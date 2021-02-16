@@ -66,7 +66,8 @@ def train_net(data_path,epochs,lr):
 
 
 def main():
-    data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet'
+    #data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet'
+    data_patah = '/data/PROJECTS/VNET/data_00_basic'
     epochs=5
     lr=0.001
     train_net(data_path,epochs,lr)

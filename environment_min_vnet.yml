@@ -1,0 +1,12 @@
+name: vnet_min                        # conda env create -f THIS_FILE
+channels:
+  - conda-forge
+dependencies:
+  - python=3.7                        # afni python...
+  - matplotlib                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch                           # vnet mods
+  - nibabel
+  - tqdm
