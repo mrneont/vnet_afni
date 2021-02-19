@@ -1,6 +1,6 @@
 import os
 
-import numpy as np
+import numpy   as np
 import nibabel as nib
 
 #data_dims = (256, 256, 256)

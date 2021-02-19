@@ -6,9 +6,9 @@ from torch import optim
 from tqdm import tqdm
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from  SSdata import SSData_path,vol_generator
-from SSmodels import VNet_org
-from SSlosses import DiceLoss 
+from lib_ml_data   import SSData_path, vol_generator
+from lib_ml_models import VNet_org
+from lib_ml_losses import DiceLoss 
 
 
 # data_path contains the dataset currently being used to train the model
@@ -74,13 +74,3 @@ def train_net(data_path,epochs,lr):
             epoch_loss += LOSS.item()
 
         print("epoch %d epochloss:%0.3f" % (epoch, epoch_loss))
-
-
-def main():
-    data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet_res8'
-    epochs=5
-    lr=0.001
-    train_net(data_path,epochs,lr)
-
-
-main()
