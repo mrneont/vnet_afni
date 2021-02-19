@@ -11,7 +11,8 @@ class RepeatConv(nn.Module):
         
         conv_list = []
         for i in range(n_conv):
-            conv_list.append(nn.Conv3d(n_channels, n_channels, kernel_size=5, padding=2))
+            conv_list.append(nn.Conv3d(n_channels, n_channels, 
+                                       kernel_size=5, padding=2))
             conv_list.append(nn.PReLU())
         
         self.conv = nn.Sequential(*conv_list)
@@ -38,7 +39,8 @@ class Up(nn.Module):
         super(Up, self).__init__()
         
         self.upconv = nn.Sequential(
-            nn.ConvTranspose3d(in_channels, int(out_channels/2), kernel_size=2, stride=2),
+            nn.ConvTranspose3d(in_channels, int(out_channels/2), 
+                               kernel_size=2, stride=2),
             nn.PReLU()
         )
         self.conv = RepeatConv(out_channels, n_conv)

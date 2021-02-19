@@ -11,8 +11,6 @@ from SSmodels import VNet_org
 from SSlosses import DiceLoss 
 
 
-
-
 # data_path contains the dataset currently being used to train the model
 # each dataset contains the training set and the validation set
 #data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet'
@@ -76,9 +74,6 @@ def train_net(data_path,epochs,lr):
             epoch_loss += LOSS.item()
 
         print("epoch %d epochloss:%0.3f" % (epoch, epoch_loss))
-
-
-
 
 
 def main():
