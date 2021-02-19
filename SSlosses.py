@@ -1,41 +1,26 @@
-import torch.nn as nn
-
+import torch
+import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
+import numpy as np
 
-class SoftDiceLoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(SoftDiceLoss, self).__init__()
- 
-    def forward(self, logits, targets):
-        num = targets.size(0)
-        smooth = 1
-        
-        probs = F.sigmoid(logits)
-        m1 = probs.view(num, -1)
-        m2 = targets.view(num, -1)
-        intersection = (m1 * m2)
- 
-        score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
-        score = 1 - score.sum() / num
-        return score
 
-'''        
 class DiceLoss(nn.Module):
-
-    def __init__(self):
+    def __init__(self, weight=None, size_average=True):
         super(DiceLoss, self).__init__()
-        self.smooth = 1.0
 
-    def forward(self, inputs, targets):
-
+    def forward(self, inputs, targets, smooth=1):
+        
+        #comment out if your model contains a sigmoid or equivalent activation layer
+        #inputs = F.sigmoid(inputs)       
+        
+        #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-        intersection = (inputs * targets).sum()
-        dice = (2. * intersection + self.smooth) / (
-            inputs.sum() + targets.sum() + self.smooth
-        )
-        return 1. - dice
+        
+        intersection = (inputs * targets).sum()                            
+        dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
+        
+        return 1 - dice
 
-
-'''        

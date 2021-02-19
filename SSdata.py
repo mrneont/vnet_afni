@@ -23,8 +23,8 @@ def vol_generator(foldername):
     
     
     
-    x = np.zeros((orig_set_size, 256, 256,256), dtype=np.float)
-    y = np.zeros((mask_set_size,256,256,256), dtype=np.float)
+    x = np.zeros((orig_set_size, 32, 32,32), dtype=np.float)
+    y = np.zeros((mask_set_size,32, 32,32), dtype=np.float)
     
     for index in range(orig_set_size):
         
