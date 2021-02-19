@@ -47,9 +47,6 @@ def vol_generator(foldername):
     return(x,y)
     
 
-	
-
-	
 def SSData_path(data_path):
     #print(data_path)
     
