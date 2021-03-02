@@ -3,8 +3,23 @@ import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import numpy as np
 
+
+
+
+def dice(inputs, targets, smooth=1.0):
+
+    #flatten label and prediction tensors
+    inputs = inputs.view(-1)
+    targets = targets.view(-1)
+    
+
+    intersection = (inputs * targets).sum()   
+    dice = 2.*intersection + smooth
+    dice/= inputs.sum() + targets.sum() + smooth
+    #print(dice)
+
+    return dice
 
 class DiceLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -24,5 +39,5 @@ class DiceLoss(nn.Module):
         dice = 2.*intersection + smooth
         dice/= inputs.sum() + targets.sum() + smooth
         
-        return 1 - dice
+        return dice
 
