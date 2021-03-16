@@ -19,7 +19,7 @@ def dice(inputs, targets, smooth=1.0):
     dice/= inputs.sum() + targets.sum() + smooth
     #print(dice)
 
-    return dice
+    return 1-dice
 
 class DiceLoss(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -39,5 +39,5 @@ class DiceLoss(nn.Module):
         dice = 2.*intersection + smooth
         dice/= inputs.sum() + targets.sum() + smooth
         
-        return dice
+        return 1-dice
 
