@@ -169,7 +169,7 @@ def train_net(data_path,epochs,lr):
         avg_train_losses.append(train_loss)
         avg_valid_losses.append(valid_loss)
         print('avg training loss is = ', avg_train_losses)
-        print('avg validation  loss is = 'avg_valid_losses)
+        print('avg validation  loss is = ',avg_valid_losses)
         if early_stopping.early_stop:
             print("Early stopping")
             break
