@@ -2,16 +2,16 @@
 import sys
 import torch
 
-from torch import optim
-from tqdm import tqdm
-import torch.nn as nn
-from torch.utils.data import DataLoader
-from lib_ml_data   import SSData_path, vol_generator
-from lib_ml_models import VNet_org
-from lib_ml_losses import DiceLoss,dice
-from pytorchtools import EarlyStopping
-import numpy as np
-import matplotlib.pyplot as plt
+from   torch            import optim
+from   tqdm             import tqdm
+import torch.nn             as nn
+from   torch.utils.data import DataLoader
+from   lib_ml_data      import SSData_path, vol_generator
+from   lib_ml_models    import VNet_org
+from   lib_ml_losses    import DiceLoss, dice
+from   pytorchtools     import EarlyStopping
+import numpy                as np
+import matplotlib.pyplot    as plt
 import time
 
 # data_path contains the dataset currently being used to train the model
@@ -29,13 +29,16 @@ import time
 def visualize_loss(avg_train_losses,avg_valid_losses):
     # visualize the loss as the network trained
     fig = plt.figure(figsize=(10,8))
-    plt.plot(range(1,len(avg_train_losses)+1),avg_train_losses, label='Training Loss')
-    plt.plot(range(1,len(avg_valid_losses)+1),avg_valid_losses,label='Validation Loss')
+    plt.plot(range(1,len(avg_train_losses)+1), avg_train_losses, 
+             label='Training Loss')
+    plt.plot(range(1,len(avg_valid_losses)+1), avg_valid_losses,
+             label='Validation Loss')
 
     # find position of lowest validation loss
     minposs = avg_valid_losses.index(min(avg_valid_losses))+1 
     
-    plt.axvline(minposs, linestyle='--', color='r',label='Early Stopping Checkpoint')
+    plt.axvline(minposs, linestyle='--', color='r',
+                label='Early Stopping Checkpoint')
 
     plt.xlabel('epochs')
     plt.ylabel('loss')
@@ -49,7 +52,25 @@ def visualize_loss(avg_train_losses,avg_valid_losses):
 
 
 
-def train_net(data_path,epochs,lr):
+def train_net(data_path, epochs, lr):
+    """
+    Main training function. Sends training to either GPU or CPU.
+
+    Parameters
+    ==========
+
+    data_path    : top level directory of data (see program help for  
+                   directory sub-structure)
+    epochs       : number of epochs for network (int)
+    lr           : learning rate parameter 
+
+    Returns
+    =======
+
+    [***the full network?  maybe describe more what this is...]
+
+    """
+
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -59,30 +80,33 @@ def train_net(data_path,epochs,lr):
 
     print('The number of  epochs is =',epochs)
 
-    (training_path,validation_path) = SSData_path(data_path)
+    (training_path, validation_path) = SSData_path(data_path)
     #traingen = vol_generator(training_path)
     #print(len(traingen))
-    (xtrain,ytrain) = vol_generator(training_path)
-    (xval,yval)=vol_generator(validation_path)
+    (xtrain, ytrain) = vol_generator(training_path)
+    (xval, yval)     = vol_generator(validation_path)
     #n_train= xtrain.shape[0]
     #print(n_train)
+
+    # Set up network
     net = VNet_org(in_channels=1, num_class=1)
     net.to(device)
-    # load optimizor
+
+    # load optimizer
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
-    mri_train_loader = DataLoader(xtrain,shuffle=False,batch_size=1)
-    mask_train_loader = DataLoader(ytrain,shuffle=False,batch_size=1)
-    mri_val_loader = DataLoader(xval,shuffle=False,batch_size=1)
-    mask_val_loader = DataLoader(yval,shuffle=False,batch_size=1)
+    mri_train_loader  = DataLoader(xtrain, shuffle=False, batch_size=1)
+    mask_train_loader = DataLoader(ytrain, shuffle=False, batch_size=1)
+    mri_val_loader    = DataLoader(xval,   shuffle=False, batch_size=1)
+    mask_val_loader   = DataLoader(yval,   shuffle=False, batch_size=1)
     #print(len(train_loader))
-    step = 0
-    dash =  '-' * 20
+    step     = 0
+    dash     = '-' * 20
     epochend = '='*60
 
-     # initialize the early_stopping object
-    patience =5
-    early_stopping = EarlyStopping(patience=patience, verbose=True)
+    # initialize the early_stopping object
+    patience         = 5
+    early_stopping   = EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []
     avg_valid_losses = []
     
@@ -100,24 +124,24 @@ def train_net(data_path,epochs,lr):
         ###################
         train_losses=[]
         net.train() # prep model for training
-        for mri_data,mask_data in zip(mri_train_loader,mask_train_loader):
+        for mri_data, mask_data in zip(mri_train_loader, mask_train_loader):
 
-            print('ith datavol = ',i)
+            print('ith datavol = ',i) 
             mri_data, mask_data = mri_data.to(device), mask_data.to(device)
-            mri_data = mri_data.unsqueeze(0)
+            mri_data  = mri_data.unsqueeze(0)
             #print('mri_data shape is =',mri_data.shape)
             mask_data = mask_data.unsqueeze(0)
             #print('mask_data shape is =',mask_data.shape)
 
-            mri_data = torch.tensor(mri_data, dtype=torch.float32)
-            mask_data = torch.tensor(mask_data, dtype=torch.float32)
+            mri_data   = torch.tensor(mri_data, dtype=torch.float32)
+            mask_data  = torch.tensor(mask_data, dtype=torch.float32)
 
             masks_pred = net(mri_data)
             print('masks_pred shape is =',masks_pred.shape)
             loss = DiceLoss()
             LOSS = loss.forward(mask_data,masks_pred)
 
-            print('LOSS = ',LOSS)
+            print('LOSS = ', LOSS)
             i=i+1
             optimizer.zero_grad()
             LOSS.backward()
@@ -144,7 +168,7 @@ def train_net(data_path,epochs,lr):
                 mask_valdata = mask_valdata.unsqueeze(0)
                 #print('mask_data shape is =',mask_data.shape)
 
-                mri_valdata = torch.tensor(mri_valdata, dtype=torch.float32)
+                mri_valdata  = torch.tensor(mri_valdata,  dtype=torch.float32)
                 mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
                 y = net(mri_valdata)
                 valid_losses.append(dice(y, mask_valdata, smooth=1.0))
@@ -161,21 +185,22 @@ def train_net(data_path,epochs,lr):
         #train_loss = np.average(train_losses)
         #train_loss = np.mean(train_losses)
         train_losses = torch.as_tensor(train_losses)
-        train_loss = torch.mean(train_losses)
+        train_loss   = torch.mean(train_losses)
         #train_loss = torch.mean(train_losses).detach().cpu().numpy()
         #valid_loss = np.average(valid_losses)
         valid_losses = torch.as_tensor(valid_losses)
-        valid_loss = torch.mean(valid_losses)
+        valid_loss   = torch.mean(valid_losses)
         avg_train_losses.append(train_loss)
         avg_valid_losses.append(valid_loss)
         print('avg training loss is = ', avg_train_losses)
-        print('avg validation  loss is = ',avg_valid_losses)
+        print('avg validation loss is = ', avg_valid_losses)
         if early_stopping.early_stop:
             print("Early stopping")
             break
 
-        # early_stopping needs the validation loss to check if it has decresed, 
-        # and if it has, it will make a checkpoint of the current model
+        # early_stopping needs the validation loss to check if it has
+        # decreased, and if it has, it will make a checkpoint of the
+        # current model
         early_stopping(valid_loss, net)
         visualize_loss(avg_train_losses,avg_valid_losses)
     #torch.save(net.state_dict(), 'model_weights.pt')
@@ -184,10 +209,10 @@ def train_net(data_path,epochs,lr):
 
 def test(data_path):
 
-    (training_path,validation_path) = SSData_path(data_path)
+    (training_path, validation_path) = SSData_path(data_path)
         
-    (xval,yval)=vol_generator(validation_path)
-    mri_val_loader = DataLoader(xval,shuffle=False,batch_size=1)
+    (xval, yval)    = vol_generator(validation_path)
+    mri_val_loader  = DataLoader(xval,shuffle=False,batch_size=1)
     mask_val_loader = DataLoader(yval,shuffle=False,batch_size=1)
     model = VNet_org(in_channels=1, num_class=1)
     model.load_state_dict(torch.load('model_weights.pt'))
@@ -196,7 +221,7 @@ def test(data_path):
     dash =  '-' * 60
     with torch.no_grad():
         count = 0
-        for mri_valdata,mask_valdata in zip(mri_val_loader,mask_val_loader):
+        for mri_valdata, mask_valdata in zip(mri_val_loader, mask_val_loader):
             
             mri_valdata = mri_valdata.unsqueeze(0)
             #print('mri_data shape is =',mri_data.shape)
@@ -210,7 +235,7 @@ def test(data_path):
 
             count += 1
         print(dash)    
-        print('DICE SCORE for validation data = ',dicescore)
+        print('DICE SCORE for validation data = ', dicescore)
 
   
 

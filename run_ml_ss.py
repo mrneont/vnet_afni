@@ -3,6 +3,40 @@ import sys
 import argparse     as argp
 import lib_ml_train as mlt
 
+# for expanding help information
+epilog_data_struc = ''' 
+------------------------------------------------------------------------
+
+Input data structure
+--------------------
+
+The basic DATA_DIR directory structure looks like
+this:
+
+    DATA_DIR/
+    ├── testing
+    │   ├── mask
+    │   └── orig
+    ├── training
+    │   ├── mask
+    │   └── orig
+    └── validation
+        ├── mask
+        └── orig
+
+... where each pair of mask/ and orig/ subsubdirectories contains
+files like SUB-001_mask.nii.gz and SUB-001_orig.nii.gz, respectively.
+That is, within a given set like "testing", each file in "mask" must
+have a partner in "orig".
+
+Typical fractions of the total N subjects for each directory could be:
+
+    training   : 70%
+    validation : 20%
+    testing    : 10%
+
+'''
+
 def dir_path(string):
     if os.path.isdir(string):
         return string
@@ -11,12 +45,16 @@ def dir_path(string):
 
 def get_args():
 
+    # [PT] Using this formatter_class: ArgumentDefaultsHelpFormatter
+    #      ... crushes newlines in the text.
     intro  = 'Train the VNet on MRI data and target masks'
     parser = argp.ArgumentParser(description = intro,
-                        formatter_class=argp.ArgumentDefaultsHelpFormatter)
+                                 epilog = epilog_data_struc,
+                        formatter_class=argp.RawTextHelpFormatter) 
+
     parser.add_argument('-d',"--data_dir", 
                         type=dir_path, 
-                        help="Path to the data directory")
+                        help="Path to the data directory (structure below)")
 
     parser.add_argument('-e', '--epochs', 
                         metavar='E', type=int, default=5,
@@ -25,6 +63,7 @@ def get_args():
     parser.add_argument("-l", "--learning_rate", 
                         dest="learning_rate", default=0.001, 
                         type=float, help="Learning rate. Default: 0.001")
+
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -34,11 +73,12 @@ if __name__ == '__main__':
     if len(sys.argv) == 1 :
         sys.argv.append('-h')
 
-    args = get_args()
-    #data_path = 'data/pretrain/pretrain_vnet_res8'
+    # get args (path and parameter settings) , and prepare to pass
+    # along to the main training net prog
+    args      = get_args()
     data_path = args.data_dir
-    epochs=args.epochs
-    lr = args.learning_rate
+    epochs    = args.epochs
+    lr        = args.learning_rate
     
-    net = mlt.train_net(data_path,epochs,lr)
+    net = mlt.train_net(data_path, epochs, lr)
     #mlt.test(data_path)
