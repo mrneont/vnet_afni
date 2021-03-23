@@ -99,8 +99,8 @@ def train_net(data_path, epochs, lr, verb):
     (training_path, validation_path) = lmd.SSData_path(data_path)
     #traingen = lmd.vol_generator(training_path)
     #print(len(traingen))
-    (xtrain, ytrain) = lmd.vol_generator(training_path)
-    (xval, yval)     = lmd.vol_generator(validation_path)
+    (xtrain, ytrain) = lmd.vol_generator(training_path, verb=verb)
+    (xval, yval)     = lmd.vol_generator(validation_path, verb=verb)
 
     Ntrain = len(xtrain)
     Nval   = len(yval)

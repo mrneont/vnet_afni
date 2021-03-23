@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy   as np
 import nibabel as nib
@@ -6,7 +7,7 @@ import nibabel as nib
 #data_dims = (256, 256, 256)
 
 
-def vol_generator(foldername):
+def vol_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate matrices
     for the dsets.
 
@@ -44,6 +45,17 @@ def vol_generator(foldername):
     mask_data_list = sorted(os.listdir(mask_data_path))
     mask_set_size  = len(mask_data_list)
 
+    if orig_set_size != mask_set_size :
+        
+        print("** ERROR: mismatched number of orig ({}) and mask ({}) dsets."
+              "".format(orig_set_size, mask_set_size))
+        print("   Check dataset directories:\n"
+              "     {}\n"
+              "     {}\n"
+              "".format( orig_data_path, mask_data_path ))
+
+        sys.exit(3)
+
     # [PT] Q: Shouldn't the dimensions here come from the dsets
     # themselves?  I don't think they should be hardwired as 32x32x32.
     # For example, could get dimensions from the first dset, and make
@@ -54,6 +66,12 @@ def vol_generator(foldername):
     x = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float)
     y = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float)
     
+    if verb > 1 :
+        print("\nLoading orig+mask dsets:\n")
+        print("  {:^30s} : {:^30s}".format('orig files', 'mask files'))
+        print("  {:30s} : {:30s}".format('-'*30, '-'*30))
+
+
     for index in range(orig_set_size):
         
         orig_filename  = orig_data_list[index]
@@ -65,8 +83,8 @@ def vol_generator(foldername):
         ### save space with making the mask data binarized?  And is
         ### there an issue that x was initialized above as type
         ### 'float', while now the data array has type int16?
-        data           = np.asanyarray(orig_image.dataobj).astype('int16')  
-        x[index]       = data
+        orig_data      = np.asanyarray(orig_image.dataobj).astype('int16')  
+        x[index]       = orig_data
         
         mask_filename  = mask_data_list[index]
         mask_data_file = os.path.join(mask_data_path, mask_filename)
@@ -75,9 +93,24 @@ def vol_generator(foldername):
         ### save space with making the mask data binarized (bool
         ### type)?  As above, is there a problem that the y array was
         ### initialized with float type, and this is int16?
-        data           = np.asanyarray(mask_image.dataobj).astype('int16') 
-        y[index]       = data
+        mask_data      = np.asanyarray(mask_image.dataobj).astype('int16') 
+        y[index]       = mask_data
         
+        if verb > 1 :
+            print("  {:30s} : {:30s}".format(orig_filename, mask_filename))
+
+        # check that names match for each pair: later generalize
+        ocheck = orig_filename.replace('.gz', '')
+        ocheck = ocheck.replace('.nii', '')
+        ocheck = ocheck.replace('_orig', '')
+        mcheck = mask_filename.replace('.gz', '')
+        mcheck = mcheck.replace('.nii', '')
+        mcheck = mcheck.replace('_mask', '')
+        if ocheck != mcheck :
+            print("** ERROR: mismatched orig+mask pair:\n"
+                  "   {:30s} : {:30s}".format(orig_filename, mask_filename))
+            sys.exit(3)
+
     return x, y
     
 
