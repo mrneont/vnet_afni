@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F            ### [PT] this isn't used?
 
 class RepeatConv(nn.Module):
     """

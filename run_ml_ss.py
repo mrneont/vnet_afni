@@ -1,7 +1,7 @@
 import os
 import sys
 import argparse     as argp
-import lib_ml_train as mlt
+import lib_ml_train as lmt
 
 # for expanding help information
 epilog_data_struc = ''' 
@@ -80,5 +80,5 @@ if __name__ == '__main__':
     epochs    = args.epochs
     lr        = args.learning_rate
     
-    net = mlt.train_net(data_path, epochs, lr)
-    #mlt.test(data_path)
+    net = lmt.train_net(data_path, epochs, lr)
+    #lmt.test(data_path)

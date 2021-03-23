@@ -2,7 +2,7 @@ import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from torch.autograd import Variable   ### [PT] this doesn't seem to be used?
 
 
 

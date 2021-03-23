@@ -1,18 +1,30 @@
 
 import sys
+import time
+import numpy                as np
+import matplotlib.pyplot    as plt
 import torch
 
 from   torch            import optim
-from   tqdm             import tqdm
-import torch.nn             as nn
 from   torch.utils.data import DataLoader
-from   lib_ml_data      import SSData_path, vol_generator
-from   lib_ml_models    import VNet_org
-from   lib_ml_losses    import DiceLoss, dice
-from   pytorchtools     import EarlyStopping
-import numpy                as np
-import matplotlib.pyplot    as plt
-import time
+import torch.nn             as nn
+
+import lib_ml_data          as lmd
+import lib_ml_models        as lmm
+import lib_ml_losses        as lml
+import pytorchtools         as ptt
+
+### unused:
+#from   tqdm             import tqdm
+
+### import whole file with abbrev, to see where functions are more
+### easily:
+#from   lib_ml_data      import SSData_path, vol_generator
+#from   lib_ml_models    import VNet_org
+#from   lib_ml_losses    import DiceLoss, dice
+#from   pytorchtools     import EarlyStopping
+
+# -----------------------------------------------------------------------
 
 # data_path contains the dataset currently being used to train the model
 # each dataset contains the training set and the validation set
@@ -80,16 +92,16 @@ def train_net(data_path, epochs, lr):
 
     print('The number of  epochs is =',epochs)
 
-    (training_path, validation_path) = SSData_path(data_path)
-    #traingen = vol_generator(training_path)
+    (training_path, validation_path) = lmd.SSData_path(data_path)
+    #traingen = lmd.vol_generator(training_path)
     #print(len(traingen))
-    (xtrain, ytrain) = vol_generator(training_path)
-    (xval, yval)     = vol_generator(validation_path)
+    (xtrain, ytrain) = lmd.vol_generator(training_path)
+    (xval, yval)     = lmd.vol_generator(validation_path)
     #n_train= xtrain.shape[0]
     #print(n_train)
 
     # Set up network
-    net = VNet_org(in_channels=1, num_class=1)
+    net = lmm.VNet_org(in_channels=1, num_class=1)
     net.to(device)
 
     # load optimizer
@@ -106,7 +118,7 @@ def train_net(data_path, epochs, lr):
 
     # initialize the early_stopping object
     patience         = 5
-    early_stopping   = EarlyStopping(patience=patience, verbose=True)
+    early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []
     avg_valid_losses = []
     
@@ -138,7 +150,7 @@ def train_net(data_path, epochs, lr):
 
             masks_pred = net(mri_data)
             print('masks_pred shape is =',masks_pred.shape)
-            loss = DiceLoss()
+            loss = lml.DiceLoss()
             LOSS = loss.forward(mask_data,masks_pred)
 
             print('LOSS = ', LOSS)
@@ -171,7 +183,7 @@ def train_net(data_path, epochs, lr):
                 mri_valdata  = torch.tensor(mri_valdata,  dtype=torch.float32)
                 mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
                 y = net(mri_valdata)
-                valid_losses.append(dice(y, mask_valdata, smooth=1.0))
+                valid_losses.append(lml.dice(y, mask_valdata, smooth=1.0))
 
                 count += 1
                 print('validatecount=',count)
@@ -209,12 +221,12 @@ def train_net(data_path, epochs, lr):
 
 def test(data_path):
 
-    (training_path, validation_path) = SSData_path(data_path)
+    (training_path, validation_path) = lmd.SSData_path(data_path)
         
-    (xval, yval)    = vol_generator(validation_path)
+    (xval, yval)    = lmd.vol_generator(validation_path)
     mri_val_loader  = DataLoader(xval,shuffle=False,batch_size=1)
     mask_val_loader = DataLoader(yval,shuffle=False,batch_size=1)
-    model = VNet_org(in_channels=1, num_class=1)
+    model = lmm.VNet_org(in_channels=1, num_class=1)
     model.load_state_dict(torch.load('model_weights.pt'))
     model.eval()
     dicescore = []
@@ -231,7 +243,7 @@ def test(data_path):
             mri_valdata = torch.tensor(mri_valdata, dtype=torch.float32)
             mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
             y = model(mri_valdata)
-            dicescore.append(dice(y, mask_valdata, smooth=1.0))
+            dicescore.append(lml.dice(y, mask_valdata, smooth=1.0))
 
             count += 1
         print(dash)    
