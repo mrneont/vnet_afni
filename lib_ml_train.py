@@ -89,8 +89,9 @@ def train_net(data_path, epochs, lr, verb):
     else:
         device = torch.device('cpu')
 
-    print('The device being used is =', device)
-    print('The number of  epochs is =', epochs)
+    if verb :
+        print('The device being used is =', device)
+        print('The number of epochs is  =', epochs)
 
     # Here, get the paths, and then make lists of the training and
     # validation dsets.  In both cases, the 'x*' member is the 'orig'
@@ -100,6 +101,10 @@ def train_net(data_path, epochs, lr, verb):
     #print(len(traingen))
     (xtrain, ytrain) = lmd.vol_generator(training_path)
     (xval, yval)     = lmd.vol_generator(validation_path)
+
+    Ntrain = len(xtrain)
+    Nval   = len(yval)
+
     #n_train= xtrain.shape[0]
     #print(n_train)
 
@@ -142,7 +147,8 @@ def train_net(data_path, epochs, lr, verb):
         net.train() # prep model for training
         for mri_data, mask_data in zip(mri_train_loader, mask_train_loader):
 
-            print('ith datavol = ',i) 
+            print('training dset : {:5d} / {}'.format(i, Ntrain))
+
             mri_data, mask_data = mri_data.to(device), mask_data.to(device)
             mri_data  = mri_data.unsqueeze(0)
             #print('mri_data shape is =',mri_data.shape)
@@ -153,20 +159,21 @@ def train_net(data_path, epochs, lr, verb):
             mask_data  = torch.tensor(mask_data, dtype=torch.float32)
 
             masks_pred = net(mri_data)
-            print('masks_pred shape is =',masks_pred.shape)
+            if verb :
+                print('masks_pred shape is =', masks_pred.shape)
             loss = lml.DiceLoss()
             LOSS = loss.forward(mask_data,masks_pred)
 
-            print('LOSS = ', LOSS)
+            if verb :
+                print('LOSS = ', LOSS)
             i=i+1
             optimizer.zero_grad()
             LOSS.backward()
             optimizer.step()
             train_losses.append(LOSS.item())
             #print(dash)
-        print(epochend)
-        
 
+        print(epochend)
 
         ######################    
         # validate the model #
@@ -192,14 +199,16 @@ def train_net(data_path, epochs, lr, verb):
                 valid_losses.append(lml.dice(y, mask_valdata, smooth=1.0))
 
                 count += 1
-                print('validatecount=', count)
+                #print('validatecount=', count)
+                print('validating dset : {:5d} / {}'.format(count, Nval))
 
         
         # calculate average loss over an epoch
         
         end = time.time()
         print(f"Runtime of the program is {end - start}")
-        
+        print("Runtime of the program is {}".format(end - start))
+
         #train_loss = np.average(train_losses)
         #train_loss = np.mean(train_losses)
         train_losses = torch.as_tensor(train_losses)
@@ -210,7 +219,7 @@ def train_net(data_path, epochs, lr, verb):
         valid_loss   = torch.mean(valid_losses)
         avg_train_losses.append(train_loss)
         avg_valid_losses.append(valid_loss)
-        print('avg training loss is = ', avg_train_losses)
+        print('avg training loss is   = ', avg_train_losses)
         print('avg validation loss is = ', avg_valid_losses)
         if early_stopping.early_stop:
             print("Early stopping")
