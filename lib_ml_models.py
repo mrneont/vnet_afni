@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F            ### [PT] this isn't used?
+import torch.nn.functional as F            ### [PT] Q: this isn't used?
 
 class RepeatConv(nn.Module):
     """
@@ -53,6 +53,29 @@ class Up(nn.Module):
 class VNet_org(nn.Module):
     """
     Main model
+
+    Here we set up the main model.
+
+    Parameters (init)
+    =================
+
+    in_channels    : **something**
+
+    num_class      : **something
+
+    Objects (init)
+    =================
+
+    down*          : **specify ....**
+
+    up*            : **
+
+    Methods
+    =======
+
+    forward        : **
+
+
     """
     def __init__(self, in_channels, num_class):
         super(VNet_org, self).__init__()
@@ -64,7 +87,7 @@ class VNet_org(nn.Module):
             nn.PReLU()
         )
         
-        self.down2 = Down(16, 32, 2)
+        self.down2 = Down(16, 32, 2)    # [PT] Q: how are these chosen?
         self.down3 = Down(32, 64, 3)
         self.down4 = Down(64, 128, 3)
         self.down5 = Down(128, 256, 3)
@@ -84,7 +107,7 @@ class VNet_org(nn.Module):
         down2 = self.down2(down1)
         down3 = self.down3(down2)
         down4 = self.down4(down3)
-        center = self.down5(down4)
+        center = self.down5(down4)       ## [PT] Q: this is... the bottom of the V?
         #print(center.shape)
         up1 = self.up1(center, down4)
         #print(up1.shape)

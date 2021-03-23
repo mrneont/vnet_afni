@@ -103,6 +103,9 @@ def train_net(data_path, epochs, lr):
     #print(n_train)
 
     # Set up network
+    ### [PT] Q: the number of channels here is determined by.... ?
+    ### and the number of classes is determined by having a binary
+    ### mask, right?
     net = lmm.VNet_org(in_channels=1, num_class=1)
     net.to(device)
 
@@ -127,9 +130,7 @@ def train_net(data_path, epochs, lr):
     start = time.time()
     for epoch in range(epochs):
 
-        print('EPOCH:',epoch)
-        
-
+        print('EPOCH:', epoch)
         
         i=1
         
@@ -175,7 +176,9 @@ def train_net(data_path, epochs, lr):
             count = 0
             for mri_valdata,mask_valdata in zip(mri_val_loader,mask_val_loader):
                 
-
+                ## [PT] Q: why is this one line?  this doesn't look
+                ## like it has to be a tuple on LHS, so why not be 2
+                ## lines?
                 mri_valdata, mask_valdata = mri_valdata.to(device), mask_valdata.to(device)
                 mri_valdata = mri_valdata.unsqueeze(0)
                 #print('mri_data shape is =',mri_data.shape)
@@ -188,7 +191,7 @@ def train_net(data_path, epochs, lr):
                 valid_losses.append(lml.dice(y, mask_valdata, smooth=1.0))
 
                 count += 1
-                print('validatecount=',count)
+                print('validatecount=', count)
 
         
         # calculate average loss over an epoch
