@@ -102,8 +102,8 @@ def train_net(data_path, epochs, lr, verb):
     (xtrain, ytrain) = lmd.vol_generator(training_path, verb=verb)
     (xval, yval)     = lmd.vol_generator(validation_path, verb=verb)
 
-    Ntrain = len(xtrain)
-    Nval   = len(yval)
+    Ntrain = xtrain.shape[0]
+    Nval   = xval.shape[0]
 
     #n_train= xtrain.shape[0]
     #print(n_train)
@@ -150,7 +150,7 @@ def train_net(data_path, epochs, lr, verb):
             print('training dset : {:5d} / {}'.format(i, Ntrain))
 
             mri_data, mask_data = mri_data.to(device), mask_data.to(device)
-            mri_data  = mri_data.unsqueeze(0)
+            mri_data  = mri_data.unsqueeze(0)   # 1 x (dimensions of dset)
             #print('mri_data shape is =',mri_data.shape)
             mask_data = mask_data.unsqueeze(0)
             #print('mask_data shape is =',mask_data.shape)
