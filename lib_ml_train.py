@@ -88,10 +88,12 @@ def train_net(data_path, epochs, lr):
     else:
         device = torch.device('cpu')
 
-    print('The device being used is =',device)
+    print('The device being used is =', device)
+    print('The number of  epochs is =', epochs)
 
-    print('The number of  epochs is =',epochs)
-
+    # Here, get the paths, and then make lists of the training and
+    # validation dsets.  In both cases, the 'x*' member is the 'orig'
+    # dset, and the 'y*' member is the mask dset.
     (training_path, validation_path) = lmd.SSData_path(data_path)
     #traingen = lmd.vol_generator(training_path)
     #print(len(traingen))
