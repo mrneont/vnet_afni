@@ -64,7 +64,7 @@ def visualize_loss(avg_train_losses,avg_valid_losses):
 
 
 
-def train_net(data_path, epochs, lr):
+def train_net(data_path, epochs, lr, verb):
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -75,6 +75,7 @@ def train_net(data_path, epochs, lr):
                    directory sub-structure)
     epochs       : number of epochs for network (int)
     lr           : learning rate parameter 
+    verb         : verbosity for stdout
 
     Returns
     =======

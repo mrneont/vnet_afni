@@ -50,19 +50,28 @@ def get_args():
     intro  = 'Train the VNet on MRI data and target masks'
     parser = argp.ArgumentParser(description = intro,
                                  epilog = epilog_data_struc,
-                        formatter_class=argp.RawTextHelpFormatter) 
+                                 formatter_class=argp.RawTextHelpFormatter) 
 
     parser.add_argument('-d',"--data_dir", 
                         type=dir_path, 
                         help="Path to the data directory (structure below)")
 
     parser.add_argument('-e', '--epochs', 
-                        metavar='E', type=int, default=5,
-                        help='Number of epochs', dest='epochs')
+                        metavar='E', 
+                        dest='epochs',
+                        type=int, default=5,
+                        help='Number of epochs (def: 5)')
 
     parser.add_argument("-l", "--learning_rate", 
-                        dest="learning_rate", default=0.001, 
-                        type=float, help="Learning rate. Default: 0.001")
+                        metavar='LRATE', 
+                        dest="learning_rate", 
+                        type=float, default=0.001, 
+                        help="Learning rate (def: 0.001)")
+
+    parser.add_argument("-v", "--verb", 
+                        dest="verb", 
+                        type=int, default=1, 
+                        help="verbosity for code running (def: 1)")
 
     return parser.parse_args()
 
@@ -79,6 +88,7 @@ if __name__ == '__main__':
     data_path = args.data_dir
     epochs    = args.epochs
     lr        = args.learning_rate
+    verb      = args.verb
     
-    net = lmt.train_net(data_path, epochs, lr)
+    net = lmt.train_net(data_path, epochs, lr, verb)
     #lmt.test(data_path)
