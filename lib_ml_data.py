@@ -99,14 +99,8 @@ def vol_generator(foldername, verb=1):
         if verb > 1 :
             print("  {:30s} : {:30s}".format(orig_filename, mask_filename))
 
-        # check that names match for each pair: later generalize
-        ocheck = orig_filename.replace('.gz', '')
-        ocheck = ocheck.replace('.nii', '')
-        ocheck = ocheck.replace('_orig', '')
-        mcheck = mask_filename.replace('.gz', '')
-        mcheck = mcheck.replace('.nii', '')
-        mcheck = mcheck.replace('_mask', '')
-        if ocheck != mcheck :
+        check_pair = is_mask_orig_pair(orig_filename, mask_filename)
+        if not(check_pair) :
             print("** ERROR: mismatched orig+mask pair:\n"
                   "   {:30s} : {:30s}".format(orig_filename, mask_filename))
             sys.exit(3)
@@ -122,6 +116,33 @@ def SSData_path(data_path):
     
     return(str(training_path), str(validation_path))
 
+def is_mask_orig_pair(A, B):
+    """Check if 2 dataset named A and B have filenames that match *except*
+    for one containing 'orig' and the other 'mask'.  Basically, check the
+    prefix_noext for each, removing 'mask' and 'orig'
 
+    Parameters
+    ==========
+    A, B    : (str) file names
 
+    Return
+    ======
+    
+    int     : 1 if they match, 0 if they don't
 
+    """
+    
+    # check that names match for each pair: later generalize
+
+    x = A.replace('.gz', '')
+    x = x.replace('.nii', '')
+    x = x.replace('_orig', '')
+
+    y = B.replace('.gz', '')
+    y = y.replace('.nii', '')
+    y = y.replace('_mask', '')
+
+    if x == y :
+        return 1
+    else:
+        return 0
