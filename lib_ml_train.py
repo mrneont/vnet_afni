@@ -64,7 +64,7 @@ def visualize_loss(avg_train_losses,avg_valid_losses):
 
 
 
-def train_net(data_path, epochs, lr, verb):
+def train_net(data_path, epochs, lr, seed, verb):
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -75,6 +75,8 @@ def train_net(data_path, epochs, lr, verb):
                    directory sub-structure)
     epochs       : number of epochs for network (int)
     lr           : learning rate parameter 
+    seed         : for random number generation in torch (int, or None);
+                   if None, no seed is set
     verb         : verbosity for stdout
 
     Returns
@@ -88,6 +90,9 @@ def train_net(data_path, epochs, lr, verb):
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+
+        if seed != None :
+            torch.manual_seed(seed)
 
     if verb :
         print('The device being used is =', device)

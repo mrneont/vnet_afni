@@ -68,6 +68,12 @@ def get_args():
                         type=float, default=0.001, 
                         help="Learning rate (def: 0.001)")
 
+    parser.add_argument('-s', '--seed', 
+                        metavar='S', 
+                        dest='seed',
+                        type=int, default=None,
+                        help='Set seed for random value gen (def: None)')
+
     parser.add_argument("-v", "--verb", 
                         dest="verb", 
                         type=int, default=1, 
@@ -88,7 +94,8 @@ if __name__ == '__main__':
     data_path = args.data_dir
     epochs    = args.epochs
     lr        = args.learning_rate
+    seed      = args.seed
     verb      = args.verb
     
-    net = lmt.train_net(data_path, epochs, lr, verb)
+    net = lmt.train_net(data_path, epochs, lr, seed, verb)
     #lmt.test(data_path)
