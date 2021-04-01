@@ -104,11 +104,11 @@ def train_net(data_path, epochs, lr, seed, verb):
     (training_path, validation_path) = lmd.SSData_path(data_path)
     #traingen = lmd.vol_generator(training_path)
     #print(len(traingen))
-    (xtrain, ytrain) = lmd.vol_generator(training_path, verb=verb)
-    (xval, yval)     = lmd.vol_generator(validation_path, verb=verb)
+    (orig_train, mask_train) = lmd.vol_generator(training_path, verb=verb)
+    (orig_val, mask_val)     = lmd.vol_generator(validation_path, verb=verb)
 
-    Ntrain = xtrain.shape[0]
-    Nval   = xval.shape[0]
+    Ntrain = orig_train.shape[0]
+    Nval   = orig_val.shape[0]
 
     #n_train= xtrain.shape[0]
     #print(n_train)
@@ -123,10 +123,10 @@ def train_net(data_path, epochs, lr, seed, verb):
     # load optimizer
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
-    mri_train_loader  = DataLoader(xtrain, shuffle=False, batch_size=1)
-    mask_train_loader = DataLoader(ytrain, shuffle=False, batch_size=1)
-    mri_val_loader    = DataLoader(xval,   shuffle=False, batch_size=1)
-    mask_val_loader   = DataLoader(yval,   shuffle=False, batch_size=1)
+    orig_train_loader = DataLoader(orig_train, shuffle=False, batch_size=1)
+    mask_train_loader = DataLoader(mask_train, shuffle=False, batch_size=1)
+    orig_val_loader   = DataLoader(orig_val,   shuffle=False, batch_size=1)
+    mask_val_loader   = DataLoader(mask_val,   shuffle=False, batch_size=1)
     #print(len(train_loader))
     step     = 0
     dash     = '-' * 20
@@ -137,8 +137,9 @@ def train_net(data_path, epochs, lr, seed, verb):
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []
     avg_valid_losses = []
-    
-    start = time.time()
+    start            = time.time()
+
+
     for epoch in range(epochs):
 
         print('EPOCH:', epoch)
@@ -150,24 +151,25 @@ def train_net(data_path, epochs, lr, seed, verb):
         ###################
         train_losses=[]
         net.train() # prep model for training
-        for mri_data, mask_data in zip(mri_train_loader, mask_train_loader):
+        for orig_data, mask_data in zip(orig_train_loader, mask_train_loader):
 
             print('training dset : {:5d} / {}'.format(i, Ntrain))
 
-            mri_data, mask_data = mri_data.to(device), mask_data.to(device)
-            mri_data  = mri_data.unsqueeze(0)   # 1 x (dimensions of dset)
+            orig_data = orig_data.to(device)
+            mask_data = mask_data.to(device)
+            orig_data = orig_data.unsqueeze(0)   # 1 x (dimensions of dset)
             #print('mri_data shape is =',mri_data.shape)
             mask_data = mask_data.unsqueeze(0)
             #print('mask_data shape is =',mask_data.shape)
 
-            mri_data   = torch.tensor(mri_data, dtype=torch.float32)
-            mask_data  = torch.tensor(mask_data, dtype=torch.float32)
+            orig_data = torch.tensor(orig_data, dtype=torch.float32)
+            mask_data = torch.tensor(mask_data, dtype=torch.float32)
 
-            masks_pred = net(mri_data)
+            masks_train_pred = net(orig_data)
             if verb :
-                print('masks_pred shape is =', masks_pred.shape)
+                print('masks_pred shape is =', masks_train_pred.shape)
             loss = lml.DiceLoss()
-            LOSS = loss.forward(mask_data,masks_pred)
+            LOSS = loss.forward(masks_train_pred,mask_data)
 
             if verb :
                 print('LOSS = ', LOSS)
@@ -187,21 +189,23 @@ def train_net(data_path, epochs, lr, seed, verb):
         valid_losses = []
         with torch.no_grad():
             count = 0
-            for mri_valdata,mask_valdata in zip(mri_val_loader,mask_val_loader):
+            for orig_valdata,mask_valdata in zip(orig_val_loader,mask_val_loader):
                 
                 ## [PT] Q: why is this one line?  this doesn't look
                 ## like it has to be a tuple on LHS, so why not be 2
-                ## lines?
-                mri_valdata, mask_valdata = mri_valdata.to(device), mask_valdata.to(device)
-                mri_valdata = mri_valdata.unsqueeze(0)
+                ## lines? (YNS: put it in 2 different lines)
+                orig_valdata  = orig_valdata.to(device)
+                mask_valdata  = mask_valdata.to(device)
+                orig_valdata  = orig_valdata.unsqueeze(0)
                 #print('mri_data shape is =',mri_data.shape)
-                mask_valdata = mask_valdata.unsqueeze(0)
+                mask_valdata  = mask_valdata.unsqueeze(0)
                 #print('mask_data shape is =',mask_data.shape)
 
-                mri_valdata  = torch.tensor(mri_valdata,  dtype=torch.float32)
-                mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
-                y = net(mri_valdata)
-                valid_losses.append(lml.dice(y, mask_valdata, smooth=1.0))
+                orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
+                mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
+
+                mask_val_pred = net(orig_valdata)
+                valid_losses.append(lml.dice(mask_val_pred, mask_valdata, smooth=1.0))
 
                 count += 1
                 #print('validatecount=', count)
@@ -243,27 +247,30 @@ def test(data_path):
 
     (training_path, validation_path) = lmd.SSData_path(data_path)
         
-    (xval, yval)    = lmd.vol_generator(validation_path)
-    mri_val_loader  = DataLoader(xval,shuffle=False,batch_size=1)
-    mask_val_loader = DataLoader(yval,shuffle=False,batch_size=1)
-    model = lmm.VNet_org(in_channels=1, num_class=1)
+    (orig_val, mask_val) = lmd.vol_generator(validation_path)
+
+    orig_val_loader = DataLoader(orig_val,shuffle=False,batch_size=1)
+    mask_val_loader = DataLoader(mask_val,shuffle=False,batch_size=1)
+    model           = lmm.VNet_org(in_channels=1, num_class=1)
+
     model.load_state_dict(torch.load('model_weights.pt'))
     model.eval()
+
     dicescore = []
     dash =  '-' * 60
     with torch.no_grad():
         count = 0
-        for mri_valdata, mask_valdata in zip(mri_val_loader, mask_val_loader):
+        for orig_valdata, mask_valdata in zip(orig_val_loader, mask_val_loader):
             
-            mri_valdata = mri_valdata.unsqueeze(0)
+            orig_valdata = orig_valdata.unsqueeze(0)
             #print('mri_data shape is =',mri_data.shape)
             mask_valdata = mask_valdata.unsqueeze(0)
             #print('mask_data shape is =',mask_data.shape)
 
-            mri_valdata = torch.tensor(mri_valdata, dtype=torch.float32)
+            orig_valdata = torch.tensor(orig_valdata, dtype=torch.float32)
             mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
-            y = model(mri_valdata)
-            dicescore.append(lml.dice(y, mask_valdata, smooth=1.0))
+            mask_val_pred = model(orig_valdata)
+            dicescore.append(lml.dice(mask_val_pred, mask_valdata, smooth=1.0))
 
             count += 1
         print(dash)    

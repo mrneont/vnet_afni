@@ -26,10 +26,10 @@ def vol_generator(foldername, verb=1):
     Returns
     =======
 
-    x            : A list of N arrays, where N is the number of dsets 
+    orig            : A list of N arrays, where N is the number of dsets 
                    in the 'orig' subdir
 
-    y            : A list of N arrays, where N is the number of dsets 
+    mask            : A list of N arrays, where N is the number of dsets 
                    in the 'mask' subdir
 
     x and y should have the same length.  The size of each element
@@ -63,8 +63,8 @@ def vol_generator(foldername, verb=1):
     # constrain ourselves to *always* have uniform input
     # dimensions??--- this means we should also check+exit with error
     # if that is not the case.)
-    x = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float)
-    y = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float)
+    orig = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float)
+    mask = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float)
     
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
@@ -84,7 +84,7 @@ def vol_generator(foldername, verb=1):
         ### there an issue that x was initialized above as type
         ### 'float', while now the data array has type int16?
         orig_data      = np.asanyarray(orig_image.dataobj).astype('int16')  
-        x[index]       = orig_data
+        orig[index]    = orig_data
         
         mask_filename  = mask_data_list[index]
         mask_data_file = os.path.join(mask_data_path, mask_filename)
@@ -94,7 +94,7 @@ def vol_generator(foldername, verb=1):
         ### type)?  As above, is there a problem that the y array was
         ### initialized with float type, and this is int16?
         mask_data      = np.asanyarray(mask_image.dataobj).astype('int16') 
-        y[index]       = mask_data
+        mask[index]       = mask_data
         
         if verb > 1 :
             print("  {:30s} : {:30s}".format(orig_filename, mask_filename))
@@ -105,7 +105,7 @@ def vol_generator(foldername, verb=1):
                   "   {:30s} : {:30s}".format(orig_filename, mask_filename))
             sys.exit(3)
 
-    return x, y
+    return orig , mask
     
 
 def SSData_path(data_path):
