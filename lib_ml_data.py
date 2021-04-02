@@ -63,9 +63,10 @@ def vol_generator(foldername, verb=1):
     # constrain ourselves to *always* have uniform input
     # dimensions??--- this means we should also check+exit with error
     # if that is not the case.)
-    orig = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float)
-    mask = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float)
+    orig = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
+    mask = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
     
+
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
         print("  {:^30s} : {:^30s}".format('orig files', 'mask files'))
@@ -83,7 +84,7 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized?  And is
         ### there an issue that x was initialized above as type
         ### 'float', while now the data array has type int16?
-        orig_data      = np.asanyarray(orig_image.dataobj).astype('int16')  
+        orig_data      = np.asanyarray(orig_image.dataobj).astype('float32')  
         orig[index]    = orig_data
         
         mask_filename  = mask_data_list[index]
@@ -93,8 +94,8 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized (bool
         ### type)?  As above, is there a problem that the y array was
         ### initialized with float type, and this is int16?
-        mask_data      = np.asanyarray(mask_image.dataobj).astype('int16') 
-        mask[index]       = mask_data
+        mask_data      = np.asanyarray(mask_image.dataobj).astype('bool') 
+        mask[index]    = mask_data
         
         if verb > 1 :
             print("  {:30s} : {:30s}".format(orig_filename, mask_filename))

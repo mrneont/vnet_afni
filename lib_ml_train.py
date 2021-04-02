@@ -118,7 +118,7 @@ def train_net(data_path, epochs, lr, seed, verb):
         print('VALIDATION DATASET PATH :',validation_path)
         print('ORIGINAL TRAINING DATASET SIZE   :',Ntrain)
         print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
-    
+        
 
     # Set up network
     ### [PT] Q: the number of channels here is determined by.... ?
@@ -148,6 +148,8 @@ def train_net(data_path, epochs, lr, seed, verb):
     mask_train_loader = DataLoader(mask_train, shuffle=False, batch_size=1)
     orig_val_loader   = DataLoader(orig_val,   shuffle=False, batch_size=1)
     mask_val_loader   = DataLoader(mask_val,   shuffle=False, batch_size=1)
+    #print('orig_train_loader  DATA TYPE =',orig_train_loader[0].dtype)
+    #print('mask_train_loader DATA TYPE     =',mask_train_loader[0].dtype)
     
     step     = 0
     dash     = '-' * 20
@@ -187,13 +189,12 @@ def train_net(data_path, epochs, lr, seed, verb):
             if verb:
                 print('ORIGINAL TRAINING DATA DIM  =',orig_data.shape)
                 print('MASK TRAINING DATA DIM      =',mask_data.shape)
-                print('ORIGINAL TRAINING DATA TYPE =',orig_data.dtype)
-                print('MASK TRAINING DATA TYPE     =',mask_data.dtype)
+                
 
             #RuntimeError: expected scalar type Double but found Float
             # F.conv3d expects the data to be Double, hence typecasting 
-            orig_data = torch.tensor(orig_data, dtype=torch.float32)
-            mask_data = torch.tensor(mask_data, dtype=torch.float32)
+            #orig_data = torch.tensor(orig_data, dtype=torch.float32)
+            #mask_data = torch.tensor(mask_data, dtype=torch.float32)
 
             if verb:
                 
@@ -241,8 +242,8 @@ def train_net(data_path, epochs, lr, seed, verb):
 
                 #RuntimeError: expected scalar type Double but found Float
                 #F.conv3d expects the data to be Double, hence typecasting 
-                orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
-                mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
+                #orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
+                #mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
 
                 if verb:
                     print('ORIGINAL VALIDATION DATA DIM  =',orig_valdata.shape)
@@ -310,7 +311,7 @@ def test(data_path):
 
     # load the weights of the model
     model.load_state_dict(torch.load('model_weights.pt'))
-    
+
     # prep the model for evaluation mode
     model.eval()
 
