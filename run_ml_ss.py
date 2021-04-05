@@ -3,7 +3,7 @@ import sys
 import datetime
 import argparse     as argp
 import lib_ml_train as lmt
- 
+
 # for expanding help information
 epilog_data_struc = ''' 
 ------------------------------------------------------------------------
