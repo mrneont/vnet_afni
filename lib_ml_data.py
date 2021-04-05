@@ -7,7 +7,7 @@ import nibabel as nib
 #data_dims = (256, 256, 256)
 
 
-def vol_generator(foldername, verb=1):
+def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate matrices
     for the dsets.
 
@@ -16,7 +16,7 @@ def vol_generator(foldername, verb=1):
 
     foldername   : Subdirectory of data (see program help for  
                    directory sub-structure), such as '.../training'
-                   or '.../validation'
+                   or '.../validation'.
 
                    Any 'foldername' should contain 2 directories of
                    dsets: 'mask' and 'orig'.  These should each
@@ -26,14 +26,16 @@ def vol_generator(foldername, verb=1):
     Returns
     =======
 
-    orig         : A list of N arrays, where N is the number of dsets 
-                   in the 'orig' subdir
+    orig_mat     : A list of N arrays (each H x W x D of individual
+                   datasets), where N is the number of dsets in the
+                   'orig' subdir.
 
-    mask         : A list of N arrays, where N is the number of dsets 
-                   in the 'mask' subdir
+    mask_mat     : A list of N arrays (each H x W x D of individual
+                   datasets), where N is the number of dsets in the
+                   'mask' subdir.
 
-    x and y should have the same length.  The size of each element
-    should be the same: an MxMxM array of data.
+    The output orig_mat and mask_mat should have the same length.  The
+    size of each element should be the same: an MxMxM array of data.
 
     """
 
@@ -71,15 +73,13 @@ def vol_generator(foldername, verb=1):
     #### that info should be OK, because all dsets should have that
     #### property---though we should certainly check this for
     #### consistency across dsets once one is read in (at the moment).
-    orig = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
-    mask = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
+    orig_mat = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
+    mask_mat = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
     
-
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
         print("  {:^30s} : {:^30s}".format('orig files', 'mask files'))
         print("  {:30s}  : {:30s}".format('-'*30, '-'*30))
-
 
     for index in range(orig_set_size):
         
@@ -92,8 +92,8 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized?  And is
         ### there an issue that x was initialized above as type
         ### 'float', while now the data array has type int16?
-        orig_data      = np.asanyarray(orig_image.dataobj).astype('float32')  
-        orig[index]    = orig_data
+        orig_data       = np.asanyarray(orig_image.dataobj).astype('float32')  
+        orig_mat[index] = orig_data
         
         mask_filename  = mask_data_list[index]
         mask_data_file = os.path.join(mask_data_path, mask_filename)
@@ -108,8 +108,8 @@ def vol_generator(foldername, verb=1):
         ##### converted to float32?  Python arrays can only have 1
         ##### type, so implicit type conversion will have to take
         ##### place, but this should be dealt with consistently.
-        mask_data      = np.asanyarray(mask_image.dataobj).astype('bool') 
-        mask[index]    = mask_data
+        mask_data       = np.asanyarray(mask_image.dataobj).astype('bool') 
+        mask_mat[index] = mask_data
         
         if verb > 1 :
             print("  {:30s} : {:30s}".format(orig_filename, mask_filename))
@@ -120,7 +120,7 @@ def vol_generator(foldername, verb=1):
                   "   {:30s} : {:30s}".format(orig_filename, mask_filename))
             sys.exit(3)
 
-    return orig , mask
+    return orig_mat, mask_mat
     
 
 def SSData_path(data_path):

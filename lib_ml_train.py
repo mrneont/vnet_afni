@@ -17,18 +17,7 @@ import pytorchtools         as ptt
 ### unused:
 #from   tqdm             import tqdm
 
-### import whole file with abbrev, to see where functions are more
-### easily:
-#from   lib_ml_data      import SSData_path, vol_generator
-#from   lib_ml_models    import VNet_org
-#from   lib_ml_losses    import DiceLoss, dice
-#from   pytorchtools     import EarlyStopping
-
 # -----------------------------------------------------------------------
-
-# data_path contains the dataset currently being used to train the model
-# each dataset contains the training set and the validation set
-#data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet'
 
 #data dimensions of the volume  
 #data_dims = (256, 256, 256)
@@ -101,32 +90,35 @@ def train_net(data_path, epochs, lr, seed, verb):
     # Here, get the paths, and then make lists of the training and
     # validation dsets.  In both cases, the 'x*' member is the 'orig'
     # dset, and the 'y*' member is the mask dset.
-    (training_path, validation_path) = lmd.SSData_path(data_path)
-   
-    # populate the matrices from the dataset
-    (orig_train, mask_train) = lmd.vol_generator(training_path, verb=verb)
-    (orig_val, mask_val)     = lmd.vol_generator(validation_path, verb=verb)
+    #(training_path, validation_path) = lmd.SSData_path(data_path)
+    path_train, path_val     = lmd.SSData_path(data_path)
 
+    # populate the matrices from the dataset
+    ### [PT: Apr 5, 2021] maybe this should be called
+    ### "mat_generator()", since that is what it generates?
+    ##### [PT] renaming output to be more descriptive: these appear to
+    ##### be matrices, of training data, for orig and mask dsets 
+    #orig_train, mask_train   = lmd.vol_generator(path_train, verb=verb)
+    #orig_val, mask_val       = lmd.vol_generator(path_val,   verb=verb)
+    orig_train_mat, mask_train_mat = lmd.mat_generator(path_train, verb=verb)
+    orig_val_mat,   mask_val_mat   = lmd.mat_generator(path_val,   verb=verb)
 
     # dataset size
-    Ntrain = orig_train.shape[0]
-    Nval   = orig_val.shape[0]
+    #Ntrain = orig_train.shape[0]
+    #Nval   = orig_val.shape[0]
+    Ntrain = orig_train_mat.shape[0]
+    Nval   = orig_val_mat.shape[0]
 
     if verb:
-
-        print('TRAINING DATASET PATH   :', training_path)
-        print('VALIDATION DATASET PATH :', validation_path)
+        print('TRAINING DATASET PATH   :', path_train)
+        print('VALIDATION DATASET PATH :', path_val)
         print('ORIGINAL TRAINING DATASET SIZE   :', Ntrain)
         print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
         
-
     # Set up network
-    ### [PT] Q: the number of channels here is determined by.... ?
-    ### and the number of classes is determined by having a binary
-    ### mask, right?
 
     # Task : binary segmentation 
-    # in_channels = 1 , size = (H X W X Depth) : in this case the entire MRI vol
+    # in_channels = 1 , size = (H X W X Depth): in this case the entire MRI vol
     # num_class = Output channel  = 1 ,  size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
 
@@ -144,10 +136,10 @@ def train_net(data_path, epochs, lr, seed, verb):
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
     #pytorch dataloader 
-    orig_train_loader = DataLoader(orig_train, shuffle=False, batch_size=1)
-    mask_train_loader = DataLoader(mask_train, shuffle=False, batch_size=1)
-    orig_val_loader   = DataLoader(orig_val,   shuffle=False, batch_size=1)
-    mask_val_loader   = DataLoader(mask_val,   shuffle=False, batch_size=1)
+    orig_train_loader = DataLoader(orig_train_mat, shuffle=False, batch_size=1)
+    mask_train_loader = DataLoader(mask_train_mat, shuffle=False, batch_size=1)
+    orig_val_loader   = DataLoader(orig_val_mat,   shuffle=False, batch_size=1)
+    mask_val_loader   = DataLoader(mask_val_mat,   shuffle=False, batch_size=1)
     #print('orig_train_loader  DATA TYPE =',orig_train_loader[0].dtype)
     #print('mask_train_loader DATA TYPE     =',mask_train_loader[0].dtype)
     
@@ -201,15 +193,15 @@ def train_net(data_path, epochs, lr, seed, verb):
                 print('ORIGINAL TRAINING DATA TYPE =', orig_data.dtype)
                 print('MASK TRAINING DATA TYPE     =', mask_data.dtype)
 
-            masks_train_pred = net(orig_data,verb)
+            mask_train_pred = net(orig_data,verb)
 
             if verb :
-                print('PREDICTED MASK SIZE :', masks_train_pred.shape)
+                print('PREDICTED MASK SIZE :', mask_train_pred.shape)
 
             # creating an instance of loss function
             loss = lml.DiceLoss()
             # compare the predicted mask and the target data 
-            LOSS = loss.forward(masks_train_pred,mask_data)
+            LOSS = loss.forward(mask_train_pred, mask_data)
 
             if verb :
                 print('LOSS = ', LOSS)
@@ -297,7 +289,7 @@ def test(data_path):
     (training_path, validation_path) = lmd.SSData_path(data_path)
     
      # populate the matrices from the dataset
-    (orig_val, mask_val) = lmd.vol_generator(validation_path)
+    (orig_val, mask_val) = lmd.mat_generator(validation_path)
 
     # pytorch data loaders
     orig_val_loader = DataLoader(orig_val, shuffle=False, batch_size=1)
