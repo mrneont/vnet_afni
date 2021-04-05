@@ -114,9 +114,9 @@ def train_net(data_path, epochs, lr, seed, verb):
 
     if verb:
 
-        print('TRAINING DATASET PATH   :',training_path)
-        print('VALIDATION DATASET PATH :',validation_path)
-        print('ORIGINAL TRAINING DATASET SIZE   :',Ntrain)
+        print('TRAINING DATASET PATH   :', training_path)
+        print('VALIDATION DATASET PATH :', validation_path)
+        print('ORIGINAL TRAINING DATASET SIZE   :', Ntrain)
         print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
         
 
@@ -126,7 +126,7 @@ def train_net(data_path, epochs, lr, seed, verb):
     ### mask, right?
 
     # Task : binary segmentation 
-    # in_channels = 1 ,  size = (H X W X Depth) : in this case the entire MRI volume 
+    # in_channels = 1 , size = (H X W X Depth) : in this case the entire MRI vol
     # num_class = Output channel  = 1 ,  size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
 
@@ -153,7 +153,7 @@ def train_net(data_path, epochs, lr, seed, verb):
     
     step     = 0
     dash     = '-' * 20
-    epochend = '='*60
+    epochend = '=' * 60
 
     # initialize the early_stopping object
     patience         = 5
@@ -182,24 +182,24 @@ def train_net(data_path, epochs, lr, seed, verb):
 
             orig_data = orig_data.to(device)
             mask_data = mask_data.to(device)
-            # CONV3D requires i/p in the format of (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
-            orig_data = orig_data.unsqueeze(0) # trying to bring the data into the format of (1 X 1 X D X H X W)
-            mask_data = mask_data.unsqueeze(0) # trying to bring the data into the format of (1 X 1 X D X H X W)
-
+            ### CONV3D requires i/p in the format of:
+            ### (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
+            # So, try to bring each data into the format: (1 X 1 X D X H X W)
+            orig_data = orig_data.unsqueeze(0) 
+            mask_data = mask_data.unsqueeze(0) 
+                                               
             if verb:
-                print('ORIGINAL TRAINING DATA DIM  =',orig_data.shape)
-                print('MASK TRAINING DATA DIM      =',mask_data.shape)
+                print('ORIGINAL TRAINING DATA DIM  =', orig_data.shape)
+                print('MASK TRAINING DATA DIM      =', mask_data.shape)
                 
-
             #RuntimeError: expected scalar type Double but found Float
             # F.conv3d expects the data to be Double, hence typecasting 
             #orig_data = torch.tensor(orig_data, dtype=torch.float32)
             #mask_data = torch.tensor(mask_data, dtype=torch.float32)
 
             if verb:
-                
-                print('ORIGINAL TRAINING DATA TYPE =',orig_data.dtype)
-                print('MASK TRAINING DATA TYPE     =',mask_data.dtype)
+                print('ORIGINAL TRAINING DATA TYPE =', orig_data.dtype)
+                print('MASK TRAINING DATA TYPE     =', mask_data.dtype)
 
             masks_train_pred = net(orig_data,verb)
 
@@ -231,14 +231,14 @@ def train_net(data_path, epochs, lr, seed, verb):
             count = 0
             for orig_valdata,mask_valdata in zip(orig_val_loader,mask_val_loader):
                 
-                ## [PT] Q: why is this one line?  this doesn't look
-                ## like it has to be a tuple on LHS, so why not be 2
-                ## lines? (YNS: put it in 2 different lines)
                 orig_valdata  = orig_valdata.to(device)
                 mask_valdata  = mask_valdata.to(device)
-                # CONV3D requires i/p in the format of (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
-                orig_valdata  = orig_valdata.unsqueeze(0)# trying to bring the data into the format of (1 X 1 X D X H X W)
-                mask_valdata  = mask_valdata.unsqueeze(0)# trying to bring the data into the format of (1 X 1 X D X H X W)
+                ### CONV3D requires i/p in the format of: (batchsz = 1,
+                ###   Channels=1, Depth =256, Height=256, width=256)
+                # So, trying to bring the data into the format of (1 X
+                # 1 X D X H X W)
+                orig_valdata  = orig_valdata.unsqueeze(0)
+                mask_valdata  = mask_valdata.unsqueeze(0)
 
                 #RuntimeError: expected scalar type Double but found Float
                 #F.conv3d expects the data to be Double, hence typecasting 
@@ -252,7 +252,8 @@ def train_net(data_path, epochs, lr, seed, verb):
                     print('MASK VALIDATION DATA TYPE     =',mask_valdata.dtype)
 
                 mask_val_pred = net(orig_valdata,verb)
-                valid_losses.append(lml.dice(mask_val_pred, mask_valdata, smooth=1.0))
+                valid_losses.append(lml.dice(mask_val_pred, mask_valdata, 
+                                             smooth=1.0))
 
                 count += 1
                 
@@ -299,13 +300,14 @@ def test(data_path):
     (orig_val, mask_val) = lmd.vol_generator(validation_path)
 
     # pytorch data loaders
-    orig_val_loader = DataLoader(orig_val,shuffle=False,batch_size=1)
-    mask_val_loader = DataLoader(mask_val,shuffle=False,batch_size=1)
+    orig_val_loader = DataLoader(orig_val, shuffle=False, batch_size=1)
+    mask_val_loader = DataLoader(mask_val, shuffle=False, batch_size=1)
 
     # set up the network
     # Task : binary segmentation 
-    # in_channels = 1 ,  size = (H X W X Depth) : in this case the entire MRI volume 
-    # num_class = Output channel  = 1 ,  size = (H X W X Depth)
+    ### in_channels = 1 , size = (H X W X Depth) : in this case the
+    ### entire MRI volume
+    # num_class = Output channel  = 1 , size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
     model  = lmm.VNet_org(in_channels=1, num_class=1)
 
@@ -317,7 +319,9 @@ def test(data_path):
 
     dicescore = []
     dash =  '-' * 60
-    with torch.no_grad(): # the gradients are not altered during the validation phase
+
+    # the gradients are not altered during the validation phase
+    with torch.no_grad(): 
         count = 0
         for orig_valdata, mask_valdata in zip(orig_val_loader, mask_val_loader):
             
@@ -325,7 +329,6 @@ def test(data_path):
             
             mask_valdata = mask_valdata.unsqueeze(0)
             
-
             orig_valdata = torch.tensor(orig_valdata, dtype=torch.float32)
             mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
 

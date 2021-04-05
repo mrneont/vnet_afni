@@ -26,10 +26,10 @@ def vol_generator(foldername, verb=1):
     Returns
     =======
 
-    orig            : A list of N arrays, where N is the number of dsets 
+    orig         : A list of N arrays, where N is the number of dsets 
                    in the 'orig' subdir
 
-    mask            : A list of N arrays, where N is the number of dsets 
+    mask         : A list of N arrays, where N is the number of dsets 
                    in the 'mask' subdir
 
     x and y should have the same length.  The size of each element
@@ -37,11 +37,11 @@ def vol_generator(foldername, verb=1):
 
     """
 
-    orig_data_path = os.path.join(foldername,'orig')
+    orig_data_path = os.path.join(foldername, 'orig')
     orig_data_list = sorted(os.listdir(orig_data_path))
     orig_set_size  = len(orig_data_list)
     
-    mask_data_path = os.path.join(foldername,'mask')
+    mask_data_path = os.path.join(foldername, 'mask')
     mask_data_list = sorted(os.listdir(mask_data_path))
     mask_set_size  = len(mask_data_list)
 
@@ -63,6 +63,14 @@ def vol_generator(foldername, verb=1):
     # constrain ourselves to *always* have uniform input
     # dimensions??--- this means we should also check+exit with error
     # if that is not the case.)
+    #### [PT: Apr 5, 2020] the dimensions here should be read read in
+    #### from the dset, using an initial 'read' with nibable,
+    #### extracting the information from the file header.  '32x32x32'
+    #### should *not* be hardwired here, because our dsets will not
+    #### not always have that property.  Reading 1 dset and getting
+    #### that info should be OK, because all dsets should have that
+    #### property---though we should certainly check this for
+    #### consistency across dsets once one is read in (at the moment).
     orig = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
     mask = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
     
@@ -70,7 +78,7 @@ def vol_generator(foldername, verb=1):
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
         print("  {:^30s} : {:^30s}".format('orig files', 'mask files'))
-        print("  {:30s} : {:30s}".format('-'*30, '-'*30))
+        print("  {:30s}  : {:30s}".format('-'*30, '-'*30))
 
 
     for index in range(orig_set_size):
@@ -94,6 +102,12 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized (bool
         ### type)?  As above, is there a problem that the y array was
         ### initialized with float type, and this is int16?
+        ##### [PT: Apr 5, 2020] There is still a type mismatch: 'mask'
+        ##### defined above has np.float32; this is being read in
+        ##### 'astype' bool... but it probably gets immediately
+        ##### converted to float32?  Python arrays can only have 1
+        ##### type, so implicit type conversion will have to take
+        ##### place, but this should be dealt with consistently.
         mask_data      = np.asanyarray(mask_image.dataobj).astype('bool') 
         mask[index]    = mask_data
         
