@@ -27,7 +27,10 @@ import pytorchtools         as ptt
 #num_slices_sag = data_dims[0]
 #num_slices_cor = data_dims[1]
 #num_slices_axl = data_dims[2]
-def visualize_loss(avg_train_losses,avg_valid_losses):
+def visualize_loss(avg_train_losses, avg_valid_losses, outdir = '.'):
+
+    oimage = '/'.join([outdir, 'loss_plot.png'])
+
     # visualize the loss as the network trained
     fig = plt.figure(figsize=(10,8))
     plt.plot(range(1,len(avg_train_losses)+1), avg_train_losses, 
@@ -49,11 +52,11 @@ def visualize_loss(avg_train_losses,avg_valid_losses):
     plt.legend()
     plt.tight_layout()
     #plt.show()
-    fig.savefig('loss_plot.png', bbox_inches='tight')
+    fig.savefig(oimage, bbox_inches='tight')
 
 
 
-def train_net(data_path, epochs, lr, seed, verb):
+def train_net(data_path, epochs, lr, seed, outdir, verb):
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -66,6 +69,7 @@ def train_net(data_path, epochs, lr, seed, verb):
     lr           : learning rate parameter 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
+    outdir       : directory for various outputs
     verb         : verbosity for stdout
 
     Returns
@@ -278,7 +282,7 @@ def train_net(data_path, epochs, lr, seed, verb):
         # decreased, and if it has, it will make a checkpoint of the
         # current model
         early_stopping(valid_loss, net)
-        visualize_loss(avg_train_losses,avg_valid_losses)
+        visualize_loss(avg_train_losses, avg_valid_losses, outdir=outdir)
     #torch.save(net.state_dict(), 'model_weights.pt')
     return net
 

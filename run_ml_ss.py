@@ -74,12 +74,71 @@ def get_args():
                         type=int, default=None,
                         help='Set seed for random value gen (def: None)')
 
+    parser.add_argument('-o', '--outdir', 
+                        metavar='OD', 
+                        dest='outdir',
+                        type=str, default='.',
+                        help='Set name of output directory (def: .)')
+
     parser.add_argument("-v", "--verb", 
                         dest="verb", 
                         type=int, default=1, 
                         help="verbosity for code running (def: 1)")
 
     return parser.parse_args()
+
+def prep_outdir(din, verb=1):
+    """Check+prepare the outdir entered by the user.  At the moment, we
+    allow outdir to exist already, and contents from run_ml_ss.py will
+    be simply and brutally overwritten.
+
+    Any final '/' will be stripped, because it would be attached later
+    by path-joining commands
+
+    Parameters
+    ----------
+
+    din       : Name of output directory entered by the user.  Can be
+                absolute or relative path.
+
+    Returns
+    -------
+
+    dout      : String obj for actual path to be used.
+
+    """
+
+    # check for any input
+    if not(din):
+        return ""
+
+    # remove any '/' at end, or just copy
+    if din[-1] == '/' :
+        dout = din[:-1]
+    else:
+        dout = din
+
+    # report if dir exists already; just reporting at the moment
+    does_exist = os.path.isdir(dout)
+    path_isabs = os.path.isabs(dout)
+
+    # check/make outdir
+    if does_exist :
+        if verb :
+            print("++ Path of outdir ({}) exists already".format(dout)) 
+    else:
+        if verb :
+            print("++ Path of outdir ({}) does NOT already".format(dout)) 
+            print("   Will make it now.") 
+        os.mkdir(dout)
+
+    # report abs path (might prefer using this later, if program hops
+    # around to different places, but not for now)
+    if verb :
+        abspath = os.path.abspath(dout)
+        print("++ Absolute path of outdir will be: {}".format(abspath))
+
+    return dout
 
 if __name__ == '__main__':
 
@@ -96,6 +155,10 @@ if __name__ == '__main__':
     lr        = args.learning_rate
     seed      = args.seed
     verb      = args.verb
-    
-    net = lmt.train_net(data_path, epochs, lr, seed, verb)
-    #lmt.test(data_path)
+    outdir    = prep_outdir(args.outdir, verb=verb)
+
+    if not(outdir) :
+        print("ERROR: this path is not valid: {}".format(args.outdir))
+        sys.exit(5)
+
+    net = lmt.train_net(data_path, epochs, lr, seed, outdir, verb)
