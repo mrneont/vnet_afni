@@ -184,7 +184,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             orig_data = orig_data.unsqueeze(0) 
             mask_data = mask_data.unsqueeze(0) 
                                                
-            if verb:
+            if verb > 1 :
                 print('ORIGINAL TRAINING DATA DIM  =', orig_data.shape)
                 print('MASK TRAINING DATA DIM      =', mask_data.shape)
                 
@@ -193,13 +193,13 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             #orig_data = torch.tensor(orig_data, dtype=torch.float32)
             #mask_data = torch.tensor(mask_data, dtype=torch.float32)
 
-            if verb:
+            if verb > 1 :
                 print('ORIGINAL TRAINING DATA TYPE =', orig_data.dtype)
                 print('MASK TRAINING DATA TYPE     =', mask_data.dtype)
 
             mask_train_pred = net(orig_data,verb)
 
-            if verb :
+            if verb > 1 :
                 print('PREDICTED MASK SIZE :', mask_train_pred.shape)
 
             # creating an instance of loss function
@@ -225,7 +225,8 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         valid_losses = []
         with torch.no_grad():
             count = 0
-            for orig_valdata,mask_valdata in zip(orig_val_loader,mask_val_loader):
+            for orig_valdata, mask_valdata \
+                in zip(orig_val_loader, mask_val_loader):
                 
                 orig_valdata  = orig_valdata.to(device)
                 mask_valdata  = mask_valdata.to(device)
@@ -241,11 +242,11 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                 #orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
                 #mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
 
-                if verb:
-                    print('ORIGINAL VALIDATION DATA DIM  =',orig_valdata.shape)
-                    print('MASK VALIDATION DATA DIM      =',mask_valdata.shape)
-                    print('ORIGINAL VALIDATION DATA TYPE =',orig_valdata.dtype)
-                    print('MASK VALIDATION DATA TYPE     =',mask_valdata.dtype)
+                if verb > 1 :
+                    print('ORIGINAL VALIDATION DATA DIM  =', orig_valdata.shape)
+                    print('MASK VALIDATION DATA DIM      =', mask_valdata.shape)
+                    print('ORIGINAL VALIDATION DATA TYPE =', orig_valdata.dtype)
+                    print('MASK VALIDATION DATA TYPE     =', mask_valdata.dtype)
 
                 mask_val_pred = net(orig_valdata,verb)
                 valid_losses.append(lml.dice(mask_val_pred, mask_valdata, 
@@ -290,10 +291,10 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 def test(data_path):
 
     # DATA PATH
-    (training_path, validation_path) = lmd.SSData_path(data_path)
+    training_path, validation_path = lmd.SSData_path(data_path)
     
      # populate the matrices from the dataset
-    (orig_val, mask_val) = lmd.mat_generator(validation_path)
+    orig_val, mask_val = lmd.mat_generator(validation_path)
 
     # pytorch data loaders
     orig_val_loader = DataLoader(orig_val, shuffle=False, batch_size=1)

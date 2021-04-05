@@ -1,5 +1,6 @@
 import os
 import sys
+import datetime
 import argparse     as argp
 import lib_ml_train as lmt
  
@@ -140,6 +141,43 @@ def prep_outdir(din, verb=1):
 
     return dout
 
+def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
+    """Store the command used to make this run.  Simple/no formatting at
+    the moment
+
+    Parameters
+    ----------
+    
+    argv       : the list of terminal commands used.
+    outdir     : output directory where all outputs (including what is 
+                 written here) will go.
+    ofile      : name of file to be written in the outdir.
+
+    Returns nothing, just writes a text file.
+
+    """
+
+    otxt  = '/'.join([outdir, ofile])
+    ocmd  = ' '.join(argv)
+    opwd  = os.getcwd()
+    
+    dt    = datetime.datetime.now()
+    odate = dt.strftime("%Y/%m/%d")
+    otime = dt.strftime("%H:%M:%S")
+
+    fff  = open(otxt, mode='w')
+
+    fff.write("# Run date  : {}\n".format(odate))
+    fff.write("# Run time  : {}\n".format(otime))
+    fff.write("# Run loc   : {}\n".format(opwd))
+    fff.write("# Run cmd   :\n{}".format(ocmd))
+
+    fff.close()
+
+    if verb :
+        print("++ Store executed command in text file: {}".format(otxt))
+
+
 if __name__ == '__main__':
 
     # [PT] a trick so that putting in *no* args prompts the help to be
@@ -160,5 +198,8 @@ if __name__ == '__main__':
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
+
+    # save command used
+    writeout_args(sys.argv, outdir, verb=verb)
 
     net = lmt.train_net(data_path, epochs, lr, seed, outdir, verb)
