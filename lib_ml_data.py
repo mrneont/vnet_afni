@@ -7,7 +7,7 @@ import nibabel as nib
 #data_dims = (256, 256, 256)
 
 
-def vol_generator(foldername, verb=1):
+def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate matrices
     for the dsets.
 
@@ -16,7 +16,7 @@ def vol_generator(foldername, verb=1):
 
     foldername   : Subdirectory of data (see program help for  
                    directory sub-structure), such as '.../training'
-                   or '.../validation'
+                   or '.../validation'.
 
                    Any 'foldername' should contain 2 directories of
                    dsets: 'mask' and 'orig'.  These should each
@@ -26,22 +26,24 @@ def vol_generator(foldername, verb=1):
     Returns
     =======
 
-    x            : A list of N arrays, where N is the number of dsets 
-                   in the 'orig' subdir
+    orig_mat     : A list of N arrays (each H x W x D of individual
+                   datasets), where N is the number of dsets in the
+                   'orig' subdir.
 
-    y            : A list of N arrays, where N is the number of dsets 
-                   in the 'mask' subdir
+    mask_mat     : A list of N arrays (each H x W x D of individual
+                   datasets), where N is the number of dsets in the
+                   'mask' subdir.
 
-    x and y should have the same length.  The size of each element
-    should be the same: an MxMxM array of data.
+    The output orig_mat and mask_mat should have the same length.  The
+    size of each element should be the same: an MxMxM array of data.
 
     """
 
-    orig_data_path = os.path.join(foldername,'orig')
+    orig_data_path = os.path.join(foldername, 'orig')
     orig_data_list = sorted(os.listdir(orig_data_path))
     orig_set_size  = len(orig_data_list)
     
-    mask_data_path = os.path.join(foldername,'mask')
+    mask_data_path = os.path.join(foldername, 'mask')
     mask_data_list = sorted(os.listdir(mask_data_path))
     mask_set_size  = len(mask_data_list)
 
@@ -63,14 +65,21 @@ def vol_generator(foldername, verb=1):
     # constrain ourselves to *always* have uniform input
     # dimensions??--- this means we should also check+exit with error
     # if that is not the case.)
-    x = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float)
-    y = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float)
+    #### [PT: Apr 5, 2020] the dimensions here should be read read in
+    #### from the dset, using an initial 'read' with nibable,
+    #### extracting the information from the file header.  '32x32x32'
+    #### should *not* be hardwired here, because our dsets will not
+    #### not always have that property.  Reading 1 dset and getting
+    #### that info should be OK, because all dsets should have that
+    #### property---though we should certainly check this for
+    #### consistency across dsets once one is read in (at the moment).
+    orig_mat = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
+    mask_mat = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
     
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
         print("  {:^30s} : {:^30s}".format('orig files', 'mask files'))
-        print("  {:30s} : {:30s}".format('-'*30, '-'*30))
-
+        print("  {:30s}  : {:30s}".format('-'*30, '-'*30))
 
     for index in range(orig_set_size):
         
@@ -83,8 +92,8 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized?  And is
         ### there an issue that x was initialized above as type
         ### 'float', while now the data array has type int16?
-        orig_data      = np.asanyarray(orig_image.dataobj).astype('int16')  
-        x[index]       = orig_data
+        orig_data       = np.asanyarray(orig_image.dataobj).astype('float32')  
+        orig_mat[index] = orig_data
         
         mask_filename  = mask_data_list[index]
         mask_data_file = os.path.join(mask_data_path, mask_filename)
@@ -93,8 +102,14 @@ def vol_generator(foldername, verb=1):
         ### save space with making the mask data binarized (bool
         ### type)?  As above, is there a problem that the y array was
         ### initialized with float type, and this is int16?
-        mask_data      = np.asanyarray(mask_image.dataobj).astype('int16') 
-        y[index]       = mask_data
+        ##### [PT: Apr 5, 2020] There is still a type mismatch: 'mask'
+        ##### defined above has np.float32; this is being read in
+        ##### 'astype' bool... but it probably gets immediately
+        ##### converted to float32?  Python arrays can only have 1
+        ##### type, so implicit type conversion will have to take
+        ##### place, but this should be dealt with consistently.
+        mask_data       = np.asanyarray(mask_image.dataobj).astype('bool') 
+        mask_mat[index] = mask_data
         
         if verb > 1 :
             print("  {:30s} : {:30s}".format(orig_filename, mask_filename))
@@ -105,7 +120,7 @@ def vol_generator(foldername, verb=1):
                   "   {:30s} : {:30s}".format(orig_filename, mask_filename))
             sys.exit(3)
 
-    return x, y
+    return orig_mat, mask_mat
     
 
 def SSData_path(data_path):

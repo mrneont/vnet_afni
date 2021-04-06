@@ -17,18 +17,7 @@ import pytorchtools         as ptt
 ### unused:
 #from   tqdm             import tqdm
 
-### import whole file with abbrev, to see where functions are more
-### easily:
-#from   lib_ml_data      import SSData_path, vol_generator
-#from   lib_ml_models    import VNet_org
-#from   lib_ml_losses    import DiceLoss, dice
-#from   pytorchtools     import EarlyStopping
-
 # -----------------------------------------------------------------------
-
-# data_path contains the dataset currently being used to train the model
-# each dataset contains the training set and the validation set
-#data_path = '/Users/yamunasn/Vnet_afni/dataset/pretrain_vnet'
 
 #data dimensions of the volume  
 #data_dims = (256, 256, 256)
@@ -38,7 +27,10 @@ import pytorchtools         as ptt
 #num_slices_sag = data_dims[0]
 #num_slices_cor = data_dims[1]
 #num_slices_axl = data_dims[2]
-def visualize_loss(avg_train_losses,avg_valid_losses):
+def visualize_loss(avg_train_losses, avg_valid_losses, outdir = '.'):
+
+    oimage = '/'.join([outdir, 'loss_plot.png'])
+
     # visualize the loss as the network trained
     fig = plt.figure(figsize=(10,8))
     plt.plot(range(1,len(avg_train_losses)+1), avg_train_losses, 
@@ -60,11 +52,11 @@ def visualize_loss(avg_train_losses,avg_valid_losses):
     plt.legend()
     plt.tight_layout()
     #plt.show()
-    fig.savefig('loss_plot.png', bbox_inches='tight')
+    fig.savefig(oimage, bbox_inches='tight')
 
 
 
-def train_net(data_path, epochs, lr, seed, verb):
+def train_net(data_path, epochs, lr, seed, outdir, verb):
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -77,6 +69,7 @@ def train_net(data_path, epochs, lr, seed, verb):
     lr           : learning rate parameter 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
+    outdir       : directory for various outputs
     verb         : verbosity for stdout
 
     Returns
@@ -85,7 +78,7 @@ def train_net(data_path, epochs, lr, seed, verb):
     [***the full network?  maybe describe more what this is...]
 
     """
-
+    # check the device available 
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -95,53 +88,81 @@ def train_net(data_path, epochs, lr, seed, verb):
             torch.manual_seed(seed)
 
     if verb :
-        print('The device being used is =', device)
-        print('The number of epochs is  =', epochs)
+        print('DEVICE BEING USED :', device)
+        print('NUMBER OF EPOCHS  :', epochs)
 
     # Here, get the paths, and then make lists of the training and
     # validation dsets.  In both cases, the 'x*' member is the 'orig'
     # dset, and the 'y*' member is the mask dset.
-    (training_path, validation_path) = lmd.SSData_path(data_path)
-    #traingen = lmd.vol_generator(training_path)
-    #print(len(traingen))
-    (xtrain, ytrain) = lmd.vol_generator(training_path, verb=verb)
-    (xval, yval)     = lmd.vol_generator(validation_path, verb=verb)
+    #(training_path, validation_path) = lmd.SSData_path(data_path)
+    path_train, path_val     = lmd.SSData_path(data_path)
 
-    Ntrain = xtrain.shape[0]
-    Nval   = xval.shape[0]
+    # populate the matrices from the dataset
+    ### [PT: Apr 5, 2021] maybe this should be called
+    ### "mat_generator()", since that is what it generates?
+    ##### [PT] renaming output to be more descriptive: these appear to
+    ##### be matrices, of training data, for orig and mask dsets 
+    #orig_train, mask_train   = lmd.vol_generator(path_train, verb=verb)
+    #orig_val, mask_val       = lmd.vol_generator(path_val,   verb=verb)
+    orig_train_mat, mask_train_mat = lmd.mat_generator(path_train, verb=verb)
+    orig_val_mat,   mask_val_mat   = lmd.mat_generator(path_val,   verb=verb)
 
-    #n_train= xtrain.shape[0]
-    #print(n_train)
+    # dataset size
+    #Ntrain = orig_train.shape[0]
+    #Nval   = orig_val.shape[0]
+    Ntrain = orig_train_mat.shape[0]
+    Nval   = orig_val_mat.shape[0]
 
+    if verb:
+        print('TRAINING DATASET PATH   :', path_train)
+        print('VALIDATION DATASET PATH :', path_val)
+        print('ORIGINAL TRAINING DATASET SIZE   :', Ntrain)
+        print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
+        
     # Set up network
-    ### [PT] Q: the number of channels here is determined by.... ?
-    ### and the number of classes is determined by having a binary
-    ### mask, right?
-    net = lmm.VNet_org(in_channels=1, num_class=1)
+
+    # Task : binary segmentation 
+    # in_channels = 1 , size = (H X W X Depth): in this case the entire MRI vol
+    # num_class = Output channel  = 1 ,  size = (H X W X Depth)
+    # num_class = 1 since the task is binary segmentation. 
+
+    net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
+
+    # move model to device
     net.to(device)
+
+    # print the model summary
+    if verb :
+        print('MODEL SUMMARY :\n' )
+        print(net)
 
     # load optimizer
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
-    mri_train_loader  = DataLoader(xtrain, shuffle=False, batch_size=1)
-    mask_train_loader = DataLoader(ytrain, shuffle=False, batch_size=1)
-    mri_val_loader    = DataLoader(xval,   shuffle=False, batch_size=1)
-    mask_val_loader   = DataLoader(yval,   shuffle=False, batch_size=1)
-    #print(len(train_loader))
+    #pytorch dataloader 
+    orig_train_loader = DataLoader(orig_train_mat, shuffle=False, batch_size=1)
+    mask_train_loader = DataLoader(mask_train_mat, shuffle=False, batch_size=1)
+    orig_val_loader   = DataLoader(orig_val_mat,   shuffle=False, batch_size=1)
+    mask_val_loader   = DataLoader(mask_val_mat,   shuffle=False, batch_size=1)
+    #print('orig_train_loader  DATA TYPE =',orig_train_loader[0].dtype)
+    #print('mask_train_loader DATA TYPE     =',mask_train_loader[0].dtype)
+    
     step     = 0
     dash     = '-' * 20
-    epochend = '='*60
+    epochend = '=' * 60
 
     # initialize the early_stopping object
     patience         = 5
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []
     avg_valid_losses = []
-    
-    start = time.time()
+    start            = time.time()
+
+
     for epoch in range(epochs):
 
-        print('EPOCH:', epoch)
+        if verb:
+            print('EPOCH:', epoch)
         
         i=1
         
@@ -150,24 +171,41 @@ def train_net(data_path, epochs, lr, seed, verb):
         ###################
         train_losses=[]
         net.train() # prep model for training
-        for mri_data, mask_data in zip(mri_train_loader, mask_train_loader):
+        for orig_data, mask_data in zip(orig_train_loader, mask_train_loader):
 
-            print('training dset : {:5d} / {}'.format(i, Ntrain))
+            if verb:
+                print('training dset : {:5d} / {}'.format(i, Ntrain))
 
-            mri_data, mask_data = mri_data.to(device), mask_data.to(device)
-            mri_data  = mri_data.unsqueeze(0)   # 1 x (dimensions of dset)
-            #print('mri_data shape is =',mri_data.shape)
-            mask_data = mask_data.unsqueeze(0)
-            #print('mask_data shape is =',mask_data.shape)
+            orig_data = orig_data.to(device)
+            mask_data = mask_data.to(device)
+            ### CONV3D requires i/p in the format of:
+            ### (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
+            # So, try to bring each data into the format: (1 X 1 X D X H X W)
+            orig_data = orig_data.unsqueeze(0) 
+            mask_data = mask_data.unsqueeze(0) 
+                                               
+            if verb > 1 :
+                print('ORIGINAL TRAINING DATA DIM  =', orig_data.shape)
+                print('MASK TRAINING DATA DIM      =', mask_data.shape)
+                
+            #RuntimeError: expected scalar type Double but found Float
+            # F.conv3d expects the data to be Double, hence typecasting 
+            #orig_data = torch.tensor(orig_data, dtype=torch.float32)
+            #mask_data = torch.tensor(mask_data, dtype=torch.float32)
 
-            mri_data   = torch.tensor(mri_data, dtype=torch.float32)
-            mask_data  = torch.tensor(mask_data, dtype=torch.float32)
+            if verb > 1 :
+                print('ORIGINAL TRAINING DATA TYPE =', orig_data.dtype)
+                print('MASK TRAINING DATA TYPE     =', mask_data.dtype)
 
-            masks_pred = net(mri_data)
-            if verb :
-                print('masks_pred shape is =', masks_pred.shape)
+            mask_train_pred = net(orig_data,verb)
+
+            if verb > 1 :
+                print('PREDICTED MASK SIZE :', mask_train_pred.shape)
+
+            # creating an instance of loss function
             loss = lml.DiceLoss()
-            LOSS = loss.forward(mask_data,masks_pred)
+            # compare the predicted mask and the target data 
+            LOSS = loss.forward(mask_train_pred, mask_data)
 
             if verb :
                 print('LOSS = ', LOSS)
@@ -187,83 +225,119 @@ def train_net(data_path, epochs, lr, seed, verb):
         valid_losses = []
         with torch.no_grad():
             count = 0
-            for mri_valdata,mask_valdata in zip(mri_val_loader,mask_val_loader):
+            for orig_valdata, mask_valdata \
+                in zip(orig_val_loader, mask_val_loader):
                 
-                ## [PT] Q: why is this one line?  this doesn't look
-                ## like it has to be a tuple on LHS, so why not be 2
-                ## lines?
-                mri_valdata, mask_valdata = mri_valdata.to(device), mask_valdata.to(device)
-                mri_valdata = mri_valdata.unsqueeze(0)
-                #print('mri_data shape is =',mri_data.shape)
-                mask_valdata = mask_valdata.unsqueeze(0)
-                #print('mask_data shape is =',mask_data.shape)
+                orig_valdata  = orig_valdata.to(device)
+                mask_valdata  = mask_valdata.to(device)
+                ### CONV3D requires i/p in the format of: (batchsz = 1,
+                ###   Channels=1, Depth =256, Height=256, width=256)
+                # So, trying to bring the data into the format of (1 X
+                # 1 X D X H X W)
+                orig_valdata  = orig_valdata.unsqueeze(0)
+                mask_valdata  = mask_valdata.unsqueeze(0)
 
-                mri_valdata  = torch.tensor(mri_valdata,  dtype=torch.float32)
-                mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
-                y = net(mri_valdata)
-                valid_losses.append(lml.dice(y, mask_valdata, smooth=1.0))
+                #RuntimeError: expected scalar type Double but found Float
+                #F.conv3d expects the data to be Double, hence typecasting 
+                #orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
+                #mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
+
+                if verb > 1 :
+                    print('ORIGINAL VALIDATION DATA DIM  =', orig_valdata.shape)
+                    print('MASK VALIDATION DATA DIM      =', mask_valdata.shape)
+                    print('ORIGINAL VALIDATION DATA TYPE =', orig_valdata.dtype)
+                    print('MASK VALIDATION DATA TYPE     =', mask_valdata.dtype)
+
+                mask_val_pred = net(orig_valdata,verb)
+                valid_losses.append(lml.dice(mask_val_pred, mask_valdata, 
+                                             smooth=1.0))
 
                 count += 1
-                #print('validatecount=', count)
+                
                 print('validating dset : {:5d} / {}'.format(count, Nval))
 
         
         # calculate average loss over an epoch
         
         end = time.time()
-        print(f"Runtime of the program is {end - start}")
+        #print(f"Runtime of the program is {end - start}")
         print("Runtime of the program is {}".format(end - start))
 
-        #train_loss = np.average(train_losses)
-        #train_loss = np.mean(train_losses)
+        # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
         train_loss   = torch.mean(train_losses)
-        #train_loss = torch.mean(train_losses).detach().cpu().numpy()
-        #valid_loss = np.average(valid_losses)
+        # computing the loss pertaining to the validation data
         valid_losses = torch.as_tensor(valid_losses)
         valid_loss   = torch.mean(valid_losses)
+
         avg_train_losses.append(train_loss)
         avg_valid_losses.append(valid_loss)
-        print('avg training loss is   = ', avg_train_losses)
-        print('avg validation loss is = ', avg_valid_losses)
+        if verb :
+            print('AVG TRAINING LOSS   = ', avg_train_losses)
+            print('AVG VALIDATION LOSS = ', avg_valid_losses)
         if early_stopping.early_stop:
-            print("Early stopping")
+            print("EARLY STOPPING")
             break
 
         # early_stopping needs the validation loss to check if it has
         # decreased, and if it has, it will make a checkpoint of the
         # current model
         early_stopping(valid_loss, net)
-        visualize_loss(avg_train_losses,avg_valid_losses)
+        visualize_loss(avg_train_losses, avg_valid_losses, outdir=outdir)
     #torch.save(net.state_dict(), 'model_weights.pt')
     return net
 
 
 def test(data_path):
 
-    (training_path, validation_path) = lmd.SSData_path(data_path)
-        
-    (xval, yval)    = lmd.vol_generator(validation_path)
-    mri_val_loader  = DataLoader(xval,shuffle=False,batch_size=1)
-    mask_val_loader = DataLoader(yval,shuffle=False,batch_size=1)
-    model = lmm.VNet_org(in_channels=1, num_class=1)
+    # DATA PATH
+    training_path, validation_path = lmd.SSData_path(data_path)
+    
+     # populate the matrices from the dataset
+    orig_val, mask_val = lmd.mat_generator(validation_path)
+
+    # pytorch data loaders
+    orig_val_loader = DataLoader(orig_val, shuffle=False, batch_size=1)
+    mask_val_loader = DataLoader(mask_val, shuffle=False, batch_size=1)
+
+    # set up the network
+    # Task : binary segmentation 
+    ### in_channels = 1 , size = (H X W X Depth) : in this case the
+    ### entire MRI volume
+    # num_class = Output channel  = 1 , size = (H X W X Depth)
+    # num_class = 1 since the task is binary segmentation. 
+    model  = lmm.VNet_org(in_channels=1, num_class=1)
+
+    # load the weights of the model
     model.load_state_dict(torch.load('model_weights.pt'))
+
+    # prep the model for evaluation mode
     model.eval()
+
     dicescore = []
     dash =  '-' * 60
-    with torch.no_grad():
-        count = 0
-        for mri_valdata, mask_valdata in zip(mri_val_loader, mask_val_loader):
-            
-            mri_valdata = mri_valdata.unsqueeze(0)
-            #print('mri_data shape is =',mri_data.shape)
-            mask_valdata = mask_valdata.unsqueeze(0)
-            #print('mask_data shape is =',mask_data.shape)
 
-            mri_valdata = torch.tensor(mri_valdata, dtype=torch.float32)
+    # the gradients are not altered during the validation phase
+    with torch.no_grad(): 
+        count = 0
+        for orig_valdata, mask_valdata in zip(orig_val_loader, mask_val_loader):
+            
+            orig_valdata = orig_valdata.unsqueeze(0)
+            
+            mask_valdata = mask_valdata.unsqueeze(0)
+            
+            orig_valdata = torch.tensor(orig_valdata, dtype=torch.float32)
             mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
-            y = model(mri_valdata)
-            dicescore.append(lml.dice(y, mask_valdata, smooth=1.0))
+
+            if verb:
+                print('ORIGINAL VALIDATION DATA DIM  =',orig_valdata.shape)
+                print('MASK VALIDATION DATA DIM      =',mask_valdata.shape)
+                print('ORIGINAL VALIDATION DATA TYPE =',orig_valdata.dtype)
+                print('MASK VALIDATION DATA TYPE     =',mask_valdata.dtype)
+
+            mask_val_pred = model(orig_valdata)
+
+            dicescore.append(lml.dice(mask_val_pred, mask_valdata, smooth=1.0))
 
             count += 1
         print(dash)    
