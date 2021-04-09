@@ -38,7 +38,7 @@ def data_normalize(img):
     #normalized = (img - mean) / std
     return normalized
 
-def visualize_loss(avg_train_losses, avg_valid_losses, outdir = '.'):
+def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
     oimage = '/'.join([outdir, 'loss_plot.png'])
 
@@ -46,11 +46,11 @@ def visualize_loss(avg_train_losses, avg_valid_losses, outdir = '.'):
     fig = plt.figure(figsize=(10,8))
     plt.plot(range(1,len(avg_train_losses)+1), avg_train_losses, 
              label='Training Loss')
-    plt.plot(range(1,len(avg_valid_losses)+1), avg_valid_losses,
+    plt.plot(range(1,len(avg_val_losses)+1), avg_val_losses,
              label='Validation Loss')
 
     # find position of lowest validation loss
-    minposs = avg_valid_losses.index(min(avg_valid_losses))+1 
+    minposs = avg_val_losses.index(min(avg_val_losses))+1 
     
     plt.axvline(minposs, linestyle='--', color='r',
                 label='Early Stopping Checkpoint')
@@ -183,7 +183,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
     patience         = 5
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []
-    avg_valid_losses = []
+    avg_val_losses = []
     start            = time.time()
 
 
@@ -262,7 +262,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         # validate the model #
         ######################
         net.eval() # prep model for evaluation
-        valid_losses = []
+        val_losses = []
         with torch.no_grad():
             count = 0
             for orig_valdata, mask_valdata \
@@ -289,19 +289,19 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                     print('MASK VALIDATION DATA TYPE     =', mask_valdata.dtype)
 
                 mask_val_pred = net(orig_valdata,verb)
-                valid_losses.append(lml.dice(mask_val_pred, mask_valdata, 
+                val_losses.append(lml.dice(mask_val_pred, mask_valdata, 
                                              smooth=1.0))
 
                 print('validating dset : {:5d} / {}'.format(count, Nval))
-                #print('val loss  ',valid_losses[count])
+                
                 loss_log.write("validating dataset : {:5d}/{} ".format(count, Nval))
-                loss_log.write(" ""LOSS: {}\n".format(valid_losses[count]))
+                loss_log.write(" ""LOSS: {}\n".format(val_losses[count]))
                 count += 1
                 
 
 
                 
-                #loss_log.write(" ""LOSS: {}\n".format(valid_losses[count]))
+                
         # calculate average loss over an epoch
         
         end = time.time()
@@ -312,28 +312,28 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         train_losses = torch.as_tensor(train_losses)
         train_loss   = torch.mean(train_losses)
         # computing the loss pertaining to the validation data
-        valid_losses = torch.as_tensor(valid_losses)
-        valid_loss   = torch.mean(valid_losses)
+        val_losses = torch.as_tensor(val_losses)
+        val_loss   = torch.mean(val_losses)
 
         avg_train_losses.append(train_loss)
-        avg_valid_losses.append(valid_loss)
+        avg_val_losses.append(val_loss)
         if verb :
             print('AVG TRAINING LOSS   = ', avg_train_losses)
-            print('AVG VALIDATION LOSS = ', avg_valid_losses)
+            print('AVG VALIDATION LOSS = ', avg_val_losses)
         if early_stopping.early_stop:
             print("EARLY STOPPING")
             break
 
 
         loss_log.write("AVG TRAINING LOSS : {}\n".format(avg_train_losses))
-        loss_log.write("AVG VALIDATION LOSS  : {}\n".format(avg_valid_losses))
+        loss_log.write("AVG VALIDATION LOSS  : {}\n".format(avg_val_losses))
         loss_log.write("RUN TIME OF PROGRAM : {}\n".format(end - start))
         print(epochend)
         # early_stopping needs the validation loss to check if it has
         # decreased, and if it has, it will make a checkpoint of the
         # current model
-        early_stopping(valid_loss, net)
-        visualize_loss(avg_train_losses, avg_valid_losses, outdir=outdir)
+        early_stopping(val_loss, net)
+        visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
         
     #torch.save(net.state_dict(), 'model_weights.pt')
     loss_log.write("EPOCH END : {}\n".format(epochend))
