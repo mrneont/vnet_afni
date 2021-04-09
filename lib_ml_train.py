@@ -27,6 +27,17 @@ import pytorchtools         as ptt
 #num_slices_sag = data_dims[0]
 #num_slices_cor = data_dims[1]
 #num_slices_axl = data_dims[2]
+def data_normalize(img):
+   
+    
+    #mean = img.mean()
+    #std = img.std()
+    data_min = img.min()
+    data_max = img.max()
+    normalized = (img - data_min) / (data_max -data_min )
+    #normalized = (img - mean) / std
+    return normalized
+
 def visualize_loss(avg_train_losses, avg_valid_losses, outdir = '.'):
 
     oimage = '/'.join([outdir, 'loss_plot.png'])
@@ -199,11 +210,14 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                 loss_log.write("ORIGINAL TRAINING DATA TYPE : {}\n".format(orig_data.dtype))
                 loss_log.write("MASK TRAINING DATA TYPE : {}\n".format(mask_data.dtype))
                 
-            
                 
 
             
-            
+            orig_data = data_normalize(orig_data)
+            if i==1 :
+                loss_log.write(" DATA NORMALISED (0,1) \n")
+                loss_log.write(" ORIG DATA MAX : {}".format(orig_data.max()))
+                loss_log.write(" ""MIN : {}\n".format(orig_data.min()))
             orig_data = orig_data.to(device)
             mask_data = mask_data.to(device)
             ### CONV3D requires i/p in the format of:
