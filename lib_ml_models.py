@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class RepeatConv(nn.Module): # function to repeat the 'n_conv' convolution layers 
     """
-    Repeat Conv + PReLU n times
+    Repeat Conv + ReLU n times
     """
     def __init__(self, n_channels, n_conv):
         super(RepeatConv, self).__init__()
@@ -13,7 +13,7 @@ class RepeatConv(nn.Module): # function to repeat the 'n_conv' convolution layer
         for i in range(n_conv):
             conv_list.append(nn.Conv3d(n_channels, n_channels,  # here the in_channels = out_channels 
                                        kernel_size=5, padding=2))
-            conv_list.append(nn.PReLU())
+            conv_list.append(nn.ReLU())
         
         self.conv = nn.Sequential(*conv_list)
         
@@ -26,7 +26,7 @@ class Down(nn.Module):
         
         self.downconv = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=2, stride=2),
-            nn.PReLU()
+            nn.ReLU()
         )
         self.conv = RepeatConv(out_channels, n_conv) # repeat the 'n_conv' convolution layers 
         
@@ -41,7 +41,7 @@ class Up(nn.Module):
         self.upconv = nn.Sequential(
             nn.ConvTranspose3d(in_channels, int(out_channels/2), 
                                kernel_size=2, stride=2),
-            nn.PReLU()
+            nn.ReLU()
         )
         self.conv = RepeatConv(out_channels, n_conv) # repeat the 'n_conv' convolution layers 
         
@@ -91,7 +91,7 @@ class VNet_org(nn.Module):
         #input layer : down1 = (Conv3d,Relu)
         self.down1 = nn.Sequential(
             nn.Conv3d(1, 16, kernel_size=5, padding=2), 
-            nn.PReLU()
+            nn.ReLU()
         )
         # hidden layer : down2 = downconv(Conv3d,Relu) => (Conv3d,Relu) => (Conv3d,Relu) 
         self.down2 = Down(16, 32, 2)    # [PT] Q: how are these chosen?
@@ -114,7 +114,8 @@ class VNet_org(nn.Module):
         #end output layer : up5 = (Conv3d,Relu)
         self.up5 = nn.Sequential(
             nn.Conv3d(32, num_class, kernel_size=1),
-            nn.PReLU()
+            #nn.ReLU()
+            nn.Softmax(dim=3)
         )
         
          
