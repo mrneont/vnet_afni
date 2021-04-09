@@ -79,6 +79,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 
     """
     # check the device available 
+    loss_file  = '/'.join([outdir,'log_loss.txt'])
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -90,6 +91,13 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
     if verb :
         print('DEVICE BEING USED :', device)
         print('NUMBER OF EPOCHS  :', epochs)
+
+    loss_log  = open(loss_file, mode='w')
+
+    loss_log.write("DEVICE BEING USED  : {}\n".format(device))
+    loss_log.write("NUMBER OF EPOCHS  : {}\n".format(epochs))
+    
+    
 
     # Here, get the paths, and then make lists of the training and
     # validation dsets.  In both cases, the 'x*' member is the 'orig'
@@ -118,6 +126,15 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         print('VALIDATION DATASET PATH :', path_val)
         print('ORIGINAL TRAINING DATASET SIZE   :', Ntrain)
         print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
+
+
+    loss_log.write("TRAINING DATASET PATH   :{}\n".format(path_train))
+    loss_log.write("VALIDATION DATASET PATH   :{}\n".format(path_val))
+    loss_log.write("ORIGINAL TRAINING DATASET SIZE    :{}\n".format(Ntrain))
+    loss_log.write("ORIGINAL VALIDATION DATASET SIZE   :{}\n".format(Nval))
+
+    
+    
         
     # Set up network
 
@@ -149,7 +166,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
     
     step     = 0
     dash     = '-' * 20
-    epochend = '=' * 60
+    epochend = '=' * 80
 
     # initialize the early_stopping object
     patience         = 5
@@ -166,6 +183,8 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         
         i=1
         
+        loss_log.write("EPOCH  :{}\n".format(epoch))
+       
         ###################
         # train the model #
         ###################
@@ -173,9 +192,18 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         net.train() # prep model for training
         for orig_data, mask_data in zip(orig_train_loader, mask_train_loader):
 
-            if verb:
-                print('training dset : {:5d} / {}'.format(i, Ntrain))
 
+            if i==1 :
+                loss_log.write("ORIGINAL TRAINING DATA DIM : {}\n".format(orig_data.shape))
+                loss_log.write("MASK TRAINING DATA DIM : {}\n".format(mask_data.shape))
+                loss_log.write("ORIGINAL TRAINING DATA TYPE : {}\n".format(orig_data.dtype))
+                loss_log.write("MASK TRAINING DATA TYPE : {}\n".format(mask_data.dtype))
+                
+            
+                
+
+            
+            
             orig_data = orig_data.to(device)
             mask_data = mask_data.to(device)
             ### CONV3D requires i/p in the format of:
@@ -183,32 +211,30 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             # So, try to bring each data into the format: (1 X 1 X D X H X W)
             orig_data = orig_data.unsqueeze(0) 
             mask_data = mask_data.unsqueeze(0) 
-                                               
-            if verb > 1 :
-                print('ORIGINAL TRAINING DATA DIM  =', orig_data.shape)
-                print('MASK TRAINING DATA DIM      =', mask_data.shape)
-                
-            #RuntimeError: expected scalar type Double but found Float
-            # F.conv3d expects the data to be Double, hence typecasting 
-            #orig_data = torch.tensor(orig_data, dtype=torch.float32)
-            #mask_data = torch.tensor(mask_data, dtype=torch.float32)
-
-            if verb > 1 :
-                print('ORIGINAL TRAINING DATA TYPE =', orig_data.dtype)
-                print('MASK TRAINING DATA TYPE     =', mask_data.dtype)
-
+            
+            # F.conv3d expects the data to be Double
             mask_train_pred = net(orig_data,verb)
 
             if verb > 1 :
                 print('PREDICTED MASK SIZE :', mask_train_pred.shape)
 
+            if i==1 :
+                loss_log.write("PREDICTED MASK SIZE : {}\n".format(mask_train_pred.shape))
+
+            loss_log.write("  \n")
+            loss_log.write("PREDICTED MASK MAX : {}".format(mask_train_pred.max()))
+            loss_log.write(" ""MIN : {}\n".format(mask_train_pred.min()))
             # creating an instance of loss function
             loss = lml.DiceLoss()
             # compare the predicted mask and the target data 
             LOSS = loss.forward(mask_train_pred, mask_data)
 
             if verb :
+                print('training dset : {:5d} / {}'.format(i, Ntrain))
                 print('LOSS = ', LOSS)
+
+            loss_log.write("training dataset : {:5d}/{} ".format(i, Ntrain))
+            loss_log.write(" ""LOSS: {}\n".format(LOSS))
             i=i+1
             optimizer.zero_grad()
             LOSS.backward()
@@ -216,7 +242,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             train_losses.append(LOSS.item())
             #print(dash)
 
-        print(epochend)
+        
 
         ######################    
         # validate the model #
@@ -252,11 +278,16 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                 valid_losses.append(lml.dice(mask_val_pred, mask_valdata, 
                                              smooth=1.0))
 
+                print('validating dset : {:5d} / {}'.format(count, Nval))
+                #print('val loss  ',valid_losses[count])
+                loss_log.write("validating dataset : {:5d}/{} ".format(count, Nval))
+                loss_log.write(" ""LOSS: {}\n".format(valid_losses[count]))
                 count += 1
                 
-                print('validating dset : {:5d} / {}'.format(count, Nval))
 
-        
+
+                
+                #loss_log.write(" ""LOSS: {}\n".format(valid_losses[count]))
         # calculate average loss over an epoch
         
         end = time.time()
@@ -279,12 +310,20 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             print("EARLY STOPPING")
             break
 
+
+        loss_log.write("AVG TRAINING LOSS : {}\n".format(avg_train_losses))
+        loss_log.write("AVG VALIDATION LOSS  : {}\n".format(avg_valid_losses))
+        loss_log.write("RUN TIME OF PROGRAM : {}\n".format(end - start))
+        print(epochend)
         # early_stopping needs the validation loss to check if it has
         # decreased, and if it has, it will make a checkpoint of the
         # current model
         early_stopping(valid_loss, net)
         visualize_loss(avg_train_losses, avg_valid_losses, outdir=outdir)
+        
     #torch.save(net.state_dict(), 'model_weights.pt')
+    loss_log.write("EPOCH END : {}\n".format(epochend))
+    loss_log.close()
     return net
 
 

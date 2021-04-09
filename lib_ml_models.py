@@ -131,7 +131,7 @@ class VNet_org(nn.Module):
         up4 = self.up4(up3, down1)
         up5 = self.up5(up4)
 
-        if verb:
+        if verb >=2 :
             print('\n')
             print('*****************  NETWORK LAYERS *************************')
             print('ENCODER PART')
