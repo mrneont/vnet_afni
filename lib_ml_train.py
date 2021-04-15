@@ -13,6 +13,7 @@ import lib_ml_data          as lmd
 import lib_ml_models        as lmm
 import lib_ml_losses        as lml
 import pytorchtools         as ptt
+import nibabel as nib
 
 ### unused:
 #from   tqdm             import tqdm
@@ -105,8 +106,8 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 
     loss_log  = open(loss_file, mode='w')
 
-    loss_log.write("DEVICE BEING USED  : {}\n".format(device))
-    loss_log.write("NUMBER OF EPOCHS  : {}\n".format(epochs))
+    #loss_log.write("DEVICE BEING USED  : {}\n".format(device))
+    #loss_log.write("NUMBER OF EPOCHS  : {}\n".format(epochs))
     
     
 
@@ -139,10 +140,10 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
 
 
-    loss_log.write("TRAINING DATASET PATH   :{}\n".format(path_train))
-    loss_log.write("VALIDATION DATASET PATH   :{}\n".format(path_val))
-    loss_log.write("ORIGINAL TRAINING DATASET SIZE    :{}\n".format(Ntrain))
-    loss_log.write("ORIGINAL VALIDATION DATASET SIZE   :{}\n".format(Nval))
+    #loss_log.write("TRAINING DATASET PATH   :{}\n".format(path_train))
+    #loss_log.write("VALIDATION DATASET PATH   :{}\n".format(path_val))
+    #loss_log.write("ORIGINAL TRAINING DATASET SIZE    :{}\n".format(Ntrain))
+    #loss_log.write("ORIGINAL VALIDATION DATASET SIZE   :{}\n".format(Nval))
 
     
     
@@ -195,7 +196,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         i=1
         
         loss_log.write("EPOCH  :{}\n".format(epoch))
-       
+        loss_log.write( "{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n".format('dataset_num', 'LOSS.item','min_val','max_val'))
         ###################
         # train the model #
         ###################
@@ -203,21 +204,23 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         net.train() # prep model for training
         for orig_data, mask_data in zip(orig_train_loader, mask_train_loader):
 
-
+            '''
             if i==1 :
                 loss_log.write("ORIGINAL TRAINING DATA DIM : {}\n".format(orig_data.shape))
                 loss_log.write("MASK TRAINING DATA DIM : {}\n".format(mask_data.shape))
                 loss_log.write("ORIGINAL TRAINING DATA TYPE : {}\n".format(orig_data.dtype))
                 loss_log.write("MASK TRAINING DATA TYPE : {}\n".format(mask_data.dtype))
-                
+            '''   
                 
 
             
             orig_data = data_normalize(orig_data)
+            '''
             if i==1 :
                 loss_log.write(" DATA NORMALISED (0,1) \n")
                 loss_log.write(" ORIG DATA MAX : {}".format(orig_data.max()))
                 loss_log.write(" ""MIN : {}\n".format(orig_data.min()))
+            '''
             orig_data = orig_data.to(device)
             mask_data = mask_data.to(device)
             ### CONV3D requires i/p in the format of:
@@ -229,17 +232,26 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             # F.conv3d expects the data to be Double
             mask_train_pred = net(orig_data,verb)
 
+            if epoch == 0:
+
+                    mask_train_pred = torch.squeeze(mask_train_pred)
+                    mask_train_pred_np = mask_train_pred.detach().numpy()
+                    pred_filename = ("predmasktrain_%d.nii.gz" % (i))
+                    pred_filename_path = '/'.join([outdir, pred_filename])
+                    print(pred_filename_path)
+                    print(mask_train_pred_np.shape)
+                    output_image = nib.Nifti1Image(mask_train_pred_np , affine=np.eye(4))
+                    nib.save(output_image, pred_filename_path)
+
             if verb > 1 :
                 print('PREDICTED MASK SIZE :', mask_train_pred.shape)
 
-            if i==1 :
-                loss_log.write("PREDICTED MASK SIZE : {}\n".format(mask_train_pred.shape))
+            #if i==1 :
+            #    loss_log.write("PREDICTED MASK SIZE : {}\n".format(mask_train_pred.shape))
 
-            loss_log.write("  \n")
-            loss_log.write("PREDICTED MASK MAX : {}".format(mask_train_pred.max()))
-            loss_log.write(" ""MIN : {}\n".format(mask_train_pred.min()))
+
             # creating an instance of loss function
-            loss = lml.DiceLoss()
+            loss = lml.get_dice()
             # compare the predicted mask and the target data 
             LOSS = loss.forward(mask_train_pred, mask_data)
 
@@ -247,8 +259,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                 print('training dset : {:5d} / {}'.format(i, Ntrain))
                 print('LOSS = ', LOSS)
 
-            loss_log.write("training dataset : {:5d}/{} ".format(i, Ntrain))
-            loss_log.write(" ""LOSS: {}\n".format(LOSS))
+            loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n ".format(i, Ntrain, LOSS, mask_train_pred.min(), mask_train_pred.max()))
             i=i+1
             optimizer.zero_grad()
             LOSS.backward()
@@ -264,7 +275,9 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         net.eval() # prep model for evaluation
         val_losses = []
         with torch.no_grad():
+
             count = 0
+            loss_log.write("VALIDATION \n")
             for orig_valdata, mask_valdata \
                 in zip(orig_val_loader, mask_val_loader):
                 
@@ -289,13 +302,28 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                     print('MASK VALIDATION DATA TYPE     =', mask_valdata.dtype)
 
                 mask_val_pred = net(orig_valdata,verb)
-                val_losses.append(lml.dice(mask_val_pred, mask_valdata, 
-                                             smooth=1.0))
+
+                val_losses.append(loss.forward(mask_val_pred, mask_valdata))
 
                 print('validating dset : {:5d} / {}'.format(count, Nval))
                 
-                loss_log.write("validating dataset : {:5d}/{} ".format(count, Nval))
-                loss_log.write(" ""LOSS: {}\n".format(val_losses[count]))
+                #loss_log.write("validating dataset : {:5d}/{} ".format(count, Nval))
+
+                #loss_log.write(" ""LOSS: {}\n".format(val_losses[count]))
+                loss_log.write(" {}/{} {:15.4f}\n".format(count, Nval, val_losses[count]))
+
+                if epoch == 0:
+
+                    mask_val_pred = torch.squeeze(mask_val_pred)
+                    mask_val_pred_np = mask_val_pred.detach().numpy()
+                    pred_filename = ("predmaskval_%d.nii.gz" % (count))
+                    pred_filename_path = '/'.join([outdir, pred_filename])
+                    print(pred_filename_path)
+                    print(mask_val_pred_np.shape)
+                    output_image = nib.Nifti1Image(mask_val_pred_np , affine=np.eye(4))
+                    nib.save(output_image, pred_filename_path)
+            
+
                 count += 1
                 
 
@@ -335,6 +363,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
         
+
     #torch.save(net.state_dict(), 'model_weights.pt')
     loss_log.write("EPOCH END : {}\n".format(epochend))
     loss_log.close()

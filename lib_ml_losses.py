@@ -5,7 +5,14 @@ import torch.nn.functional as F
 from torch.autograd import Variable   ### [PT] this doesn't seem to be used?
 
 
-
+class get_dice(nn.Module):
+    def __init__(self):
+        super(get_dice, self).__init__()
+    
+    def forward(self,pred, gt):
+        dice = 2.0*torch.sum(pred*gt)/(1.0+torch.sum(pred**2)+torch.sum(gt**2))
+            
+        return 1-dice 
 
 def dice(inputs, targets, smooth=1.0):
 
