@@ -1,11 +1,10 @@
 import os
 import sys
 
+import lib_nibabel_utils     as lnu  
+
 import numpy   as np
 import nibabel as nib
-
-#data_dims = (256, 256, 256)
-
 
 def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate matrices
@@ -58,23 +57,46 @@ def mat_generator(foldername, verb=1):
 
         sys.exit(3)
 
-    # [PT] Q: Shouldn't the dimensions here come from the dsets
-    # themselves?  I don't think they should be hardwired as 32x32x32.
-    # For example, could get dimensions from the first dset, and make
-    # sure all the others match. (And I think at the moment we will
-    # constrain ourselves to *always* have uniform input
-    # dimensions??--- this means we should also check+exit with error
-    # if that is not the case.)
-    #### [PT: Apr 5, 2020] the dimensions here should be read read in
-    #### from the dset, using an initial 'read' with nibable,
-    #### extracting the information from the file header.  '32x32x32'
-    #### should *not* be hardwired here, because our dsets will not
-    #### not always have that property.  Reading 1 dset and getting
-    #### that info should be OK, because all dsets should have that
-    #### property---though we should certainly check this for
-    #### consistency across dsets once one is read in (at the moment).
-    orig_mat = np.zeros((orig_set_size, 32, 32, 32), dtype=np.float32)
-    mask_mat = np.zeros((mask_set_size, 32, 32, 32), dtype=np.float32)
+    # get matrix size from first dset in list, and can check later
+    # that it matches for everyone. This is necessary to get the
+    # matrix size from the input dsets
+    if True :
+        orig_filename  = orig_data_list[0]
+        orig_data_file = os.path.join(orig_data_path, orig_filename)
+        orig_image     = nib.load(orig_data_file)
+        orig_shape     = orig_image.shape
+
+        mask_filename  = mask_data_list[0]
+        mask_data_file = os.path.join(mask_data_path, mask_filename)
+        mask_image     = nib.load(mask_data_file)
+        mask_shape     = mask_image.shape
+
+        if len(orig_shape) != 3 or len(mask_shape) != 3 :
+            print("** ERROR: orig and mask dsets should be 3D volumes, not\n"
+                  "'{}' and '{}' dimensional".format(len(orig_shape), 
+                                                     len(mask_shape)))
+            sys.exit(2)
+        else:
+            str1 = ' '.join([str(x) for x in orig_shape])
+            str2 = ' '.join([str(x) for x in mask_shape])
+            if str1 != str2 :
+                print("** ERROR: orig and mask dsets have same shape,\n"
+                      " but don't:\n"
+                      "   {} : {}\n"
+                      "   {} : {}\n".format(orig_data_file, str1,
+                                            mask_data_file, str2))
+                sys.exit(2)
+            
+        # if we reach here, we should be happy that the number of orig
+        # dsets matches that of mask dsets; and the dimensions of the
+        # orig dsets should match that of the mask ones (at least for
+        # the [0]th examples of each list
+        ndset_and_dims = (orig_set_size, orig_shape[0], orig_shape[1],
+                          orig_shape[2])
+
+    # matrix dims come from dsets themselves
+    orig_mat = np.zeros(ndset_and_dims, dtype=np.float32)
+    mask_mat = np.zeros(ndset_and_dims, dtype=np.float32)
     
     if verb > 1 :
         print("\nLoading orig+mask dsets:\n")
