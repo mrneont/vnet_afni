@@ -316,13 +316,15 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 
                 if epoch == 0:
 
-                    mask_val_pred = torch.squeeze(mask_val_pred)
-                    mask_val_pred_np = mask_val_pred.detach().numpy()
-                    pred_filename = ("predmaskval_%d.nii.gz" % (count))
+                    mask_val_pred      = torch.squeeze(mask_val_pred)
+                    mask_val_pred_np   = mask_val_pred.detach().numpy()
+                    #pred_filename = ("predmaskval_%d.nii.gz" % (count))
+                    pred_filename      = ("predmaskval_{:04d}.nii.gz".format(count))
                     pred_filename_path = '/'.join([outdir, pred_filename])
                     print(pred_filename_path)
                     print(mask_val_pred_np.shape)
-                    output_image = nib.Nifti1Image(mask_val_pred_np , affine=np.eye(4))
+                    output_image = nib.Nifti1Image(mask_val_pred_np , 
+                                                   affine=np.eye(4))
                     nib.save(output_image, pred_filename_path)
             
 
