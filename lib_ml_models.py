@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
                          
 
 class RepeatConv(nn.Module): # function to repeat the 'n_conv' convolution layers 
@@ -121,7 +122,8 @@ class VNet_org(nn.Module):
         #count = 1
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
-                 nn.init.kaiming_normal_(m.weight, mode='fan_out',nonlinearity='relu')
+                 #nn.init.kaiming_normal_(m.weight, mode='fan_out',nonlinearity='relu')
+                 nn.init.xavier_uniform(m.weight, gain=np.sqrt(2))
                  #print('weight init {:d}'.format(count))
                  #count= count+1
          
@@ -157,3 +159,6 @@ class VNet_org(nn.Module):
 
 
         return up5
+
+
+

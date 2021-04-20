@@ -14,6 +14,7 @@ import lib_ml_models        as lmm
 import lib_ml_losses        as lml
 import pytorchtools         as ptt
 import nibabel as nib
+import lib_ml_cerebrum as lmc
 
 ### unused:
 #from   tqdm             import tqdm
@@ -155,8 +156,8 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
     # num_class = Output channel  = 1 ,  size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
 
-    net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
-
+    #net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
+    net = lmc.Cerebrum(in_channels=1, num_class=1,verb=verb)
     # move model to device
     net.to(device)
 
