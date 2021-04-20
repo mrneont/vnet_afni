@@ -94,7 +94,7 @@ class Cerebrum(nn.Module):
 		for m in self.modules():
 			if isinstance(m, nn.Conv3d):
 
-				nn.init.xavier_uniform(m.weight.data)
+				nn.init.xavier_normal_(m.weight.data)
 
 			elif isinstance(m, nn.ConvTranspose3d):
 
