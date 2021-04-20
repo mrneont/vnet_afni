@@ -232,18 +232,7 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             # F.conv3d expects the data to be Double
             mask_train_pred = net(orig_data,verb)
 
-            if epoch == 0:
-
-                mask_train_pred = torch.squeeze(mask_train_pred)
-                mask_train_pred_np = mask_train_pred.detach().numpy()
-                #pred_filename = ("predmasktrain_%d.nii.gz" % (i))
-                pred_filename = ("predmasktrain_{:04d}.nii.gz".format(i))
-                pred_filename_path = '/'.join([outdir, pred_filename])
-                print(pred_filename_path)
-                print(mask_train_pred_np.shape)
-                output_image = nib.Nifti1Image(mask_train_pred_np,
-                                               affine=np.eye(4))
-                nib.save(output_image, pred_filename_path)
+            
 
             if verb > 1 :
                 print('PREDICTED MASK SIZE :', mask_train_pred.shape)
@@ -267,6 +256,18 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
             LOSS.backward()
             optimizer.step()
             train_losses.append(LOSS.item())
+            if epoch == (epochs-1):
+
+                mask_train_pred_sq = torch.squeeze(mask_train_pred)
+                mask_train_pred_np = mask_train_pred_sq.cpu().detach().numpy()
+                #pred_filename = ("predmasktrain_%d.nii.gz" % (i))
+                pred_filename = ("predmasktrain_{:04d}.nii.gz".format(i))
+                pred_filename_path = '/'.join([outdir, pred_filename])
+                print(pred_filename_path)
+                print(mask_train_pred_np.shape)
+                output_image = nib.Nifti1Image(mask_train_pred_np,
+                                               affine=np.eye(4))
+                nib.save(output_image, pred_filename_path)
             #print(dash)
 
         
@@ -314,10 +315,10 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
                 #loss_log.write(" ""LOSS: {}\n".format(val_losses[count]))
                 loss_log.write(" {}/{} {:15.4f}\n".format(count, Nval, val_losses[count]))
 
-                if epoch == 0:
+                if epoch == (epochs-1):
 
                     mask_val_pred      = torch.squeeze(mask_val_pred)
-                    mask_val_pred_np   = mask_val_pred.detach().numpy()
+                    mask_val_pred_np   = mask_val_pred.cpu().detach().numpy()
                     #pred_filename = ("predmaskval_%d.nii.gz" % (count))
                     pred_filename      = ("predmaskval_{:04d}.nii.gz".format(count))
                     pred_filename_path = '/'.join([outdir, pred_filename])

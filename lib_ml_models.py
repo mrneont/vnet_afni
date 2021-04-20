@@ -118,6 +118,12 @@ class VNet_org(nn.Module):
             nn.Softmax(dim=3)
         )
         
+        #count = 1
+        for m in self.modules():
+            if isinstance(m, nn.Conv3d):
+                 nn.init.kaiming_normal_(m.weight, mode='fan_out',nonlinearity='relu')
+                 #print('weight init {:d}'.format(count))
+                 #count= count+1
          
     def forward(self, x,verb):
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
