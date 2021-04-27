@@ -14,7 +14,7 @@ import lib_ml_models        as lmm
 import lib_ml_losses        as lml
 import pytorchtools         as ptt
 import nibabel as nib
-import lib_ml_cerebrum as lmc
+import lib_ml_cerebrum      as lmc
 import os
 
 
@@ -67,7 +67,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
     fig.savefig(oimage, bbox_inches='tight')
 
 
-def train_net(data_path, epochs, lr, seed, outdir, verb): 
+def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -106,16 +106,24 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         print('DEVICE BEING USED :', device)
         print('NUMBER OF EPOCHS  :', epochs)
 
-    
+
     # Task : binary segmentation 
     # in_channels = 1, size = (H X W X Depth): in this case the entire MRI vol
     # num_class = Output channel  = 1 ,  size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
 
-     # Set up network - Initialize the net with the desired model
-    net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
-    #net = lmc.Cerebrum(in_channels=1, num_class=1,verb=verb)
-    
+    # Set up network - Initialize the net with the desired model
+    if net_arch == 'vnet_org' :
+        net = lmm.VNet_org(in_channels=1, num_class=1, verb=verb)
+    elif net_arch == 'Cerebrum' :
+        net = lmc.Cerebrum(in_channels=1, num_class=1, verb=verb)
+    else:
+        print("There is no network architecture here of name: {}"
+              "".format(net_arch))
+        sys.exit(1)
+
+    print("++ Network architecture type: {}".format(net_arch))
+
     # move model to device
     net.to(device)
 

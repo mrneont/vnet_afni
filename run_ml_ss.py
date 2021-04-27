@@ -86,6 +86,12 @@ def get_args():
                         type=int, default=1, 
                         help="verbosity for code running (def: 1)")
 
+    parser.add_argument("-a", "--architecture", 
+                        dest="net_arch", 
+                        type=str, default="vnet_org", 
+                        help="network architecture type; valid arguments\n" +
+                        "include: 'vnet_orig', 'Cerebrum' (def: vnet_org)")
+
     return parser.parse_args()
 
 def prep_outdir(din, verb=1):
@@ -192,6 +198,7 @@ if __name__ == '__main__':
     epochs    = args.epochs
     lr        = args.learning_rate
     seed      = args.seed
+    net_arch  = args.net_arch
     verb      = args.verb
     outdir    = prep_outdir(args.outdir, verb=verb)
 
@@ -202,4 +209,5 @@ if __name__ == '__main__':
     # save command used
     writeout_args(sys.argv, outdir, verb=verb)
 
-    net = lmt.train_net(data_path, epochs, lr, seed, outdir, verb)
+    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, 
+                         outdir, verb )
