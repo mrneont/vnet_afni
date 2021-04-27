@@ -149,7 +149,7 @@ class VNet_org(nn.Module):
             if isinstance(m, nn.Conv3d):
                 #nn.init.kaiming_normal_(m.weight, mode='fan_out', 
                 #                        nonlinearity='relu')
-                nn.init.xavier_uniform(m.weight, gain=np.sqrt(2))
+                nn.init.xavier_uniform_(m.weight, gain=np.sqrt(2))
                 #print('weight init {:d}'.format(count))
                 #count= count+1
          
