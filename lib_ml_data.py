@@ -5,6 +5,31 @@ import lib_nibabel_utils     as lnu
 
 import numpy   as np
 import nibabel as nib
+import torch.utils.data as data
+import glob
+
+class mridataset(data.Dataset):
+
+    def __init__(self, root_path):
+        self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig','*.nii.gz'))]
+        self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask','*.nii.gz'))]
+        
+
+
+    def __getitem__(self, index):
+        
+        self.orig_image  = nib.load(self.orig_data_list[index])
+        self.mask_image  = nib.load(self.mask_data_list[index])
+        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')  
+        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')  
+        
+        return (self.orig_data, self.mask_data)
+
+    def __len__(self):
+        return len(self.orig_data_list)
+
+
+
 
 def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate matrices

@@ -5,14 +5,48 @@ import torch.nn.functional as F
 from torch.autograd import Variable   ### [PT] this doesn't seem to be used?
 
 
+class dice_thrsh(nn.Module):  
+    def __init__(self):
+        super(dice_paul, self).__init__()
+
+    def forward(self, pred, gt):
+
+        
+        pred_max = torch.max(pred)
+        cutoff   = 0.25*pred_max
+        C        = (pred - cutoff) 
+        #Thresholding done differently to preserve the gradient attribute. 
+        #C        = (pred - cutoff) > 0
+        C[C<0] = 0
+        #B = torch.round(pred)
+        denom = torch.sum(C) + torch.sum(gt)
+
+        if denom :
+            dice = 2.0 * torch.sum(C*gt) / denom
+        else:
+            dice = 0
+
+        loss_value = (1-dice) 
+        
+        return loss_value
+
+
+
+
 class get_dice(nn.Module):
     def __init__(self):
         super(get_dice, self).__init__()
     
     def forward(self,pred, gt):
+
+        #print('pred MAX', pred.max())
+        #print('pred MIN', pred.min())
+
         dice = 2.0*torch.sum(pred*gt)/(1.0+torch.sum(pred**2)+torch.sum(gt**2))
-            
+      
         return 1-dice 
+
+
 
 def dice(inputs, targets, smooth=1.0):
 

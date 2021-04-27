@@ -15,30 +15,28 @@ import lib_ml_losses        as lml
 import pytorchtools         as ptt
 import nibabel as nib
 import lib_ml_cerebrum as lmc
-
-### unused:
-#from   tqdm             import tqdm
-
-# -----------------------------------------------------------------------
-
-#data dimensions of the volume  
-#data_dims = (256, 256, 256)
+import os
 
 
-# number of slices in cor, sag and axl
-#num_slices_sag = data_dims[0]
-#num_slices_cor = data_dims[1]
-#num_slices_axl = data_dims[2]
 def data_normalize(img):
    
-    
-    #mean = img.mean()
-    #std = img.std()
+
     data_min = img.min()
     data_max = img.max()
     normalized = (img - data_min) / (data_max -data_min )
-    #normalized = (img - mean) / std
     return normalized
+
+# write the predicated masks into output directory 
+def mask_pred_save(mask_pred, phase, count, outdir = '.'):
+
+    mask_pred_sq = torch.squeeze(mask_pred) # squeeze the channel dimension
+    mask_pred_sq_np = mask_pred_sq.cpu().detach().numpy()
+    pred_filename = ("predmask_{}_{:04d}.nii.gz".format(phase,count))
+    pred_filename_path = '/'.join([outdir, pred_filename])
+    output_image = nib.Nifti1Image(mask_pred_sq_np,
+                                               affine=np.eye(4))
+
+    nib.save(output_image, pred_filename_path)
 
 def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
@@ -68,8 +66,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
     fig.savefig(oimage, bbox_inches='tight')
 
 
-
-def train_net(data_path, epochs, lr, seed, outdir, verb):
+def train_net(data_path, epochs, lr, seed, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -87,12 +84,15 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 
     Returns
     =======
-
-    [***the full network?  maybe describe more what this is...]
-
     """
-    # check the device available 
+
+    # file to track the training and validation loss 
     loss_file  = '/'.join([outdir,'log_loss.txt'])
+    loss_log  = open(loss_file, mode='w')
+
+
+
+    # check the device available 
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -105,78 +105,45 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
         print('DEVICE BEING USED :', device)
         print('NUMBER OF EPOCHS  :', epochs)
 
-    loss_log  = open(loss_file, mode='w')
-
-    #loss_log.write("DEVICE BEING USED  : {}\n".format(device))
-    #loss_log.write("NUMBER OF EPOCHS  : {}\n".format(epochs))
-    
-    
-
-    # Here, get the paths, and then make lists of the training and
-    # validation dsets.  In both cases, the 'x*' member is the 'orig'
-    # dset, and the 'y*' member is the mask dset.
-    #(training_path, validation_path) = lmd.SSData_path(data_path)
-    path_train, path_val     = lmd.SSData_path(data_path)
-
-    # populate the matrices from the dataset
-    ### [PT: Apr 5, 2021] maybe this should be called
-    ### "mat_generator()", since that is what it generates?
-    ##### [PT] renaming output to be more descriptive: these appear to
-    ##### be matrices, of training data, for orig and mask dsets 
-    #orig_train, mask_train   = lmd.vol_generator(path_train, verb=verb)
-    #orig_val, mask_val       = lmd.vol_generator(path_val,   verb=verb)
-    orig_train_mat, mask_train_mat = lmd.mat_generator(path_train, verb=verb)
-    orig_val_mat,   mask_val_mat   = lmd.mat_generator(path_val,   verb=verb)
-
-    # dataset size
-    #Ntrain = orig_train.shape[0]
-    #Nval   = orig_val.shape[0]
-    Ntrain = orig_train_mat.shape[0]
-    Nval   = orig_val_mat.shape[0]
-
-    if verb:
-        print('TRAINING DATASET PATH   :', path_train)
-        print('VALIDATION DATASET PATH :', path_val)
-        print('ORIGINAL TRAINING DATASET SIZE   :', Ntrain)
-        print('ORIGINAL VALIDATION DATASET SIZE :', Nval)
-
-
-    #loss_log.write("TRAINING DATASET PATH   :{}\n".format(path_train))
-    #loss_log.write("VALIDATION DATASET PATH   :{}\n".format(path_val))
-    #loss_log.write("ORIGINAL TRAINING DATASET SIZE    :{}\n".format(Ntrain))
-    #loss_log.write("ORIGINAL VALIDATION DATASET SIZE   :{}\n".format(Nval))
 
     
-    
-        
-    # Set up network
-
     # Task : binary segmentation 
     # in_channels = 1 , size = (H X W X Depth): in this case the entire MRI vol
     # num_class = Output channel  = 1 ,  size = (H X W X Depth)
     # num_class = 1 since the task is binary segmentation. 
 
-    #net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
-    net = lmc.Cerebrum(in_channels=1, num_class=1,verb=verb)
+     # Set up network - Initialize the net with the desired model
+    net = lmm.VNet_org(in_channels=1, num_class=1,verb=verb)
+    #net = lmc.Cerebrum(in_channels=1, num_class=1,verb=verb)
+    
     # move model to device
     net.to(device)
 
     # print the model summary
-    if verb :
+    if verb > 1:
         print('MODEL SUMMARY :\n' )
         print(net)
 
     # load optimizer
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
-    #pytorch dataloader 
-    orig_train_loader = DataLoader(orig_train_mat, shuffle=False, batch_size=1)
-    mask_train_loader = DataLoader(mask_train_mat, shuffle=False, batch_size=1)
-    orig_val_loader   = DataLoader(orig_val_mat,   shuffle=False, batch_size=1)
-    mask_val_loader   = DataLoader(mask_val_mat,   shuffle=False, batch_size=1)
-    #print('orig_train_loader  DATA TYPE =',orig_train_loader[0].dtype)
-    #print('mask_train_loader DATA TYPE     =',mask_train_loader[0].dtype)
+    train_datapath = os.path.join(data_path, 'training')
+    train_set = lmd.mridataset(train_datapath)
+    Ntrain = len(train_set)
     
+    val_datapath = os.path.join(data_path, 'validation')
+    val_set = lmd.mridataset(val_datapath)
+    Nval = len(val_set)
+   
+    
+   
+    dataloaders = {
+    'train': DataLoader(train_set, shuffle=False, batch_size=1),
+    'val'  : DataLoader(val_set, shuffle=False, batch_size=1)
+    }
+
+    
+
     step     = 0
     dash     = '-' * 20
     epochend = '=' * 80
@@ -184,163 +151,91 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
     # initialize the early_stopping object
     patience         = 5
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
-    avg_train_losses = []
-    avg_val_losses = []
+    avg_train_losses = [] #calculated over the entire dataset in an epoch
+    avg_val_losses = [] #calculated over the entire dataset in an epoch
     start            = time.time()
 
+    for epoch in range(epochs): # start of FOR loop for EPOCHS
 
-    for epoch in range(epochs):
 
         if verb:
             print('EPOCH:', epoch)
         
-        i=1
+        
         
         loss_log.write("EPOCH  :{}\n".format(epoch))
-        loss_log.write( "{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n".format('dataset_num', 'LOSS.item','min_val','max_val'))
-        ###################
-        # train the model #
-        ###################
-        train_losses=[]
-        net.train() # prep model for training
-        for orig_data, mask_data in zip(orig_train_loader, mask_train_loader):
+        
 
-            '''
-            if i==1 :
-                loss_log.write("ORIGINAL TRAINING DATA DIM : {}\n".format(orig_data.shape))
-                loss_log.write("MASK TRAINING DATA DIM : {}\n".format(mask_data.shape))
-                loss_log.write("ORIGINAL TRAINING DATA TYPE : {}\n".format(orig_data.dtype))
-                loss_log.write("MASK TRAINING DATA TYPE : {}\n".format(mask_data.dtype))
-            '''   
+        # Each epoch has a training and validation phase
+        for phase in ['train', 'val']: # start of FOR loop for PHASE
+            if phase == 'train':
+                net.train()  # Set model to training mode
+                train_losses=[] 
+                dataset_size = Ntrain
+                i=1 #index for the datafile/volume in the DATASET
+            else:
+                net.eval()   # Set model to evaluate mode
+                val_losses = []
+                dataset_size = Nval 
+                i=1 #index for the datafile/volume in the DATASET
                 
-
-            
-            orig_data = data_normalize(orig_data)
-            '''
-            if i==1 :
-                loss_log.write(" DATA NORMALISED (0,1) \n")
-                loss_log.write(" ORIG DATA MAX : {}".format(orig_data.max()))
-                loss_log.write(" ""MIN : {}\n".format(orig_data.min()))
-            '''
-            orig_data = orig_data.to(device)
-            mask_data = mask_data.to(device)
-            ### CONV3D requires i/p in the format of:
-            ### (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
-            # So, try to bring each data into the format: (1 X 1 X D X H X W)
-            orig_data = orig_data.unsqueeze(0) 
-            mask_data = mask_data.unsqueeze(0) 
-            
-            # F.conv3d expects the data to be Double
-            mask_train_pred = net(orig_data,verb)
-
-            
-
-            if verb > 1 :
-                print('PREDICTED MASK SIZE :', mask_train_pred.shape)
-
-            #if i==1 :
-            #    loss_log.write("PREDICTED MASK SIZE : {}\n".format(mask_train_pred.shape))
-
-
-            # creating an instance of loss function
+            print(phase)
+             # creating an instance of loss function
+            loss_log.write("PHASE  :{}\n".format(phase))
+            loss_log.write( "{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n".format('dataset_num', 'LOSS.item','min_val','max_val'))
             loss = lml.get_dice()
-            # compare the predicted mask and the target data 
-            LOSS = loss.forward(mask_train_pred, mask_data)
 
-            if verb :
-                print('training dset : {:5d} / {}'.format(i, Ntrain))
-                print('LOSS = ', LOSS)
+            for orig_data, mask_data in dataloaders[phase]:
 
-            loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n ".format(i, Ntrain, LOSS, mask_train_pred.min(), mask_train_pred.max()))
-            i=i+1
-            optimizer.zero_grad()
-            LOSS.backward()
-            optimizer.step()
-            train_losses.append(LOSS.item())
-            if epoch == (epochs-1):
-
-                mask_train_pred_sq = torch.squeeze(mask_train_pred)
-                mask_train_pred_np = mask_train_pred_sq.cpu().detach().numpy()
-                #pred_filename = ("predmasktrain_%d.nii.gz" % (i))
-                pred_filename = ("predmasktrain_{:04d}.nii.gz".format(i))
-                pred_filename_path = '/'.join([outdir, pred_filename])
-                print(pred_filename_path)
-                print(mask_train_pred_np.shape)
-                output_image = nib.Nifti1Image(mask_train_pred_np,
-                                               affine=np.eye(4))
-                nib.save(output_image, pred_filename_path)
-            #print(dash)
-
-        
-
-        ######################    
-        # validate the model #
-        ######################
-        net.eval() # prep model for evaluation
-        val_losses = []
-        with torch.no_grad():
-
-            count = 0
-            loss_log.write("VALIDATION \n")
-            for orig_valdata, mask_valdata \
-                in zip(orig_val_loader, mask_val_loader):
-                
-                orig_valdata  = orig_valdata.to(device)
-                mask_valdata  = mask_valdata.to(device)
-                ### CONV3D requires i/p in the format of: (batchsz = 1,
-                ###   Channels=1, Depth =256, Height=256, width=256)
-                # So, trying to bring the data into the format of (1 X
-                # 1 X D X H X W)
-                orig_valdata  = orig_valdata.unsqueeze(0)
-                mask_valdata  = mask_valdata.unsqueeze(0)
-
-                #RuntimeError: expected scalar type Double but found Float
-                #F.conv3d expects the data to be Double, hence typecasting 
-                #orig_valdata  = torch.tensor(orig_valdata, dtype=torch.float32)
-                #mask_valdata  = torch.tensor(mask_valdata, dtype=torch.float32)
-
-                if verb > 1 :
-                    print('ORIGINAL VALIDATION DATA DIM  =', orig_valdata.shape)
-                    print('MASK VALIDATION DATA DIM      =', mask_valdata.shape)
-                    print('ORIGINAL VALIDATION DATA TYPE =', orig_valdata.dtype)
-                    print('MASK VALIDATION DATA TYPE     =', mask_valdata.dtype)
-
-                mask_val_pred = net(orig_valdata,verb)
-
-                val_losses.append(loss.forward(mask_val_pred, mask_valdata))
-
-                print('validating dset : {:5d} / {}'.format(count, Nval))
-                
-                #loss_log.write("validating dataset : {:5d}/{} ".format(count, Nval))
-
-                #loss_log.write(" ""LOSS: {}\n".format(val_losses[count]))
-                loss_log.write(" {}/{} {:15.4f}\n".format(count, Nval, val_losses[count]))
-
-                if epoch == (epochs-1):
-
-                    mask_val_pred      = torch.squeeze(mask_val_pred)
-                    mask_val_pred_np   = mask_val_pred.cpu().detach().numpy()
-                    #pred_filename = ("predmaskval_%d.nii.gz" % (count))
-                    pred_filename      = ("predmaskval_{:04d}.nii.gz".format(count))
-                    pred_filename_path = '/'.join([outdir, pred_filename])
-                    print(pred_filename_path)
-                    print(mask_val_pred_np.shape)
-                    output_image = nib.Nifti1Image(mask_val_pred_np , 
-                                                   affine=np.eye(4))
-                    nib.save(output_image, pred_filename_path)
+                orig_data = data_normalize(orig_data)
+           
+                orig_data = orig_data.to(device)
+                mask_data = mask_data.to(device)
+                ### CONV3D requires i/p in the format of:
+                ### (batchsz =1, Channels=1, Depth =256, Height=256 width=256)
+                # So, try to bring each data into the format: (1 X 1 X D X H X W)
+                orig_data = orig_data.unsqueeze(0) 
+                mask_data = mask_data.unsqueeze(0) 
             
+               
 
-                count += 1
-                
+                # zero the parameter gradients
+                optimizer.zero_grad()
 
 
+                # forward propogation required in both training and validation phase 
+                with torch.set_grad_enabled(phase == 'train'): # set gradient calculation only for training phase
+                    # predict the mask using MRI orig_data
+                    mask_pred = net(orig_data,verb) ## reminder : F.conv3d expects the data to be Double
+                    # compare the predicted mask and the target data 
+                    LOSS = loss.forward(mask_pred, mask_data)
+
+                # backward propogation and optimization only if in training phase
+                if phase == 'train':
+                    LOSS.backward()
+                    optimizer.step()
+                    train_losses.append(LOSS.item())
+
+
+                    # save the model weights
+                if phase == 'val':
+                    val_losses.append(LOSS.item())
+                    
+                    
+
+
+                loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n ".format(i, dataset_size, LOSS, mask_pred.min(), mask_pred.max()))
+                if verb :
+                    print('dset : {:5d} / {}  LOSS = {:1.4f}'.format(i, dataset_size,LOSS))
+                #print('LOSS = ', LOSS)
                 
                 
-        # calculate average loss over an epoch
-        
-        end = time.time()
-        #print(f"Runtime of the program is {end - start}")
-        print("Runtime of the program is {}".format(end - start))
+                if epoch == (epochs-1):
+                    # save the pred masks in output dir
+                    mask_pred_save(mask_pred, phase, i, outdir = outdir)
+                    
+                i=i+1
+            end = time.time() # end of FOR loop for PHASE
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
@@ -351,87 +246,8 @@ def train_net(data_path, epochs, lr, seed, outdir, verb):
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
-        if verb :
-            print('AVG TRAINING LOSS   = ', avg_train_losses)
-            print('AVG VALIDATION LOSS = ', avg_val_losses)
-        if early_stopping.early_stop:
-            print("EARLY STOPPING")
-            break
-
-
-        loss_log.write("AVG TRAINING LOSS : {}\n".format(avg_train_losses))
-        loss_log.write("AVG VALIDATION LOSS  : {}\n".format(avg_val_losses))
-        loss_log.write("RUN TIME OF PROGRAM : {}\n".format(end - start))
-        print(epochend)
-        # early_stopping needs the validation loss to check if it has
-        # decreased, and if it has, it will make a checkpoint of the
-        # current model
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
-        
-
-    #torch.save(net.state_dict(), 'model_weights.pt')
-    loss_log.write("EPOCH END : {}\n".format(epochend))
+        print(epochend)# end of FOR loop for EPOCHS
     loss_log.close()
     return net
-
-
-def test(data_path):
-
-    # DATA PATH
-    training_path, validation_path = lmd.SSData_path(data_path)
-    
-     # populate the matrices from the dataset
-    orig_val, mask_val = lmd.mat_generator(validation_path)
-
-    # pytorch data loaders
-    orig_val_loader = DataLoader(orig_val, shuffle=False, batch_size=1)
-    mask_val_loader = DataLoader(mask_val, shuffle=False, batch_size=1)
-
-    # set up the network
-    # Task : binary segmentation 
-    ### in_channels = 1 , size = (H X W X Depth) : in this case the
-    ### entire MRI volume
-    # num_class = Output channel  = 1 , size = (H X W X Depth)
-    # num_class = 1 since the task is binary segmentation. 
-    model  = lmm.VNet_org(in_channels=1, num_class=1)
-
-    # load the weights of the model
-    model.load_state_dict(torch.load('model_weights.pt'))
-
-    # prep the model for evaluation mode
-    model.eval()
-
-    dicescore = []
-    dash =  '-' * 60
-
-    # the gradients are not altered during the validation phase
-    with torch.no_grad(): 
-        count = 0
-        for orig_valdata, mask_valdata in zip(orig_val_loader, mask_val_loader):
-            
-            orig_valdata = orig_valdata.unsqueeze(0)
-            
-            mask_valdata = mask_valdata.unsqueeze(0)
-            
-            orig_valdata = torch.tensor(orig_valdata, dtype=torch.float32)
-            mask_valdata = torch.tensor(mask_valdata, dtype=torch.float32)
-
-            if verb:
-                print('ORIGINAL VALIDATION DATA DIM  =',orig_valdata.shape)
-                print('MASK VALIDATION DATA DIM      =',mask_valdata.shape)
-                print('ORIGINAL VALIDATION DATA TYPE =',orig_valdata.dtype)
-                print('MASK VALIDATION DATA TYPE     =',mask_valdata.dtype)
-
-            mask_val_pred = model(orig_valdata)
-
-            dicescore.append(lml.dice(mask_val_pred, mask_valdata, smooth=1.0))
-
-            count += 1
-        print(dash)    
-        print('DICE SCORE for validation data = ', dicescore)
-
-  
-
-       
-      
