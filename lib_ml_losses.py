@@ -7,18 +7,19 @@ from torch.autograd import Variable   ### [PT] this doesn't seem to be used?
 
 class dice_thrsh(nn.Module):  
     def __init__(self):
-        super(dice_paul, self).__init__()
+        super(dice_thrsh, self).__init__()
 
     def forward(self, pred, gt):
 
         
         pred_max = torch.max(pred)
         cutoff   = 0.25*pred_max
-        C        = (pred - cutoff) 
-        #Thresholding done differently to preserve the gradient attribute. 
-        #C        = (pred - cutoff) > 0
+
+        # Binarize, with thresholding to preserve the gradient attribute. 
+        C      = (pred - cutoff) 
         C[C<0] = 0
-        #B = torch.round(pred)
+        C[C>0] = 1
+
         denom = torch.sum(C) + torch.sum(gt)
 
         if denom :

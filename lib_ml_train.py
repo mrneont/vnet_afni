@@ -29,11 +29,12 @@ def data_normalize(img):
     return normalized
 
 # write the predicated masks into output directory 
-def mask_pred_save(mask_pred, phase, count, outdir = '.'):
+def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
     mask_pred_sq    = torch.squeeze(mask_pred) # squeeze the channel dimension
     mask_pred_sq_np = mask_pred_sq.cpu().detach().numpy()
-    pred_fname      = ("predmask_{}_{:04d}.nii.gz".format(phase, count))
+    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
+                                                              count))
     pred_fname_path = '/'.join([outdir, pred_fname])
     output_image    = nib.Nifti1Image(mask_pred_sq_np, affine=np.eye(4))
 
@@ -88,7 +89,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     """
 
     # file to track the training and validation loss 
-    loss_file = '/'.join([outdir,'log_loss.txt'])
+    loss_file = '/'.join([outdir, 'log_loss.txt'])
     dash      = '-' * 20
     epochend  = '=' * 80
     step      = 0         
@@ -156,12 +157,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     start            = time.time()
 
     for epoch in range(epochs): # start of FOR loop for EPOCHS
-
-        if verb:
-            print('EPOCH:', epoch)
+        print('EPOCH:', epoch)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']: # start of FOR loop for PHASE
+            print("Starting phase: ", phase)
+
             if phase == 'train':
                 # Set model to training mode
                 net.train()  
@@ -178,15 +179,14 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
             loss_log  = open(loss_file, mode='a')
             loss_log.write("EPOCH  :{}\n".format(epoch))
-
-            print("Starting phase: ", phase)
-
-            # creating an instance of loss function
             loss_log.write("PHASE  :{}\n".format(phase))
             loss_log.write("{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n"
                            "".format('dataset_num', 'LOSS.item',
                                      'min_val', 'max_val'))
+
+            # creating an instance of loss function
             loss = lml.get_dice()
+            #loss = lml.dice_thrsh()
 
             i = 1 # index for the datafile/volume in the DATASET
 
@@ -211,11 +211,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
                 # set gradient calculation only for training phase
                 with torch.set_grad_enabled(phase == 'train'): 
+                    ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
                     mask_pred = net(orig_data, verb) 
-
-                    ## reminder: F.conv3d expects the data to be Double
 
                     # compare the predicted mask and the target data 
                     LOSS = loss.forward(mask_pred, mask_data)
@@ -238,13 +237,15 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
-                if epoch == (epochs-1):
+                if 1: #epoch == (epochs-1):
                     # save the pred masks in output dir
-                    mask_pred_save(mask_pred, phase, i, outdir = outdir)
+                    mask_pred_save(mask_pred, epoch, phase, i, 
+                                   outdir = outdir)
                 
                 i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
             end = time.time() # end of FOR loop for PHASE
             loss_log.close()
+
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
         train_loss   = torch.mean(train_losses)
@@ -260,5 +261,4 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
         print(epochend) # end of FOR loop for EPOCHS
 
-    #loss_log.close()
     return net
