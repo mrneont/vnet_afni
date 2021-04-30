@@ -17,6 +17,29 @@ import nibabel as nib
 import lib_ml_cerebrum      as lmc
 import os
 
+def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
+    ave_grads = []
+    layers = []
+    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+    grad_fname_path = '/'.join([outdir, grad_fname])
+    plt.figure(figsize=(10,8))
+    for n, p in named_parameters:
+        #print("n = {}".format(n))
+        #print("p = {}".format(p)) # parameter containing tensor 
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            #print("ave_grads = {}".format(ave_grads))
+    plt.plot(ave_grads, alpha=0.3, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(xmin=0, xmax=len(ave_grads))
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.savefig(grad_fname_path, bbox_inches = "tight")
+    #fig.savefig(oimage, bbox_inches='tight')
 
 # one idea of scaling the input dsets, to have a range of values [0,
 # 1], to start
@@ -177,6 +200,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                 print("This should never happen! 'phase' is: {}"
                       "".format(phase))
 
+            before = list(net.parameters())[0].clone()
             loss_log  = open(loss_file, mode='a')
             loss_log.write("EPOCH  :{}\n".format(epoch))
             loss_log.write("PHASE  :{}\n".format(phase))
@@ -225,11 +249,19 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
+                    print('net.named_parameters()')
+                    print(net.named_parameters())
+                    plot_grad_flow(net.named_parameters(), epoch, i, outdir = outdir)
+                    
 
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
-                    
+                
+                after = list(net.parameters())[0].clone()
+                for j in range(len(before)):
+                    #print('CHANGE in Parameters \n')
+                    print(torch.equal(before[j].data, after[j].data))
                 loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
                                "".format(i, dataset_size, LOSS, 
                                          mask_pred.min(), mask_pred.max()))
@@ -244,7 +276,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                 
                 i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
             end = time.time() # end of FOR loop for PHASE
-            loss_log.close()
+            
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
@@ -256,9 +288,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
+        loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
+        loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
 
         print(epochend) # end of FOR loop for EPOCHS
-
+    loss_log.close()
     return net
