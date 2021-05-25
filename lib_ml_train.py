@@ -16,13 +16,14 @@ import pytorchtools         as ptt
 import nibabel as nib
 import lib_ml_cerebrum      as lmc
 import os
+from matplotlib.lines import Line2D
 
 def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
     ave_grads = []
     layers = []
     grad_fname      = ("grad_{}_{}.png".format(epoch, count))
     grad_fname_path = '/'.join([outdir, grad_fname])
-    plt.figure(figsize=(10,8))
+    plt.figure(figsize=(10,9))
     for n, p in named_parameters:
         #print("n = {}".format(n))
         #print("p = {}".format(p)) # parameter containing tensor 
@@ -40,6 +41,38 @@ def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
     plt.grid(True)
     plt.savefig(grad_fname_path, bbox_inches = "tight")
     #fig.savefig(oimage, bbox_inches='tight')
+
+def plot_grad_flow_new(named_parameters,epoch, count, outdir = '.'):
+    '''Plots the gradients flowing through different layers in the net during training.
+    Can be used for checking for possible gradient vanishing / exploding problems.
+    
+    Usage: Plug this function in Trainer class after loss.backwards() as 
+    "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+    ave_grads = []
+    max_grads= []
+    layers = []
+    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+    grad_fname_path = '/'.join([outdir, grad_fname])
+    plt.figure(figsize=(10,9))
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            max_grads.append(p.grad.abs().max())
+    plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+    plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(left=0, right=len(ave_grads))
+    plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.legend([Line2D([0], [0], color="c", lw=4),
+                Line2D([0], [0], color="b", lw=4),
+                Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
+    plt.savefig(grad_fname_path, bbox_inches = "tight")
 
 # one idea of scaling the input dsets, to have a range of values [0,
 # 1], to start
@@ -138,9 +171,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
     # Set up network - Initialize the net with the desired model
     if net_arch == 'vnet_org' :
-        net = lmm.VNet_org(in_channels=1, num_class=1, verb=verb)
+        net = lmm.VNet_org(in_channels=1, num_class=2, verb=verb)
     elif net_arch == 'Cerebrum' :
-        net = lmc.Cerebrum(in_channels=1, num_class=1, verb=verb)
+        net = lmc.Cerebrum(in_channels=1, num_class=2, verb=verb)
     else:
         print("There is no network architecture here of name: {}"
               "".format(net_arch))
@@ -200,7 +233,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                 print("This should never happen! 'phase' is: {}"
                       "".format(phase))
 
-            before = list(net.parameters())[0].clone()
+            
             loss_log  = open(loss_file, mode='a')
             loss_log.write("EPOCH  :{}\n".format(epoch))
             loss_log.write("PHASE  :{}\n".format(phase))
@@ -209,7 +242,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                                      'min_val', 'max_val'))
 
             # creating an instance of loss function
-            loss = lml.get_dice()
+            #loss = lml.DiceLoss_multiclass()
+            loss = lml.DiceLoss_multiclass()
+            #loss = lml.get_dice()
+            
             #loss = lml.dice_thrsh()
 
             i = 1 # index for the datafile/volume in the DATASET
@@ -229,6 +265,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
             
                 # zero the parameter gradients
                 optimizer.zero_grad()
+                #before = list(net.parameters())[0].clone()
 
                 # forward propagation required in both training and
                 # validation phase
@@ -238,7 +275,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
-                    mask_pred = net(orig_data, verb) 
+                    mask_pred = net.forward(orig_data, verb) 
 
                     # compare the predicted mask and the target data 
                     LOSS = loss.forward(mask_pred, mask_data)
@@ -249,19 +286,20 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
-                    print('net.named_parameters()')
-                    print(net.named_parameters())
-                    plot_grad_flow(net.named_parameters(), epoch, i, outdir = outdir)
+                    #print('net.named_parameters()')
+                    #print(net.named_parameters())
+                    #plot_grad_flow_new(net.named_parameters(), epoch, i, outdir = outdir)
+                    #print([z.grad for z in list(net.parameters())])
                     
 
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
                 
-                after = list(net.parameters())[0].clone()
-                for j in range(len(before)):
+                #after = list(net.parameters())[0].clone()
+                #for j in range(len(before)):
                     #print('CHANGE in Parameters \n')
-                    print(torch.equal(before[j].data, after[j].data))
+                    #print(torch.equal(before[j].data, after[j].data))
                 loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
                                "".format(i, dataset_size, LOSS, 
                                          mask_pred.min(), mask_pred.max()))
@@ -269,7 +307,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
-                if 1: #epoch == (epochs-1):
+                if epoch == (epochs-1):
                     # save the pred masks in output dir
                     mask_pred_save(mask_pred, epoch, phase, i, 
                                    outdir = outdir)

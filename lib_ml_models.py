@@ -19,7 +19,7 @@ class RepeatConv(nn.Module):
         for i in range(n_conv):
             conv_list.append( nn.Conv3d(n_channels, n_channels,   
                                         kernel_size=5, padding=2))
-            conv_list.append(nn.LeakyReLU())
+            conv_list.append(nn.ReLU())
         
         self.conv = nn.Sequential(*conv_list)
         
@@ -37,7 +37,7 @@ class Down(nn.Module):
         self.downconv = nn.Sequential(
             nn.Conv3d( in_channels, out_channels, 
                        kernel_size=2, stride=2),
-            nn.LeakyReLU()
+            nn.ReLU()
         )
 
         # repeat the 'n_conv' convolution layers 
@@ -57,7 +57,7 @@ class Up(nn.Module):
         self.upconv = nn.Sequential(
             nn.ConvTranspose3d( in_channels, int(out_channels/2), 
                                 kernel_size=2, stride=2),
-            nn.LeakyReLU()
+            nn.ReLU()
         )
 
         # repeat the 'n_conv' convolution layers 
@@ -121,7 +121,7 @@ class VNet_org(nn.Module):
         # hidden layer : down5 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
         self.down1 = nn.Sequential(
             nn.Conv3d(1, 16, kernel_size=5, padding=2), 
-            nn.LeakyReLU()
+            nn.ReLU()
         )
         self.down2 = Down(16,  32,  2)    
         self.down3 = Down(32,  64,  3)  
