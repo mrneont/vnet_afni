@@ -87,14 +87,26 @@ def data_normalize(img):
 # write the predicated masks into output directory 
 def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
-    mask_pred_sq    = torch.squeeze(mask_pred) # squeeze the channel dimension
-    mask_pred_sq_np = mask_pred_sq.cpu().detach().numpy()
+    
+    mask_pred_np    = mask_pred.cpu().detach().numpy()
     pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
                                                               count))
     pred_fname_path = '/'.join([outdir, pred_fname])
-    output_image    = nib.Nifti1Image(mask_pred_sq_np, affine=np.eye(4))
+    output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
 
     nib.save(output_image, pred_fname_path)
+
+
+def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
+
+    
+    mask_pred_opp_np    = mask_pred_opp.cpu().detach().numpy()
+    pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
+                                                              count))
+    pred_opp_fname_path = '/'.join([outdir, pred_opp_fname])
+    output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
+
+    nib.save(output_image, pred_opp_fname_path)
 
 def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
@@ -307,9 +319,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
-                if epoch == (epochs-1):
+                if 1: #epoch == (epochs-1):
                     # save the pred masks in output dir
-                    mask_pred_save(mask_pred, epoch, phase, i, 
+                    mask_pred_save(mask_pred[0][0], epoch, phase, i, 
+                                   outdir = outdir)
+                    mask_pred_save_opp(mask_pred[0][1], epoch, phase, i, 
                                    outdir = outdir)
                 
                 i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA

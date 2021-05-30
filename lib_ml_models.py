@@ -141,10 +141,11 @@ class VNet_org(nn.Module):
         self.up5 = nn.Sequential(
             nn.Conv3d(32, num_class, kernel_size=1),
             #nn.ReLU()
-            nn.Softmax(dim=3)
+            nn.Softmax(dim=1)
         )
         
         #count = 1
+        '''
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', 
@@ -152,6 +153,7 @@ class VNet_org(nn.Module):
                 #nn.init.xavier_normal_(m.weight, gain=np.sqrt(2))
                 #print('weight init {:d}'.format(count))
                 #count= count+1
+        '''
          
     def forward(self, x, verb):
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
