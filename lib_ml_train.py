@@ -43,11 +43,15 @@ def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
     #fig.savefig(oimage, bbox_inches='tight')
 
 def plot_grad_flow_new(named_parameters,epoch, count, outdir = '.'):
-    '''Plots the gradients flowing through different layers in the net during training.
-    Can be used for checking for possible gradient vanishing / exploding problems.
+    '''Plots the gradients flowing through different layers in the net
+    during training.  Can be used for checking for possible gradient
+    vanishing / exploding problems.
     
-    Usage: Plug this function in Trainer class after loss.backwards() as 
-    "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+    Usage: Plug this function in Trainer class after loss.backwards()
+    as "plot_grad_flow(self.model.named_parameters())" to visualize
+    the gradient flow
+
+    '''
     ave_grads = []
     max_grads= []
     layers = []
@@ -71,7 +75,8 @@ def plot_grad_flow_new(named_parameters,epoch, count, outdir = '.'):
     plt.grid(True)
     plt.legend([Line2D([0], [0], color="c", lw=4),
                 Line2D([0], [0], color="b", lw=4),
-                Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
+                Line2D([0], [0], color="k", lw=4)], 
+               ['max-gradient', 'mean-gradient', 'zero-gradient'])
     plt.savefig(grad_fname_path, bbox_inches = "tight")
 
 # one idea of scaling the input dsets, to have a range of values [0,
@@ -89,7 +94,8 @@ def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
     
     mask_pred_np    = mask_pred.cpu().detach().numpy()
-    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
+    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, 
+                                                              phase, 
                                                               count))
     pred_fname_path = '/'.join([outdir, pred_fname])
     output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
@@ -101,8 +107,9 @@ def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
 
     
     mask_pred_opp_np    = mask_pred_opp.cpu().detach().numpy()
-    pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
-                                                              count))
+    pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, 
+                                                                      phase, 
+                                                                      count))
     pred_opp_fname_path = '/'.join([outdir, pred_opp_fname])
     output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
 
@@ -300,7 +307,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     train_losses.append(LOSS.item())
                     #print('net.named_parameters()')
                     #print(net.named_parameters())
-                    #plot_grad_flow_new(net.named_parameters(), epoch, i, outdir = outdir)
+                    #plot_grad_flow_new(net.named_parameters(), 
+                    #                   epoch, i, outdir = outdir)
                     #print([z.grad for z in list(net.parameters())])
                     
 
