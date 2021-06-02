@@ -5,6 +5,12 @@ import argparse      as argp
 import lib_ml_train  as lmt
 import lib_ml_losses as lml
 
+# -----------------------------------------------------------------------
+# 
+__version__ = '1.0.00'; verdate = 'Jun 2, 2021'
+# [PT] version number of code running
+#
+# -----------------------------------------------------------------------
 
 # for expanding help information
 epilog_data_struc = ''' 
@@ -51,11 +57,15 @@ def get_args():
     # [PT] Using this formatter_class: ArgumentDefaultsHelpFormatter
     #      ... crushes newlines in the text.
     intro  = 'Train the VNet on MRI data and target masks'
-    parser = argp.ArgumentParser(description = intro,
+    parser = argp.ArgumentParser(prog = 'run_ml_ss.py',
+                                 description = intro,
                                  epilog = epilog_data_struc,
                                  formatter_class=argp.RawTextHelpFormatter) 
 
-    parser.add_argument('-d',"--data_dir", 
+    parser.add_argument('-V', '--version', action='version', 
+                        version='%(prog)s {}'.format(__version__))
+
+    parser.add_argument('-d', "--data_dir", 
                         type=dir_path, 
                         help="Path to the data directory (structure below)")
 
