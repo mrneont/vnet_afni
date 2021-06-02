@@ -6,12 +6,6 @@ import lib_ml_train  as lmt
 import lib_ml_losses as lml
 
 
-# List of all possible net architectures to choose from.  Add any
-# others here. The [0th] one is the default.
-list_net_arch = [ 'vnet_orig',
-                  'Cerebrum',
-                  ]
-
 # for expanding help information
 epilog_data_struc = ''' 
 ------------------------------------------------------------------------
@@ -104,13 +98,13 @@ def get_args():
                         help='verbosity for code running' + '\n' +
                         '(def: {})'.format(str(def_verb)))
 
-    def_net_arch = list_net_arch[0]
+    def_net_arch = lmt.list_net_arch[0]
     parser.add_argument("-a", "--architecture", 
                         dest="net_arch", 
                         type=str, default=def_net_arch,
                         help="network architecture type; valid arguments\n" +
                         "include:" + '\n  ' +
-                        "{}".format('\n  '.join(list_net_arch)) + '\n' +
+                        "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
                         '(def: {})'.format(str(def_net_arch)))
 
     def_loss_func = lml.list_CalcLoss[0]
@@ -252,7 +246,7 @@ if __name__ == '__main__':
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
-    if not(check_opt_allowed( net_arch, list_net_arch, 
+    if not(check_opt_allowed( net_arch, lmt.list_net_arch, 
                               desc_bad='This network architecture ' + 
                                        'is not in the List:' )) or \
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,

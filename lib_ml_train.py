@@ -18,6 +18,18 @@ import lib_ml_cerebrum      as lmc
 import os
 from   matplotlib.lines import Line2D
 
+# --------------------------------------------------------------------------
+
+# List of all possible net architectures to choose from.  Add any
+# others here (the if-condition to use one is below). The [0th]
+# one is the default.
+list_net_arch = [ 'vnet_orig',
+                  'Cerebrum',
+                  ]
+
+# --------------------------------------------------------------------------
+
+
 def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
     ave_grads = []
     layers = []
