@@ -1,10 +1,13 @@
 
+import os
 import sys
 import time
 import numpy                as np
 import matplotlib.pyplot    as plt
-import torch
+from   matplotlib.lines import Line2D
+import nibabel              as nib
 
+import torch
 from   torch            import optim
 from   torch.utils.data import DataLoader
 import torch.nn             as nn
@@ -12,11 +15,8 @@ import torch.nn             as nn
 import lib_ml_data          as lmd
 import lib_ml_models        as lmm
 import lib_ml_losses        as lml
-import pytorchtools         as ptt
-import nibabel as nib
 import lib_ml_cerebrum      as lmc
-import os
-from   matplotlib.lines import Line2D
+import pytorchtools         as ptt
 
 # --------------------------------------------------------------------------
 
@@ -26,6 +26,12 @@ from   matplotlib.lines import Line2D
 list_net_arch = [ 'vnet_orig',
                   'Cerebrum',
                   ]
+
+# List of all possible optimizers to choose from.  Add any others here
+# (the if-condition to use one is below). The [0th] one is the
+# default.
+list_optimizer = [ 'Adam',
+                   ]
 
 # --------------------------------------------------------------------------
 
@@ -156,7 +162,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
 
 def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
-              outdir, verb): 
+              optimizer, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -171,6 +177,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                    if None, no seed is set
     net_arch     : network architecture name, from available list (str)
     loss_func    : loss function name, from available list (str)
+    optimizer    : optimizer name, from available list (str)
     outdir       : directory for various outputs
     verb         : verbosity for stdout
 
@@ -224,7 +231,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         print(net)
 
     # load optimizer
-    optimizer      = optim.Adam(net.parameters(), lr=lr)
+    if optimizer == 'Adam':
+        optimizer      = optim.Adam(net.parameters(), lr=lr)
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)

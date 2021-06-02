@@ -126,6 +126,14 @@ def get_args():
                         "{}".format('\n  '.join(lml.list_CalcLoss)) + '\n' +
                         '(def: {})'.format(str(def_loss_func)))
 
+    def_optimizer = lmt.list_optimizer[0]
+    parser.add_argument("-O", "--optimizer", 
+                        dest="optimizer", 
+                        type=str, default=def_optimizer,
+                        help="optimizer type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_optimizer)) + '\n' +
+                        '(def: {})'.format(str(def_optimizer)))
 
     return parser.parse_args()
 
@@ -182,8 +190,8 @@ def prep_outdir(din, verb=1):
 
     return dout
 
-def writeout_args(argv, outdir, ofile='cmd_args.txt', ver='0.0.0',
-                  verb=1):
+def writeout_args(argv, outdir, ofile='log_cmd.txt', ver='0.0.0',
+                  state=None, verb=1):
     """Store the command used to make this run.  Simple/no formatting at
     the moment
 
@@ -210,11 +218,16 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', ver='0.0.0',
 
     fff  = open(otxt, mode='w')
 
-    fff.write("# Run date  : {}\n".format(odate))
-    fff.write("# Run time  : {}\n".format(otime))
-    fff.write("# Run loc   : {}\n".format(opwd))
-    fff.write("# Run ver   : {}\n".format(str(ver)))
-    fff.write("# Run cmd   :\n{}".format(ocmd))
+    fff.write("{:15s} : {:15s}\n".format("Run cmd", ocmd))
+    fff.write("\n")
+    fff.write("{:15s} : {:15s}\n".format("Prog ver", str(ver)))
+    fff.write("{:15s} : {:15s}\n".format("Output dir", opwd))
+    fff.write("{:15s} : {:15s}\n".format("Run date", odate))
+    fff.write("{:15s} : {:15s}\n".format("Run start time", otime))
+    fff.write("\n")
+
+    if state :
+        fff.write("{}".format(state))
 
     fff.close()
 
@@ -235,6 +248,19 @@ def check_opt_allowed(X, the_list, desc_bad=None):
 
     return is_ok
 
+def get_args_state(args):
+    '''
+    Get a nice string for outputting the state of the variables
+    '''
+
+    ostr = ''
+
+    for key in vars(args):
+        ostr+= "{:15s} : {:15s}\n".format(str(key), str(vars(args)[key]))
+
+    return ostr
+
+
 
 if __name__ == '__main__':
 
@@ -252,6 +278,7 @@ if __name__ == '__main__':
     seed      = args.seed
     net_arch  = args.net_arch
     loss_func = args.loss_func
+    optimizer = args.optimizer
     verb      = args.verb
     outdir    = prep_outdir(args.outdir, verb=verb)
 
@@ -262,13 +289,18 @@ if __name__ == '__main__':
     if not(check_opt_allowed( net_arch, lmt.list_net_arch, 
                               desc_bad='This network architecture ' + 
                                        'is not in the List:' )) or \
+        not(check_opt_allowed( optimizer, lmt.list_optimizer, 
+                               desc_bad='This optimizer ' + 
+                               'is not in the List:' )) or \
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,
                               desc_bad='This loss function ' + 
                                        'is not in the List:' )) :
         sys.exit(5)
 
     # save command used
-    writeout_args(sys.argv, outdir, ver=__version__, verb=verb)
+    str_args = get_args_state(args)
+    writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
+                   verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         outdir, verb )
+                         optimizer, outdir, verb )
