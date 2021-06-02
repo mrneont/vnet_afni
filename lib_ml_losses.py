@@ -2,9 +2,17 @@ import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable   ### [PT] this doesn't seem to be used?
 
 
+
+# List of all lost function suffixes, so we can check if user has
+# input a valid one.  Every time a new loss function is added, its
+# name should be entered here.  The [0]th one in the list is the
+# default.
+list_CalcLoss = [ "SoftDice_00",
+                  ]
+
+# =========================================================================
 
 def make_one_hot(labels, classes):
     shape = list(labels.size())
@@ -17,31 +25,68 @@ def make_one_hot(labels, classes):
     return target
 
 
-class DiceLoss_multiclass(nn.Module):
+class CalcLoss_SoftDice_00(nn.Module):
 
     def __init__(self,):
-        super(DiceLoss_multiclass, self).__init__()
+        super(CalcLoss_SoftDice_00, self).__init__()
 
     def forward(self, pred, gt):
+        '''Input two dsets, and calculate the loss function between them.
+    This is for the 2-channel case:  brain, and nonbrain.
 
+    For this loss: the soft-Dice is calculated for each channel; the
+    results are averaged; and the output is one minus that value.
+
+    Each dset has 5 dimensions, with each index telling:
+        (batch_size, n_channels, Depth, Height, Width)
+
+    For example, the gt.size() is: (1, 1, 32, 32, 32), 
+    and the pred.size() is:        (1, 2, 32, 32, 32).
+
+    Args:
+        pred     : 'prediction' dataset
+        gt       : 'answer' dataset
+
+    Return:
+        value    : single-valued Tensor-type (so, a scalar tensor?)
+
+        '''
         
-        target = make_one_hot(gt, classes=pred.size()[1])
-        #target.size() = torch.Size([1, 2, 32, 32, 32])
-        # gt.size() = torch.Size([1, 1, 32, 32, 32])
-        # Here target.size()[0] = batch_sz, target.size()[1] = channels
-        # target.size()[2] = Depth ; target.size()[3] = Height; target.size()[4] = width
+        # separate out pred into separate dsets, one volume per
+        # channel; same size as pred
+        target      = make_one_hot(gt, classes=pred.size()[1])
 
-        numerator = 2.0*(pred * target).sum(dim=(2, 3,4))
+        numerator   = 2.0 * (pred * target).sum(dim=(2, 3, 4))
+        denominator = 1.0 + pred.pow(2).sum(dim=(2, 3, 4)) + \
+            target.sum(dim=(2, 3, 4))
 
-        denominator = 1.0+pred.pow(2).sum(dim=(2, 3,4)) + target.sum(dim=(2, 3,4))
-
-       
         dice = numerator / denominator
 
         print(dice)
 
         return 1 - dice.mean()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# -------------------------------------------------------------------------
+# The boneyard of older cost functions.  For inspiration.
+
+'''
 class dice_thrsh(nn.Module):  
     def __init__(self):
         super(dice_thrsh, self).__init__()
@@ -119,4 +164,4 @@ class DiceLoss(nn.Module):
         dice/= inputs.sum() + targets.sum() + smooth
         
         return 1-dice
-
+'''

@@ -72,8 +72,8 @@ class Up(nn.Module):
 # ==================================================================
 # the model
 
-class VNet_org(nn.Module):
-    """Main model: Vnet_org is implementation of Fig 2 from the paper:
+class VNet_orig(nn.Module):
+    """Main model: VNet_orig is implementation of Fig 2 from the paper:
        https://arxiv.org/pdf/1606.04797.pdf
 
     Here we set up the main model.
@@ -111,7 +111,7 @@ class VNet_org(nn.Module):
     """
 
     def __init__(self, in_channels, num_class,verb):
-        super(VNet_org, self).__init__()
+        super(VNet_orig, self).__init__()
 
         #                -- ENCODER --
         #  input layer : down1 = (Conv3d, ReLu)

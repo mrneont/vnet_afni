@@ -1,8 +1,16 @@
 import os
 import sys
 import datetime
-import argparse     as argp
-import lib_ml_train as lmt
+import argparse      as argp
+import lib_ml_train  as lmt
+import lib_ml_losses as lml
+
+
+# List of all possible net architectures to choose from.  Add any
+# others here. The [0th] one is the default.
+list_net_arch = [ 'vnet_orig',
+                  'Cerebrum',
+                  ]
 
 # for expanding help information
 epilog_data_struc = ''' 
@@ -57,40 +65,63 @@ def get_args():
                         type=dir_path, 
                         help="Path to the data directory (structure below)")
 
+    def_E = 5 
     parser.add_argument('-e', '--epochs', 
                         metavar='E', 
                         dest='epochs',
-                        type=int, default=5,
-                        help='Number of epochs (def: 5)')
+                        type=int, default=def_E,
+                        help='Number of epochs' + '\n' +
+                        "(def: {})".format(str(def_E)))
 
+    def_LRATE = 0.001
     parser.add_argument("-l", "--learning_rate", 
                         metavar='LRATE', 
                         dest="learning_rate", 
-                        type=float, default=0.001, 
-                        help="Learning rate (def: 0.001)")
+                        type=float, default=def_LRATE, 
+                        help='Learning rate' + '\n' +
+                        '(def: {})'.format(str(def_LRATE)))
 
+    def_S = None
     parser.add_argument('-s', '--seed', 
                         metavar='S', 
                         dest='seed',
-                        type=int, default=None,
-                        help='Set seed for random value gen (def: None)')
+                        type=int, default=def_S,
+                        help='Set seed for random value gen' + '\n' +
+                        '(def: {})'.format(str(def_S)))
 
+    def_OD = '.'
     parser.add_argument('-o', '--outdir', 
                         metavar='OD', 
                         dest='outdir',
-                        type=str, default='.',
-                        help='Set name of output directory (def: .)')
+                        type=str, default=def_OD,
+                        help='Set name of output directory' + '\n' +
+                        '(def: {})'.format(str(def_OD)))
 
+    def_verb = 1
     parser.add_argument("-v", "--verb", 
                         dest="verb", 
-                        type=int, default=1, 
-                        help="verbosity for code running (def: 1)")
+                        type=int, default=def_verb, 
+                        help='verbosity for code running' + '\n' +
+                        '(def: {})'.format(str(def_verb)))
 
+    def_net_arch = list_net_arch[0]
     parser.add_argument("-a", "--architecture", 
                         dest="net_arch", 
-                        type=str, default="vnet_org", 
+                        type=str, default=def_net_arch,
                         help="network architecture type; valid arguments\n" +
-                        "include: 'vnet_orig', 'Cerebrum' (def: vnet_org)")
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(list_net_arch)) + '\n' +
+                        '(def: {})'.format(str(def_net_arch)))
+
+    def_loss_func = lml.list_CalcLoss[0]
+    parser.add_argument("-L", "--Loss", 
+                        dest="loss_func", 
+                        type=str, default=def_loss_func,
+                        help="loss function type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lml.list_CalcLoss)) + '\n' +
+                        '(def: {})'.format(str(def_loss_func)))
+
 
     return parser.parse_args()
 
@@ -184,6 +215,20 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
         print("++ Store executed command in text file: {}".format(otxt))
 
 
+def check_opt_allowed(X, the_list, desc_bad=None): 
+    '''See if element X is contained in the_list; the desc_bad is the
+    description output if it ain't.
+
+    '''
+
+    is_ok = the_list.__contains__(X)
+
+    if not(is_ok) :
+        print("** ERROR: {} {}\n".format(desc_bad, X))
+
+    return is_ok
+
+
 if __name__ == '__main__':
 
     # [PT] a trick so that putting in *no* args prompts the help to be
@@ -199,6 +244,7 @@ if __name__ == '__main__':
     lr        = args.learning_rate
     seed      = args.seed
     net_arch  = args.net_arch
+    loss_func = args.loss_func
     verb      = args.verb
     outdir    = prep_outdir(args.outdir, verb=verb)
 
@@ -206,8 +252,17 @@ if __name__ == '__main__':
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
+    if not(check_opt_allowed( net_arch, list_net_arch, 
+                              desc_bad='This network architecture ' + 
+                                       'is not in the List:' )) or \
+        not(check_opt_allowed( loss_func, lml.list_CalcLoss,
+                              desc_bad='This loss function ' + 
+                                       'is not in the List:' )) :
+        sys.exit(5)
+
+
     # save command used
     writeout_args(sys.argv, outdir, verb=verb)
 
-    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, 
+    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
                          outdir, verb )

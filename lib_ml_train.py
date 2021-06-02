@@ -16,7 +16,7 @@ import pytorchtools         as ptt
 import nibabel as nib
 import lib_ml_cerebrum      as lmc
 import os
-from matplotlib.lines import Line2D
+from   matplotlib.lines import Line2D
 
 def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
     ave_grads = []
@@ -143,7 +143,8 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
     fig.savefig(oimage, bbox_inches='tight')
 
 
-def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb): 
+def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
+              outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -156,6 +157,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     lr           : learning rate parameter 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
+    net_arch     : network architecture name, from available list (str)
+    loss_func    : loss function name, from available list (str)
     outdir       : directory for various outputs
     verb         : verbosity for stdout
 
@@ -189,8 +192,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     # num_class = 1 since the task is binary segmentation. 
 
     # Set up network - Initialize the net with the desired model
-    if net_arch == 'vnet_org' :
-        net = lmm.VNet_org(in_channels=1, num_class=2, verb=verb)
+    if net_arch == 'vnet_orig' :
+        net = lmm.VNet_orig(in_channels=1, num_class=2, verb=verb)
     elif net_arch == 'Cerebrum' :
         net = lmc.Cerebrum(in_channels=1, num_class=2, verb=verb)
     else:
@@ -261,11 +264,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                                      'min_val', 'max_val'))
 
             # creating an instance of loss function
-            #loss = lml.DiceLoss_multiclass()
-            loss = lml.DiceLoss_multiclass()
-            #loss = lml.get_dice()
-            
-            #loss = lml.dice_thrsh()
+            if 1 :
+                loss = lml.CalcLoss_SoftDice_00()
 
             i = 1 # index for the datafile/volume in the DATASET
 
