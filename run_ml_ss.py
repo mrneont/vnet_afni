@@ -182,7 +182,8 @@ def prep_outdir(din, verb=1):
 
     return dout
 
-def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
+def writeout_args(argv, outdir, ofile='cmd_args.txt', ver='0.0.0',
+                  verb=1):
     """Store the command used to make this run.  Simple/no formatting at
     the moment
 
@@ -192,6 +193,7 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
     argv       : the list of terminal commands used.
     outdir     : output directory where all outputs (including what is 
                  written here) will go.
+    ver        : version of code (str).
     ofile      : name of file to be written in the outdir.
 
     Returns nothing, just writes a text file.
@@ -211,6 +213,7 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
     fff.write("# Run date  : {}\n".format(odate))
     fff.write("# Run time  : {}\n".format(otime))
     fff.write("# Run loc   : {}\n".format(opwd))
+    fff.write("# Run ver   : {}\n".format(str(ver)))
     fff.write("# Run cmd   :\n{}".format(ocmd))
 
     fff.close()
@@ -264,9 +267,8 @@ if __name__ == '__main__':
                                        'is not in the List:' )) :
         sys.exit(5)
 
-
     # save command used
-    writeout_args(sys.argv, outdir, verb=verb)
+    writeout_args(sys.argv, outdir, ver=__version__, verb=verb)
 
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
                          outdir, verb )
