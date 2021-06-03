@@ -16,6 +16,7 @@ import lib_ml_data          as lmd
 import lib_ml_models        as lmm
 import lib_ml_losses        as lml
 import lib_ml_cerebrum      as lmc
+import lib_nibabel_utils    as lnu
 import pytorchtools         as ptt
 
 # --------------------------------------------------------------------------
@@ -108,6 +109,8 @@ def data_normalize(img):
     return normalized
 
 # write the predicated masks into output directory 
+# [PT] starting to translate this to having more correct header info.
+#    + pieces are still hardwired now, but these should overlay now
 def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
     
@@ -116,11 +119,14 @@ def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
                                                               phase, 
                                                               count))
     pred_fname_path = '/'.join([outdir, pred_fname])
-    output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
+    #output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
+    #nib.save(output_image, pred_fname_path)
 
-    nib.save(output_image, pred_fname_path)
+    lnu.write_out_nifti_vol(mask_pred_np, pred_fname_path,
+                            affmat=lnu.TEMP_M44_32iso_nib_ori)
 
-
+# [PT] starting to translate this to having more correct header info.
+#    + pieces are still hardwired now, but these should overlay now
 def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
 
     
@@ -129,9 +135,12 @@ def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
                                                                       phase, 
                                                                       count))
     pred_opp_fname_path = '/'.join([outdir, pred_opp_fname])
-    output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
+    #output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
+    #nib.save(output_image, pred_opp_fname_path)
 
-    nib.save(output_image, pred_opp_fname_path)
+    lnu.write_out_nifti_vol(mask_pred_opp_np, pred_opp_fname_path,
+                            affmat=lnu.TEMP_M44_32iso_nib_ori)
+
 
 def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
