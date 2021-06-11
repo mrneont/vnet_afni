@@ -104,9 +104,20 @@ def data_normalize(img):
    
     data_min   = img.min()
     data_max   = img.max()
+    #print("orig_data max = {}".format(data_max))
+    #print("orig_data min = {}".format(data_min))
     normalized = (img - data_min) / (data_max - data_min)
 
     return normalized
+
+def z_scoring(img):
+   
+    data_mean  = img.mean()
+    data_std   = img.std()
+    
+    Z_normalized = (img - data_mean) / data_std
+
+    return Z_normalized
 
 # write the predicated masks into output directory 
 # [PT] starting to translate this to having more correct header info.
@@ -300,7 +311,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
             for orig_data, mask_data in dataloaders[phase]:
 
-                orig_data = data_normalize(orig_data)
+                
+                if 1:
+                    orig_data = z_scoring(orig_data)
+                else: 
+                    orig_data = data_normalize(orig_data)
+
            
                 orig_data = orig_data.to(device)
                 mask_data = mask_data.to(device)
