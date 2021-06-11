@@ -114,8 +114,11 @@ def z_scoring(img):
    
     data_mean  = img.mean()
     data_std   = img.std()
+
     
     Z_normalized = (img - data_mean) / data_std
+    #print("orig_data max = {}".format(Z_normalized.max()))
+    #print("orig_data min = {}".format(Z_normalized.min()))
 
     return Z_normalized
 
@@ -243,7 +246,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     print("++ Network architecture type: {}".format(net_arch))
 
     # move model to device
-    net.to(device)
+    if device == 'cuda':
+        net.to(device).half()
+    else: # device == 'cpu'
+        net.to(device)
+
 
     # print the model summary
     if verb > 1:
@@ -317,9 +324,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 else: 
                     orig_data = data_normalize(orig_data)
 
-           
-                orig_data = orig_data.to(device)
-                mask_data = mask_data.to(device)
+                if device =='cuda':
+                    orig_data = orig_data.to(device).half()
+                    mask_data = mask_data.to(device).half()
+                else:# device == 'cpu'
+                    orig_data = orig_data.to(device)
+                    mask_data = mask_data.to(device)
 
                 ### CONV3D requires i/p in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
