@@ -171,7 +171,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
 
 def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
-              optimizer, outdir, verb): 
+              optimizer, wt_norm, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -221,9 +221,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     # Set up network - Initialize the net with the desired model
     if net_arch == 'vnet_orig' :
-        net = lmm.VNet_orig(in_channels=1, num_class=2, verb=verb)
+        net = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
     elif net_arch == 'Cerebrum' :
-        net = lmc.Cerebrum(in_channels=1, num_class=2, verb=verb)
+        net = lmc.Cerebrum(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
     else:
         print("There is no network architecture here of name: {}"
               "".format(net_arch))
@@ -325,6 +325,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     # predict the mask using MRI orig_data
                     mask_pred = net.forward(orig_data, verb) 
 
+
                     # compare the predicted mask and the target data 
                     LOSS = loss.forward(mask_pred, mask_data)
 
@@ -356,7 +357,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
-                if 1: #epoch == (epochs-1):
+                if epoch == (epochs-1):
                     # save the pred masks in output dir
                     mask_pred_save(mask_pred[0][0], epoch, phase, i, 
                                    outdir = outdir)
@@ -381,7 +382,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
-
+        print("Time taken for all epochs= {}\n".format(end-start))
+        loss_log.write("Time taken for all epochs= {}\n".format(end-start))
         print(epochend) # end of FOR loop for EPOCHS
     loss_log.close()
     return net

@@ -1,14 +1,21 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from torch.nn.utils import weight_norm
 
 class conv3dblk(nn.Module):
-	def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+	def __init__(self, in_channels, out_channels, kernel_size, stride, padding, wt_norm):
 		super(conv3dblk, self).__init__()
 
-		self.conv3d = nn.Sequential(nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding),
-            nn.ReLU()
-            ) 
+		if (wt_norm ==1):
+			self.conv3d = nn.Sequential(
+				weight_norm(nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding)),
+            	nn.ReLU()) 
+		else:
+
+			self.conv3d = nn.Sequential(nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding),
+            	nn.ReLU())
+
 
 	def forward(self, x):
 		out = self.conv3d(x)
@@ -16,12 +23,17 @@ class conv3dblk(nn.Module):
 
 
 class downconv(nn.Module):
-	def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+	def __init__(self, in_channels, out_channels, kernel_size, stride, padding, wt_norm):
 		super(downconv, self).__init__()
 
-		self.downconv3d = nn.Sequential(nn.Conv3d(in_channels, out_channels, kernel_size,stride,padding),
-            nn.ReLU()
-            )
+		if (wt_norm ==1):
+			self.downconv3d = nn.Sequential(
+				weight_norm(nn.Conv3d(in_channels, out_channels, kernel_size,stride,padding)),
+            	nn.ReLU())
+
+		else:
+			self.downconv3d = nn.Sequential(nn.Conv3d(in_channels, out_channels, kernel_size,stride,padding),
+            	nn.ReLU())
 
 	def forward(self, x):
 
@@ -29,14 +41,18 @@ class downconv(nn.Module):
 		return out
 
 class upconv(nn.Module):
-	def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+	def __init__(self, in_channels, out_channels, kernel_size, stride, padding, wt_norm):
 
 		super(upconv, self).__init__()
 
-		self.upconv3d = nn.Sequential(
-			nn.ConvTranspose3d(in_channels, out_channels, kernel_size,stride,padding),
-			nn.ReLU()
-			)
+		if (wt_norm ==1):
+			self.upconv3d = nn.Sequential(
+				nn.ConvTranspose3d(in_channels, out_channels, kernel_size,stride,padding),
+				nn.ReLU())
+		else:
+			self.upconv3d = nn.Sequential(
+				weight_norm(nn.ConvTranspose3d(in_channels, out_channels, kernel_size,stride,padding)),
+				nn.ReLU())
 
 
 	def forward(self, x):
@@ -47,50 +63,54 @@ class upconv(nn.Module):
 
 class Cerebrum(nn.Module):
 
-	def __init__(self, in_channels, num_class,verb):
+	def __init__(self, in_channels, num_class, wt_norm ,verb):
 
 		super(Cerebrum, self).__init__()
 
-		self.enc_lvl1_block1_op = conv3dblk(1,48,3,1,1)
-		self.down_conv_1to2_op  = downconv(48,96,3,2,1)
+		self.enc_lvl1_block1_op = conv3dblk(1,48,3,1,1,wt_norm)
+		self.down_conv_1to2_op  = downconv(48,96,3,2,1,wt_norm)
 
 
 
 		# -----------------------------------
 		#         ENCODER - LEVEL 2
 		# -----------------------------------
-		self.enc_lvl2_block1_op =  conv3dblk(96,96,3,1,1)
-		self.enc_lvl2_block2_op =  conv3dblk(96,96,3,1,1)
-		self.down_conv_2to3_op  = downconv(96,192,3,2,1)
+		self.enc_lvl2_block1_op =  conv3dblk(96,96,3,1,1,wt_norm)
+		self.enc_lvl2_block2_op =  conv3dblk(96,96,3,1,1,wt_norm)
+		self.down_conv_2to3_op  = downconv(96,192,3,2,1,wt_norm)
 
 		# -----------------------------------
 		#         BOTTLENECK LAYER
 		# -----------------------------------
 
-		self.bottleneck_block1_op =  conv3dblk(192,192,3,1,1)
-		self.bottleneck_block2_op =  conv3dblk(192,192,3,1,1)
-		self.bottleneck_block3_op =  conv3dblk(192,192,3,1,1)
+		self.bottleneck_block1_op =  conv3dblk(192,192,3,1,1,wt_norm)
+		self.bottleneck_block2_op =  conv3dblk(192,192,3,1,1,wt_norm)
+		self.bottleneck_block3_op =  conv3dblk(192,192,3,1,1,wt_norm)
 
 
 		# -----------------------------------
 		#         DECODER - LEVEL 2
 		# -----------------------------------
 
-		self.up_conv_3to2_op = upconv(192,96,4,2,1)   
-		self.dec_lvl2_block1_op = conv3dblk(96,96,3,1,1)
-		self.dec_lvl2_block2_op = conv3dblk(96,96,3,1,1)
+		self.up_conv_3to2_op = upconv(192,96,4,2,1,wt_norm)   
+		self.dec_lvl2_block1_op = conv3dblk(96,96,3,1,1,wt_norm)
+		self.dec_lvl2_block2_op = conv3dblk(96,96,3,1,1,wt_norm)
 
 		# -----------------------------------
 		#         DECODER - LEVEL 1
 		# -----------------------------------
 
-		self.up_conv_2to1_op = upconv(96,48,4,2,1)
-		self.dec_lvl1_block1_op = conv3dblk(48,48,3,1,1)
-		self.output_layer_op = nn.Sequential(nn.Conv3d(48, 1, kernel_size=1),
-            nn.Softmax(dim=3)
-            )
+		self.up_conv_2to1_op = upconv(96,48,4,2,1,wt_norm)
+		self.dec_lvl1_block1_op = conv3dblk(48,48,3,1,1,wt_norm)
+		if (wt_norm ==1):
+			self.output_layer_op = nn.Sequential(
+				weight_norm(nn.Conv3d(48, num_class, kernel_size=1)),
+           		nn.Softmax(dim=1))
+		else: 
+			self.output_layer_op = nn.Sequential(nn.Conv3d(48, num_class, kernel_size=1),
+           		nn.Softmax(dim=1))
 #nn.init.kaiming_normal_(m.weight, mode='fan_out',nonlinearity='relu')
-
+		'''
 		for m in self.modules():
 			if isinstance(m, nn.Conv3d):
 
@@ -100,7 +120,7 @@ class Cerebrum(nn.Module):
 
 				nn.init.xavier_normal_(m.weight.data)
 
-
+		'''
 	def forward(self, x,verb):
 
 		# -----------------------------------
@@ -166,6 +186,8 @@ class Cerebrum(nn.Module):
 
 
 		output_layer = self.output_layer_op(dec_lvl1_block1)
+
+		
 
 
 		return output_layer

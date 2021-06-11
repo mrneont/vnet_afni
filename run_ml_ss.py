@@ -117,6 +117,13 @@ def get_args():
                         "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
                         '(def: {})'.format(str(def_net_arch)))
 
+    def_wt_norm = 1
+    parser.add_argument("-w", "--weight_norm", 
+                        dest="weight_norm", 
+                        type=int, default=def_wt_norm,
+                        help='weight normalization' + '\n' +
+                        '(def: {})'.format(str(def_wt_norm)))
+
     def_loss_func = lml.list_CalcLoss[0]
     parser.add_argument("-L", "--Loss", 
                         dest="loss_func", 
@@ -280,6 +287,7 @@ if __name__ == '__main__':
     loss_func = args.loss_func
     optimizer = args.optimizer
     verb      = args.verb
+    wt_norm   = args.weight_norm
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
@@ -302,5 +310,6 @@ if __name__ == '__main__':
     writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
                    verb=verb )
 
+    print("wt_norm = ".format(wt_norm))
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         optimizer, outdir, verb )
+                         optimizer, wt_norm, outdir, verb )
