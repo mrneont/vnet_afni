@@ -1,8 +1,16 @@
 import os
 import sys
 import datetime
-import argparse     as argp
-import lib_ml_train as lmt
+import argparse      as argp
+import lib_ml_train  as lmt
+import lib_ml_losses as lml
+
+# -----------------------------------------------------------------------
+# 
+__version__ = '1.0.00'; verdate = 'Jun 2, 2021'
+# [PT] version number of code running
+#
+# -----------------------------------------------------------------------
 
 # for expanding help information
 epilog_data_struc = ''' 
@@ -49,48 +57,90 @@ def get_args():
     # [PT] Using this formatter_class: ArgumentDefaultsHelpFormatter
     #      ... crushes newlines in the text.
     intro  = 'Train the VNet on MRI data and target masks'
-    parser = argp.ArgumentParser(description = intro,
+    parser = argp.ArgumentParser(prog = 'run_ml_ss.py',
+                                 description = intro,
                                  epilog = epilog_data_struc,
                                  formatter_class=argp.RawTextHelpFormatter) 
 
-    parser.add_argument('-d',"--data_dir", 
+    parser.add_argument('-V', '--version', action='version', 
+                        version='%(prog)s {}'.format(__version__))
+
+    parser.add_argument('-d', "--data_dir", 
                         type=dir_path, 
                         help="Path to the data directory (structure below)")
 
+    def_E = 5 
     parser.add_argument('-e', '--epochs', 
                         metavar='E', 
                         dest='epochs',
-                        type=int, default=5,
-                        help='Number of epochs (def: 5)')
+                        type=int, default=def_E,
+                        help='Number of epochs' + '\n' +
+                        "(def: {})".format(str(def_E)))
 
+    def_LRATE = 0.001
     parser.add_argument("-l", "--learning_rate", 
                         metavar='LRATE', 
                         dest="learning_rate", 
-                        type=float, default=0.001, 
-                        help="Learning rate (def: 0.001)")
+                        type=float, default=def_LRATE, 
+                        help='Learning rate' + '\n' +
+                        '(def: {})'.format(str(def_LRATE)))
 
+    def_S = None
     parser.add_argument('-s', '--seed', 
                         metavar='S', 
                         dest='seed',
-                        type=int, default=None,
-                        help='Set seed for random value gen (def: None)')
+                        type=int, default=def_S,
+                        help='Set seed for random value gen' + '\n' +
+                        '(def: {})'.format(str(def_S)))
 
+    def_OD = '.'
     parser.add_argument('-o', '--outdir', 
                         metavar='OD', 
                         dest='outdir',
-                        type=str, default='.',
-                        help='Set name of output directory (def: .)')
+                        type=str, default=def_OD,
+                        help='Set name of output directory' + '\n' +
+                        '(def: {})'.format(str(def_OD)))
 
+    def_verb = 1
     parser.add_argument("-v", "--verb", 
                         dest="verb", 
-                        type=int, default=1, 
-                        help="verbosity for code running (def: 1)")
+                        type=int, default=def_verb, 
+                        help='verbosity for code running' + '\n' +
+                        '(def: {})'.format(str(def_verb)))
 
+    def_net_arch = lmt.list_net_arch[0]
     parser.add_argument("-a", "--architecture", 
                         dest="net_arch", 
-                        type=str, default="vnet_org", 
+                        type=str, default=def_net_arch,
                         help="network architecture type; valid arguments\n" +
-                        "include: 'vnet_orig', 'Cerebrum' (def: vnet_org)")
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
+                        '(def: {})'.format(str(def_net_arch)))
+
+    def_wt_norm = 1
+    parser.add_argument("-w", "--weight_norm", 
+                        dest="weight_norm", 
+                        type=int, default=def_wt_norm,
+                        help='weight normalization' + '\n' +
+                        '(def: {})'.format(str(def_wt_norm)))
+
+    def_loss_func = lml.list_CalcLoss[0]
+    parser.add_argument("-L", "--Loss", 
+                        dest="loss_func", 
+                        type=str, default=def_loss_func,
+                        help="loss function type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lml.list_CalcLoss)) + '\n' +
+                        '(def: {})'.format(str(def_loss_func)))
+
+    def_optimizer = lmt.list_optimizer[0]
+    parser.add_argument("-O", "--optimizer", 
+                        dest="optimizer", 
+                        type=str, default=def_optimizer,
+                        help="optimizer type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_optimizer)) + '\n' +
+                        '(def: {})'.format(str(def_optimizer)))
 
     return parser.parse_args()
 
@@ -147,7 +197,8 @@ def prep_outdir(din, verb=1):
 
     return dout
 
-def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
+def writeout_args(argv, outdir, ofile='log_cmd.txt', ver='0.0.0',
+                  state=None, verb=1):
     """Store the command used to make this run.  Simple/no formatting at
     the moment
 
@@ -157,6 +208,7 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
     argv       : the list of terminal commands used.
     outdir     : output directory where all outputs (including what is 
                  written here) will go.
+    ver        : version of code (str).
     ofile      : name of file to be written in the outdir.
 
     Returns nothing, just writes a text file.
@@ -173,15 +225,48 @@ def writeout_args(argv, outdir, ofile='cmd_args.txt', verb=1):
 
     fff  = open(otxt, mode='w')
 
-    fff.write("# Run date  : {}\n".format(odate))
-    fff.write("# Run time  : {}\n".format(otime))
-    fff.write("# Run loc   : {}\n".format(opwd))
-    fff.write("# Run cmd   :\n{}".format(ocmd))
+    fff.write("{:15s} : {:15s}\n".format("Run cmd", ocmd))
+    fff.write("\n")
+    fff.write("{:15s} : {:15s}\n".format("Prog ver", str(ver)))
+    fff.write("{:15s} : {:15s}\n".format("Output dir", opwd))
+    fff.write("{:15s} : {:15s}\n".format("Run date", odate))
+    fff.write("{:15s} : {:15s}\n".format("Run start time", otime))
+    fff.write("\n")
+
+    if state :
+        fff.write("{}".format(state))
 
     fff.close()
 
     if verb :
         print("++ Store executed command in text file: {}".format(otxt))
+
+
+def check_opt_allowed(X, the_list, desc_bad=None): 
+    '''See if element X is contained in the_list; the desc_bad is the
+    description output if it ain't.
+
+    '''
+
+    is_ok = the_list.__contains__(X)
+
+    if not(is_ok) :
+        print("** ERROR: {} {}\n".format(desc_bad, X))
+
+    return is_ok
+
+def get_args_state(args):
+    '''
+    Get a nice string for outputting the state of the variables
+    '''
+
+    ostr = ''
+
+    for key in vars(args):
+        ostr+= "{:15s} : {:15s}\n".format(str(key), str(vars(args)[key]))
+
+    return ostr
+
 
 
 if __name__ == '__main__':
@@ -199,15 +284,32 @@ if __name__ == '__main__':
     lr        = args.learning_rate
     seed      = args.seed
     net_arch  = args.net_arch
+    loss_func = args.loss_func
+    optimizer = args.optimizer
     verb      = args.verb
+    wt_norm   = args.weight_norm
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
-    # save command used
-    writeout_args(sys.argv, outdir, verb=verb)
+    if not(check_opt_allowed( net_arch, lmt.list_net_arch, 
+                              desc_bad='This network architecture ' + 
+                                       'is not in the List:' )) or \
+        not(check_opt_allowed( optimizer, lmt.list_optimizer, 
+                               desc_bad='This optimizer ' + 
+                               'is not in the List:' )) or \
+        not(check_opt_allowed( loss_func, lml.list_CalcLoss,
+                              desc_bad='This loss function ' + 
+                                       'is not in the List:' )) :
+        sys.exit(5)
 
-    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, 
-                         outdir, verb )
+    # save command used
+    str_args = get_args_state(args)
+    writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
+                   verb=verb )
+
+    print("wt_norm = ".format(wt_norm))
+    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
+                         optimizer, wt_norm, outdir, verb )

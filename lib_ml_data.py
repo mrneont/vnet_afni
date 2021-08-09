@@ -20,7 +20,11 @@ class mridataset(data.Dataset):
         
         self.orig_image  = nib.load(self.orig_data_list[index])
         self.mask_image  = nib.load(self.mask_data_list[index])
-        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')  
+        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32') 
+        self.top99_thresh = np.percentile(self.orig_data, 99) 
+        self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
+        self.down2_thresh = np.percentile(self.orig_data, 2) 
+        self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
         self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')  
         
         return (self.orig_data, self.mask_data)

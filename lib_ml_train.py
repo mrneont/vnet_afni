@@ -1,10 +1,13 @@
 
+import os
 import sys
 import time
 import numpy                as np
 import matplotlib.pyplot    as plt
-import torch
+from   matplotlib.lines import Line2D
+import nibabel              as nib
 
+import torch
 from   torch            import optim
 from   torch.utils.data import DataLoader
 import torch.nn             as nn
@@ -12,11 +15,88 @@ import torch.nn             as nn
 import lib_ml_data          as lmd
 import lib_ml_models        as lmm
 import lib_ml_losses        as lml
-import pytorchtools         as ptt
-import nibabel as nib
 import lib_ml_cerebrum      as lmc
-import os
+import lib_nibabel_utils    as lnu
+import pytorchtools         as ptt
 
+# --------------------------------------------------------------------------
+
+# List of all possible net architectures to choose from.  Add any
+# others here (the if-condition to use one is below). The [0th]
+# one is the default.
+list_net_arch = [ 'vnet_orig',
+                  'Cerebrum',
+                  ]
+
+# List of all possible optimizers to choose from.  Add any others here
+# (the if-condition to use one is below). The [0th] one is the
+# default.
+list_optimizer = [ 'Adam',
+                   ]
+
+# --------------------------------------------------------------------------
+
+
+def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
+    ave_grads = []
+    layers = []
+    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+    grad_fname_path = '/'.join([outdir, grad_fname])
+    plt.figure(figsize=(10,9))
+    for n, p in named_parameters:
+        #print("n = {}".format(n))
+        #print("p = {}".format(p)) # parameter containing tensor 
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            #print("ave_grads = {}".format(ave_grads))
+    plt.plot(ave_grads, alpha=0.3, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(xmin=0, xmax=len(ave_grads))
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.savefig(grad_fname_path, bbox_inches = "tight")
+    #fig.savefig(oimage, bbox_inches='tight')
+
+def plot_grad_flow_new(named_parameters,epoch, count, outdir = '.'):
+    '''Plots the gradients flowing through different layers in the net
+    during training.  Can be used for checking for possible gradient
+    vanishing / exploding problems.
+    
+    Usage: Plug this function in Trainer class after loss.backwards()
+    as "plot_grad_flow(self.model.named_parameters())" to visualize
+    the gradient flow
+
+    '''
+    ave_grads = []
+    max_grads= []
+    layers = []
+    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+    grad_fname_path = '/'.join([outdir, grad_fname])
+    plt.figure(figsize=(10,9))
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            max_grads.append(p.grad.abs().max())
+    plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+    plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(left=0, right=len(ave_grads))
+    plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.legend([Line2D([0], [0], color="c", lw=4),
+                Line2D([0], [0], color="b", lw=4),
+                Line2D([0], [0], color="k", lw=4)], 
+               ['max-gradient', 'mean-gradient', 'zero-gradient'])
+    plt.savefig(grad_fname_path, bbox_inches = "tight")
 
 # one idea of scaling the input dsets, to have a range of values [0,
 # 1], to start
@@ -24,21 +104,57 @@ def data_normalize(img):
    
     data_min   = img.min()
     data_max   = img.max()
+    #print("orig_data max = {}".format(data_max))
+    #print("orig_data min = {}".format(data_min))
     normalized = (img - data_min) / (data_max - data_min)
 
     return normalized
 
+def z_scoring(img):
+   
+    data_mean  = img.mean()
+    data_std   = img.std()
+
+    
+    Z_normalized = (img - data_mean) / data_std
+    #print("orig_data max = {}".format(Z_normalized.max()))
+    #print("orig_data min = {}".format(Z_normalized.min()))
+
+    return Z_normalized
+
 # write the predicated masks into output directory 
+# [PT] starting to translate this to having more correct header info.
+#    + pieces are still hardwired now, but these should overlay now
 def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
-    mask_pred_sq    = torch.squeeze(mask_pred) # squeeze the channel dimension
-    mask_pred_sq_np = mask_pred_sq.cpu().detach().numpy()
-    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, phase, 
+    
+    mask_pred_np    = mask_pred.cpu().detach().numpy()
+    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, 
+                                                              phase, 
                                                               count))
     pred_fname_path = '/'.join([outdir, pred_fname])
-    output_image    = nib.Nifti1Image(mask_pred_sq_np, affine=np.eye(4))
+    #output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
+    #nib.save(output_image, pred_fname_path)
 
-    nib.save(output_image, pred_fname_path)
+    lnu.write_out_nifti_vol(mask_pred_np, pred_fname_path,
+                            affmat=lnu.TEMP_M44_32iso_nib_ori)
+
+# [PT] starting to translate this to having more correct header info.
+#    + pieces are still hardwired now, but these should overlay now
+def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
+
+    
+    mask_pred_opp_np    = mask_pred_opp.cpu().detach().numpy()
+    pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, 
+                                                                      phase, 
+                                                                      count))
+    pred_opp_fname_path = '/'.join([outdir, pred_opp_fname])
+    #output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
+    #nib.save(output_image, pred_opp_fname_path)
+
+    lnu.write_out_nifti_vol(mask_pred_opp_np, pred_opp_fname_path,
+                            affmat=lnu.TEMP_M44_32iso_nib_ori)
+
 
 def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
@@ -68,7 +184,8 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
     fig.savefig(oimage, bbox_inches='tight')
 
 
-def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb): 
+def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
+              optimizer, wt_norm, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -81,6 +198,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     lr           : learning rate parameter 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
+    net_arch     : network architecture name, from available list (str)
+    loss_func    : loss function name, from available list (str)
+    optimizer    : optimizer name, from available list (str)
     outdir       : directory for various outputs
     verb         : verbosity for stdout
 
@@ -114,10 +234,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     # num_class = 1 since the task is binary segmentation. 
 
     # Set up network - Initialize the net with the desired model
-    if net_arch == 'vnet_org' :
-        net = lmm.VNet_org(in_channels=1, num_class=1, verb=verb)
+    if net_arch == 'vnet_orig' :
+        net = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
     elif net_arch == 'Cerebrum' :
-        net = lmc.Cerebrum(in_channels=1, num_class=1, verb=verb)
+        net = lmc.Cerebrum(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
     else:
         print("There is no network architecture here of name: {}"
               "".format(net_arch))
@@ -126,7 +246,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
     print("++ Network architecture type: {}".format(net_arch))
 
     # move model to device
-    net.to(device)
+    if device == 'cuda':
+        net.to(device).half()
+    else: # device == 'cpu'
+        net.to(device)
+
 
     # print the model summary
     if verb > 1:
@@ -134,7 +258,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
         print(net)
 
     # load optimizer
-    optimizer      = optim.Adam(net.parameters(), lr=lr)
+    if optimizer == 'Adam':
+        optimizer      = optim.Adam(net.parameters(), lr=lr)
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
@@ -177,6 +302,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                 print("This should never happen! 'phase' is: {}"
                       "".format(phase))
 
+            
             loss_log  = open(loss_file, mode='a')
             loss_log.write("EPOCH  :{}\n".format(epoch))
             loss_log.write("PHASE  :{}\n".format(phase))
@@ -185,17 +311,25 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                                      'min_val', 'max_val'))
 
             # creating an instance of loss function
-            loss = lml.get_dice()
-            #loss = lml.dice_thrsh()
+            if 1 :
+                loss = lml.CalcLoss_SoftDice_00()
 
             i = 1 # index for the datafile/volume in the DATASET
 
             for orig_data, mask_data in dataloaders[phase]:
 
-                orig_data = data_normalize(orig_data)
-           
-                orig_data = orig_data.to(device)
-                mask_data = mask_data.to(device)
+                
+                if 1:
+                    orig_data = z_scoring(orig_data)
+                else: 
+                    orig_data = data_normalize(orig_data)
+
+                if device =='cuda':
+                    orig_data = orig_data.to(device).half()
+                    mask_data = mask_data.to(device).half()
+                else:# device == 'cpu'
+                    orig_data = orig_data.to(device)
+                    mask_data = mask_data.to(device)
 
                 ### CONV3D requires i/p in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
@@ -205,6 +339,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
             
                 # zero the parameter gradients
                 optimizer.zero_grad()
+                #before = list(net.parameters())[0].clone()
 
                 # forward propagation required in both training and
                 # validation phase
@@ -214,7 +349,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
-                    mask_pred = net(orig_data, verb) 
+                    mask_pred = net.forward(orig_data, verb) 
+
 
                     # compare the predicted mask and the target data 
                     LOSS = loss.forward(mask_pred, mask_data)
@@ -225,11 +361,21 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
+                    #print('net.named_parameters()')
+                    #print(net.named_parameters())
+                    #plot_grad_flow_new(net.named_parameters(), 
+                    #                   epoch, i, outdir = outdir)
+                    #print([z.grad for z in list(net.parameters())])
+                    
 
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
-                    
+                
+                #after = list(net.parameters())[0].clone()
+                #for j in range(len(before)):
+                    #print('CHANGE in Parameters \n')
+                    #print(torch.equal(before[j].data, after[j].data))
                 loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
                                "".format(i, dataset_size, LOSS, 
                                          mask_pred.min(), mask_pred.max()))
@@ -237,14 +383,16 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
-                if 1: #epoch == (epochs-1):
+                if epoch == (epochs-1):
                     # save the pred masks in output dir
-                    mask_pred_save(mask_pred, epoch, phase, i, 
+                    mask_pred_save(mask_pred[0][0], epoch, phase, i, 
+                                   outdir = outdir)
+                    mask_pred_save_opp(mask_pred[0][1], epoch, phase, i, 
                                    outdir = outdir)
                 
                 i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
             end = time.time() # end of FOR loop for PHASE
-            loss_log.close()
+            
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
@@ -256,9 +404,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, outdir, verb):
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
+        loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
+        loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
-
+        print("Time taken for all epochs= {}\n".format(end-start))
+        loss_log.write("Time taken for all epochs= {}\n".format(end-start))
         print(epochend) # end of FOR loop for EPOCHS
-
+    loss_log.close()
     return net

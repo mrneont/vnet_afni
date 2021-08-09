@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from torch.nn.utils import weight_norm
                          
 # ==================================================================
 # pieces to be used within the model
@@ -12,13 +13,18 @@ class RepeatConv(nn.Module):
     NB:  out_channels = in_channels.
     """
 
-    def __init__(self, n_channels, n_conv):
+    def __init__(self, n_channels, n_conv, wt_norm):
         super(RepeatConv, self).__init__()
         
         conv_list = []
         for i in range(n_conv):
-            conv_list.append( nn.Conv3d(n_channels, n_channels,   
+            if wt_norm ==1:
+                conv_list.append(weight_norm(nn.Conv3d(n_channels, n_channels,   
+                                        kernel_size=5, padding=2)))
+            else:
+                conv_list.append(nn.Conv3d(n_channels, n_channels,   
                                         kernel_size=5, padding=2))
+
             conv_list.append(nn.ReLU())
         
         self.conv = nn.Sequential(*conv_list)
@@ -31,17 +37,25 @@ class Down(nn.Module):
     NB:  out_channels = 2 * in_channels.
     """
 
-    def __init__(self, in_channels, out_channels, n_conv): 
+    def __init__(self, in_channels, out_channels, n_conv, wt_norm): 
         super(Down, self).__init__()
         
-        self.downconv = nn.Sequential(
-            nn.Conv3d( in_channels, out_channels, 
-                       kernel_size=2, stride=2),
-            nn.ReLU()
-        )
+        if wt_norm ==1:
+
+            self.downconv = nn.Sequential(
+                weight_norm(nn.Conv3d( in_channels, out_channels, 
+                       kernel_size=2, stride=2)),
+                nn.ReLU())
+
+        else:
+            self.downconv = nn.Sequential(
+                (nn.Conv3d( in_channels, out_channels, 
+                       kernel_size=2, stride=2)),
+                nn.ReLU())
+        
 
         # repeat the 'n_conv' convolution layers 
-        self.conv = RepeatConv(out_channels, n_conv) 
+        self.conv = RepeatConv(out_channels, n_conv, wt_norm) 
         
     def forward(self, x):
         out = self.downconv(x)
@@ -51,17 +65,25 @@ class Up(nn.Module):
     """
     NB:  out_channels = in_channels / 2.
     """
-    def __init__(self, in_channels, out_channels, n_conv): 
+    def __init__(self, in_channels, out_channels, n_conv, wt_norm): 
         super(Up, self).__init__()
         
-        self.upconv = nn.Sequential(
-            nn.ConvTranspose3d( in_channels, int(out_channels/2), 
+        if wt_norm ==1:
+            self.upconv = nn.Sequential(
+                weight_norm(nn.ConvTranspose3d( in_channels, int(out_channels/2), 
+                                kernel_size=2, stride=2)),
+                nn.ReLU())
+
+        else:
+            self.upconv = nn.Sequential(
+                nn.ConvTranspose3d( in_channels, int(out_channels/2), 
                                 kernel_size=2, stride=2),
-            nn.ReLU()
-        )
+                nn.ReLU())
+            
+        
 
         # repeat the 'n_conv' convolution layers 
-        self.conv = RepeatConv(out_channels, n_conv) 
+        self.conv = RepeatConv(out_channels, n_conv, wt_norm) 
         
     def forward(self, x, down):
         x   = self.upconv(x)
@@ -72,8 +94,8 @@ class Up(nn.Module):
 # ==================================================================
 # the model
 
-class VNet_org(nn.Module):
-    """Main model: Vnet_org is implementation of Fig 2 from the paper:
+class VNet_orig(nn.Module):
+    """Main model: VNet_orig is implementation of Fig 2 from the paper:
        https://arxiv.org/pdf/1606.04797.pdf
 
     Here we set up the main model.
@@ -110,8 +132,8 @@ class VNet_org(nn.Module):
 
     """
 
-    def __init__(self, in_channels, num_class,verb):
-        super(VNet_org, self).__init__()
+    def __init__(self, in_channels, num_class, wt_norm, verb):
+        super(VNet_orig, self).__init__()
 
         #                -- ENCODER --
         #  input layer : down1 = (Conv3d, ReLu)
@@ -119,14 +141,19 @@ class VNet_org(nn.Module):
         # hidden layer : down3 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
         # hidden layer : down4 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
         # hidden layer : down5 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
-        self.down1 = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=5, padding=2), 
-            nn.ReLU()
-        )
-        self.down2 = Down(16,  32,  2)    
-        self.down3 = Down(32,  64,  3)  
-        self.down4 = Down(64,  128, 3)
-        self.down5 = Down(128, 256, 3) 
+        if (wt_norm ==1):
+            self.down1 = nn.Sequential(
+                weight_norm(nn.Conv3d(1, 16, kernel_size=5, padding=2)), 
+                nn.ReLU())
+        else :
+            self.down1 = nn.Sequential(
+                nn.Conv3d(1, 16, kernel_size=5, padding=2),
+                nn.ReLU())
+
+        self.down2 = Down(16,  32,  2, wt_norm)    
+        self.down3 = Down(32,  64,  3, wt_norm)  
+        self.down4 = Down(64,  128, 3, wt_norm)
+        self.down5 = Down(128, 256, 3, wt_norm) 
         
         #                -- DECODER --
         # hidden layer : up1 = upconv(ConvTr3d,Relu) => 3x(Conv3d,Relu)
@@ -134,24 +161,32 @@ class VNet_org(nn.Module):
         # hidden layer : up3 = upconv(ConvTr3d,Relu) => 2x(Conv3d,Relu)
         # hidden layer : up4 = upconv(ConvTr3d,Relu) => 1x(Conv3d,Relu)
         #    out layer : up5 = (Conv3d,Relu)
-        self.up1 = Up(256, 256, 3)
-        self.up2 = Up(256, 128, 3)
-        self.up3 = Up(128,  64, 2)
-        self.up4 = Up(64,   32, 1)
-        self.up5 = nn.Sequential(
-            nn.Conv3d(32, num_class, kernel_size=1),
-            #nn.ReLU()
-            nn.Softmax(dim=3)
-        )
+        self.up1 = Up(256, 256, 3, wt_norm)
+        self.up2 = Up(256, 128, 3, wt_norm)
+        self.up3 = Up(128,  64, 2, wt_norm)
+        self.up4 = Up(64,   32, 1, wt_norm)
+
+        if (wt_norm ==1):
+            self.up5 = nn.Sequential(
+                weight_norm(nn.Conv3d(32, num_class, kernel_size=1)),
+                nn.Softmax(dim=1))
+        else:
+            self.up5 = nn.Sequential(
+                nn.Conv3d(32, num_class, kernel_size=1),
+                nn.Softmax(dim=1))
+            
+        
         
         #count = 1
+        '''
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
-                #nn.init.kaiming_normal_(m.weight, mode='fan_out', 
-                #                        nonlinearity='relu')
-                nn.init.xavier_uniform_(m.weight, gain=np.sqrt(2))
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', 
+                                        nonlinearity='relu')
+                #nn.init.xavier_normal_(m.weight, gain=np.sqrt(2))
                 #print('weight init {:d}'.format(count))
                 #count= count+1
+        '''
          
     def forward(self, x, verb):
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
