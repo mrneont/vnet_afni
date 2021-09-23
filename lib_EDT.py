@@ -1,6 +1,7 @@
 import sys, copy
 import numpy             as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 BIG = 10**10    # -> assumes max matrix dimension is < 10**5
 
@@ -99,7 +100,9 @@ def check_matrix_types(im) :
         BADNESS+= 1
         print("** ERROR: input must be of type np.array (not {})"
               "".format(type(im)))
-    if im.dtype != int :
+    #if not isinstance(im.dtype, (int, np.integer)) :
+    if not [int, np.int32].__contains__(im.dtype) :
+    #if im.dtype != int :
         BADNESS+= 1
         print("** ERROR: input must have dtype=int (not {}), "
               "since this is a map of ROIs"
@@ -352,8 +355,8 @@ def calc_EDT_2D( im,
         print("** ERROR: need to be a 2D array for this function")
         sys.exit(4)
 
-    if check_matrix_dims(im) or check_matrix_types(im):
-        sys.exit(5)
+    #if check_matrix_dims(im) or check_matrix_types(im):
+    #    sys.exit(5)
 
     # Special cases: input is all constant (esp. if all zeros)
     if np.min(im) == np.max(im) :
@@ -622,9 +625,9 @@ def plot_EDT_2D( arr_EDT, arr_ROI,
 
 
 def plot_EDT_3D( arr_EDT, arr_ROI,
-                 Nsli      = 3,
+                 Nsli      = 8,
                  fname     = "IMAGE_3D.svg",
-                 panelsize = (3.5, 3),
+                 panelsize = (9, 6),
                  edims       = (1, 1, 1) ):
     '''Make a plot of the results.  The figure will have Nsli columns and
     2 rows: top row is the input ROI map, and bottom row is the output
@@ -796,6 +799,7 @@ if __name__ == "__main__" :
     
     print("++ Calc 3D EDT for example_00")
     vol_00_rois, vol_00_edims = make_3D_ex_00()
+
     vol_00_EDT  = calc_EDT_3D( vol_00_rois, 
                                bounds_are_zero=True,
                                edims=vol_00_edims )
@@ -826,6 +830,10 @@ if __name__ == "__main__" :
                  Nsli  = 6,
                  fname = "TEST_02.svg",
                  edims = vol_02_edims )
+
+
+    print(" vol_00_EDT ", vol_00_EDT)
+    print(" vol_00_rois ", vol_00_rois)
 
 
     sys.exit(0)

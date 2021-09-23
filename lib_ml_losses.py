@@ -2,7 +2,8 @@ import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
-
+import lib_EDT
+import numpy as np
 
 
 # List of all lost function suffixes, so we can check if user has
@@ -56,15 +57,64 @@ class CalcLoss_SoftDice_00(nn.Module):
         # channel; same size as pred
         target      = make_one_hot(gt, classes=pred.size()[1])
 
+      
+        gt = gt.int()
+        np_gt = gt.numpy()
+        
+        
+        target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
+                               bounds_are_zero=True,
+                               edims=(8, 8, 8))
+
+        #np_target_EDT = torch.from_numpy(target_EDT)
+        #wts  = target_EDT/target_EDT.max()
+        wtsexp = np.exp(-target_EDT)
+        wtsexpsum = wtsexp.sum()
+        #print("wtsexpsum = ",wtsexpsum)
+        wts = wtsexp/wtsexp.max()
+
+        #print("wtsexpmax = ",wtsexp.max())
+
+
+        wts = torch.from_numpy(wts)
+        
+
+ 
+        #print("pred[0][0] = ", pred.shape)
+       
+        num1   = 2.0 * ( pred[0][0] * target[0][0]).sum()
+        denom1 = 1.0 + pred[0][0].pow(2).sum() + \
+            target[0][0].sum()
+
+        num2  = 2.0 * (wts* pred[0][1] * target[0][1]).sum()
+        denom2 = 1.0 +  pred[0][1].pow(2).sum() + \
+            target[0][1].sum()
+
         numerator   = 2.0 * (pred * target).sum(dim=(2, 3, 4))
         denominator = 1.0 + pred.pow(2).sum(dim=(2, 3, 4)) + \
             target.sum(dim=(2, 3, 4))
 
-        dice = numerator / denominator
 
-        print(dice)
+        dice1 = num1 / denom1
 
-        return 1 - dice.mean()
+        dice2 = num2 / denom2
+
+        dicemain = numerator/denominator
+        #print("dicemain type",dicemain)
+        dicemain_mean = dicemain.mean()
+        #print("dicemain_mean ",dicemain_mean)
+
+        #print(dice1,dice2)
+
+        dice = [dice1, dice2]
+
+        wtdicemean  = (dice1+dice2)/2
+        #print("dice",dice)
+        #print("dicemean",dicemean)
+
+        return 1 - wtdicemean
+
+
 
 
 

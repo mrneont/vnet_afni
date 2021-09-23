@@ -122,6 +122,22 @@ def z_scoring(img):
 
     return Z_normalized
 
+
+# write the target masks into output directory 
+
+def pred_save(mask, epoch, phase, count, outdir = '.'):
+
+    
+    mask_np    = mask.cpu().detach().numpy()
+    mask_fname      = ("target{}_{}_{:04d}.nii.gz".format(epoch, 
+                                                              phase, 
+                                                              count))
+    mask_fname_path = '/'.join([outdir, mask_fname])
+    #output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
+    #nib.save(output_image, pred_fname_path)
+
+    lnu.write_out_nifti_vol(mask_np, mask_fname_path,
+                            affmat=lnu.TEMP_M44_32iso_nib_ori)
 # write the predicated masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
@@ -383,8 +399,13 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
                 
+                
                 if epoch == (epochs-1):
+                
+                #if 1 :
                     # save the pred masks in output dir
+                    pred_save(mask_data[0][0],epoch, phase, i, 
+                                   outdir = outdir)
                     mask_pred_save(mask_pred[0][0], epoch, phase, i, 
                                    outdir = outdir)
                     mask_pred_save_opp(mask_pred[0][1], epoch, phase, i, 
