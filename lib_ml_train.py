@@ -125,9 +125,11 @@ def z_scoring(img):
 
 # write the target masks into output directory 
 
-def pred_save(mask, epoch, phase, count, outdir = '.'):
-
-    
+def target_save(mask, epoch, phase, count, outdir = '.'):
+    """
+    + The i/p 'mask' is a torch tensor, it is converted into numpy array
+      and written into nifti format as o/p 
+    """ 
     mask_np    = mask.cpu().detach().numpy()
     mask_fname      = ("target{}_{}_{:04d}.nii.gz".format(epoch, 
                                                               phase, 
@@ -143,7 +145,10 @@ def pred_save(mask, epoch, phase, count, outdir = '.'):
 #    + pieces are still hardwired now, but these should overlay now
 def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 
-    
+    """
+    + The i/p 'mask' is a torch tensor, it is converted into numpy array
+      and written into nifti format as o/p 
+    """ 
     mask_pred_np    = mask_pred.cpu().detach().numpy()
     pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, 
                                                               phase, 
@@ -159,6 +164,10 @@ def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
 #    + pieces are still hardwired now, but these should overlay now
 def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
 
+    """
+    + The i/p 'mask' is a torch tensor, it is converted into numpy array
+      and written into nifti format as o/p 
+    """ 
     
     mask_pred_opp_np    = mask_pred_opp.cpu().detach().numpy()
     pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, 
@@ -226,6 +235,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     # file to track the training and validation loss 
     loss_file = '/'.join([outdir, 'log_loss.txt'])
+    perf_file = '/'.join([outdir, 'log_performance.txt'])
     dash      = '-' * 20
     epochend  = '=' * 80
     step      = 0         
@@ -295,7 +305,16 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
     avg_train_losses = []   # calculated over the entire dataset in an epoch
     avg_val_losses   = []   # calculated over the entire dataset in an epoch
+   
+    perf_log  = open(perf_file, mode='a')
+    perf_log.write("{0!s:13} {1!s:13} {2!s:10} \n"
+                            "".format('EPOCH', 'Train_Loss',
+                                                    'Val_Loss',))
+    
+
     start            = time.time()
+
+
 
     for epoch in range(epochs): # start of FOR loop for EPOCHS
         print('EPOCH:', epoch)
@@ -318,6 +337,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 print("This should never happen! 'phase' is: {}"
                       "".format(phase))
 
+
             
             loss_log  = open(loss_file, mode='a')
             loss_log.write("EPOCH  :{}\n".format(epoch))
@@ -326,9 +346,16 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                            "".format('dataset_num', 'LOSS.item',
                                      'min_val', 'max_val'))
 
+            
+            
+
             # creating an instance of loss function
             if 1 :
-                loss = lml.CalcLoss_SoftDice_00()
+                #loss = lml.CalcLoss_SoftDice_00()
+                loss = lml.CalcLoss_WtSoftDice_01()
+                
+
+
 
             i = 1 # index for the datafile/volume in the DATASET
 
@@ -365,11 +392,15 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
+                    # The data to the neural net is of type 'torch.FloatTensor'
                     mask_pred = net.forward(orig_data, verb) 
+                    # The output mask_pred is of type 'torch.FloatTensor'
 
 
                     # compare the predicted mask and the target data 
+                    # + mask_data and mask_data is of type torch.FloatTensor  
                     LOSS = loss.forward(mask_pred, mask_data)
+                    # the output of loss.forward is a single value of type 'torch.DoubleTensor'
 
                 # backward propagation and optimization only if in
                 # training phase
@@ -404,7 +435,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 
                 #if 1 :
                     # save the pred masks in output dir
-                    pred_save(mask_data[0][0],epoch, phase, i, 
+                    target_save(mask_data[0][0],epoch, phase, i, 
                                    outdir = outdir)
                     mask_pred_save(mask_pred[0][0], epoch, phase, i, 
                                    outdir = outdir)
@@ -419,18 +450,26 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         train_losses = torch.as_tensor(train_losses)
         train_loss   = torch.mean(train_losses)
 
+
         # computing the loss pertaining to the validation data
         val_losses = torch.as_tensor(val_losses)
         val_loss   = torch.mean(val_losses)
 
+        perf_log.write("{:5d} {:15.4f} {:15.4f}\n"
+                    "".format(epoch, train_loss, val_loss))
+
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
+
         loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
         loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
         early_stopping(val_loss, net)
+        
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
+
         print("Time taken for all epochs= {}\n".format(end-start))
         loss_log.write("Time taken for all epochs= {}\n".format(end-start))
         print(epochend) # end of FOR loop for EPOCHS
     loss_log.close()
+    perf_log.close()
     return net

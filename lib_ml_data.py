@@ -8,8 +8,18 @@ import nibabel as nib
 import torch.utils.data as data
 import glob
 
-class mridataset(data.Dataset):
 
+class mridataset(data.Dataset):
+    """
++ A 'mridataset' Dataset class is substantiated for the Dataloader.
++ The Dataset class is used by the Dataloader class.
++ A custom Dataset class must implement three functions: __init__, __len__, and __getitem__.
++ The __init__ function initializes the data directory, annotation file and any data tranforms.
++ The __len__ function returns the number of samples in the dataset.
++ The __getitem__ function loads and returns a sample from the dataset at the given index. 
+  Based on the index, it converts the mri data into torch tensor using nibabel 'load'.
+  It retrieves the corresponding groundtruth/mask
+    """
     def __init__(self, root_path):
         self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig','*.nii.gz'))]
         self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask','*.nii.gz'))]

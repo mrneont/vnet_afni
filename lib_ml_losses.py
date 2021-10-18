@@ -11,18 +11,30 @@ import numpy as np
 # name should be entered here.  The [0]th one in the list is the
 # default.
 list_CalcLoss = [ "SoftDice_00",
+                  "WtSoftDice_01",
                   ]
 
 # =========================================================================
 
 def make_one_hot(labels, classes):
+    '''
+    + This function puts together a representation of categorical 
+       variables as binary vectors
+    + Here the categories are different classes/channels
+
+    + Input labels is the ground truth data itself
+
+    + Return a torch tensor 'target' having the number of channels
+      equal to the  number of classes
+
+    '''
     shape = list(labels.size())
     shape[1] = classes
     
     
     one_hot =torch.zeros(shape,device=labels.device)
     target = one_hot.scatter_(1, labels.data.long(), 1)
-    #print("target",target.size())
+    
     return target
 
 
@@ -57,6 +69,57 @@ class CalcLoss_SoftDice_00(nn.Module):
         # channel; same size as pred
         target      = make_one_hot(gt, classes=pred.size()[1])
 
+
+        numerator   = 2.0 * (pred * target).sum(dim=(2, 3, 4))
+        denominator = 1.0 + pred.pow(2).sum(dim=(2, 3, 4)) + \
+            target.sum(dim=(2, 3, 4))
+
+        
+        dice = numerator/denominator
+       
+        dice_mean = dice.mean()
+       
+       
+
+        return 1 - dice_mean
+
+
+
+
+class CalcLoss_WtSoftDice_01(nn.Module):
+
+    def __init__(self,):
+        super(CalcLoss_WtSoftDice_01, self).__init__()
+
+    def forward(self, pred, gt):
+        '''Input two dsets, and calculate the loss function between them.
+    This is for the 2-channel case:  brain, and nonbrain.
+    
+    Each dset has 5 dimensions, with each index telling:
+        (batch_size, n_channels, Depth, Height, Width)
+
+    For example, the gt.size() is: (1, 1, 32, 32, 32), 
+    and the pred.size() is:        (1, 2, 32, 32, 32).
+
+    Args:
+        pred     : 'prediction' dataset
+        gt       : 'answer' dataset
+
+    Return:
+        value    : single-valued Tensor-type (so, a scalar tensor?)
+
+    + WtSoftDice_01 function has an extended feature to SoftDice_00. 
+    + The predicted mask is mupltiplied by the depth_info as weights. 
+    + The depth_info emphasises the voxels at the edge 
+    + The depth_info is calculated using the function "calc_EDT_3D"
+      imported from lib_EDT
+
+        '''
+        
+        # separate out pred into separate dsets, one volume per
+        # channel; same size as pred
+        target      = make_one_hot(gt, classes=pred.size()[1])
+
       
         gt = gt.int()
         np_gt = gt.numpy()
@@ -66,55 +129,44 @@ class CalcLoss_SoftDice_00(nn.Module):
                                bounds_are_zero=True,
                                edims=(8, 8, 8))
 
-        #np_target_EDT = torch.from_numpy(target_EDT)
-        #wts  = target_EDT/target_EDT.max()
-        wtsexp = np.exp(-target_EDT)
-        wtsexpsum = wtsexp.sum()
-        #print("wtsexpsum = ",wtsexpsum)
-        wts = wtsexp/wtsexp.max()
-
-        #print("wtsexpmax = ",wtsexp.max())
-
-
-        wts = torch.from_numpy(wts)
+       
+        wts  = target_EDT/target_EDT.max()
+        wtsexp = np.exp(-wts)
+        
+        
+        # Please note : The neural network goes into saturation when  
+        # exponential(depth_info) is normalized.
+        # the best way to go about is to normalize the depth_info
+        # and then calculate the exp(norm_depth_info)
+        
+        wts = torch.from_numpy(wtsexp)
         
 
  
-        #print("pred[0][0] = ", pred.shape)
+        # channel corresponding to the non brainm region 
        
         num1   = 2.0 * ( pred[0][0] * target[0][0]).sum()
         denom1 = 1.0 + pred[0][0].pow(2).sum() + \
             target[0][0].sum()
 
+        # channel corresponding to the brain region 
+        # the wts are multiplied only to the channel corresponding to the brain region 
         num2  = 2.0 * (wts* pred[0][1] * target[0][1]).sum()
-        denom2 = 1.0 +  pred[0][1].pow(2).sum() + \
+        denom2 = 1.0 +  (wts*pred[0][1]).pow(2).sum() + \
             target[0][1].sum()
-
-        numerator   = 2.0 * (pred * target).sum(dim=(2, 3, 4))
-        denominator = 1.0 + pred.pow(2).sum(dim=(2, 3, 4)) + \
-            target.sum(dim=(2, 3, 4))
 
 
         dice1 = num1 / denom1
 
         dice2 = num2 / denom2
 
-        dicemain = numerator/denominator
-        #print("dicemain type",dicemain)
-        dicemain_mean = dicemain.mean()
-        #print("dicemain_mean ",dicemain_mean)
-
-        #print(dice1,dice2)
-
+        
         dice = [dice1, dice2]
 
         wtdicemean  = (dice1+dice2)/2
-        #print("dice",dice)
-        #print("dicemean",dicemean)
+     
 
         return 1 - wtdicemean
-
-
 
 
 
