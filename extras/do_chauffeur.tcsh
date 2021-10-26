@@ -18,3 +18,4 @@ set opref = QC01/Vrel
     -set_xhairs        OFF                                            \
     -montx 3 -monty 3                                                 \
     -label_mode 1 -label_size 4
+    
