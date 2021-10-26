@@ -307,9 +307,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     avg_val_losses   = []   # calculated over the entire dataset in an epoch
    
     perf_log  = open(perf_file, mode='a')
-    perf_log.write("{0!s:13} {1!s:13} {2!s:10} \n"
+    perf_log.write("{0!s:13} {1!s:13} {2!s:10}  {3!s:10}  {4!s:10} {5!s:10} {6!s:10}\n"
                             "".format('EPOCH', 'Train_Loss',
-                                                    'Val_Loss',))
+                                'Train_Loss_median', 'Train_Loss_stddev',
+                                'Val_Loss', 'Val_Loss_median','Val_Loss_stddev'))
     
 
     start            = time.time()
@@ -352,7 +353,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
             # creating an instance of loss function
             if 1 :
                 #loss = lml.CalcLoss_SoftDice_00()
-                loss = lml.CalcLoss_WtSoftDice_01()
+                #loss = lml.CalcLoss_WtSoftDice_01()
+                #loss = lml.Calc_Sorensen_Dice_02()
+                loss = lml.Calc_WtSorensen_Dice_03()
                 
 
 
@@ -431,9 +434,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                           "".format(i, dataset_size, LOSS))
                 
                 
-                if epoch == (epochs-1):
+                #if epoch == (epochs-1):
                 
-                #if 1 :
+                if 1 :
                     # save the pred masks in output dir
                     target_save(mask_data[0][0],epoch, phase, i, 
                                    outdir = outdir)
@@ -455,8 +458,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         val_losses = torch.as_tensor(val_losses)
         val_loss   = torch.mean(val_losses)
 
-        perf_log.write("{:5d} {:15.4f} {:15.4f}\n"
-                    "".format(epoch, train_loss, val_loss))
+        perf_log.write("{:5d} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f}\n"
+                    "".format(epoch, train_loss,torch.median(train_losses),
+                        torch.std(train_losses),val_loss,
+                        torch.median(val_losses),torch.std(val_losses)))
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)

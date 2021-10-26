@@ -38,6 +38,9 @@ def make_one_hot(labels, classes):
     return target
 
 
+
+
+
 class CalcLoss_SoftDice_00(nn.Module):
 
     def __init__(self,):
@@ -170,10 +173,83 @@ class CalcLoss_WtSoftDice_01(nn.Module):
 
 
 
+class Calc_Sorensen_Dice_02(nn.Module):
+
+    '''
+    +  Sorensen–Dice index = 2|X∩Y|/ |X|+|Y|
+    +  Ref :https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+
+    '''
+
+    def __init__(self,):
+        super(Calc_Sorensen_Dice_02, self).__init__()
+        self.eps = 1e-6
+
+    def forward(self, pred, gt):
+
+        target       = make_one_hot(gt, classes=pred.size()[1])
+
+        
+        
+        numerator    = 2.0 *  torch.sum(pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(pred + target, dim=(2, 3, 4))
+
+        
+        dice = numerator/(denominator)
+       
+        return 1 - torch.mean(dice)
+       
 
 
 
 
+
+class Calc_WtSorensen_Dice_03(nn.Module):
+
+    '''
+    +  Sorensen–Dice index = 2|X∩Y|/ |X|+|Y|
+    +  Ref :https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+
+    '''
+
+    def __init__(self,):
+        super(Calc_WtSorensen_Dice_03, self).__init__()
+        self.eps = 1e-6
+
+    def forward(self, pred, gt):
+
+        target       = make_one_hot(gt, classes=pred.size()[1])
+
+        gt = gt.int()
+        np_gt = gt.numpy()
+        
+        
+        target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
+                               bounds_are_zero=True,
+                               edims=(8, 8, 8))
+
+       
+        wts  = target_EDT/target_EDT.max()
+        wtsexp = np.exp(-wts)
+        
+        
+        # Please note : The neural network goes into saturation when  
+        # exponential(depth_info) is normalized.
+        # the best way to go about is to normalize the depth_info
+        # and then calculate the exp(norm_depth_info)
+        
+        wts = torch.from_numpy(wtsexp)
+        
+
+        
+        
+        numerator    = 2.0 *  torch.sum(wts*pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(wts *pred + wts*target, dim=(2, 3, 4))
+
+        
+        dice = numerator/(denominator)
+       
+        return 1 - torch.mean(dice)
 
 
 
