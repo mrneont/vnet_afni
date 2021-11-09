@@ -125,7 +125,7 @@ class CalcLoss_WtSoftDice_01(nn.Module):
 
       
         gt = gt.int()
-        np_gt = gt.numpy()
+        np_gt = gt.cpu().numpy()
         
         
         target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
@@ -221,7 +221,7 @@ class Calc_WtSorensen_Dice_03(nn.Module):
         target       = make_one_hot(gt, classes=pred.size()[1])
 
         gt = gt.int()
-        np_gt = gt.numpy()
+        np_gt = gt.cpu().numpy()
         
         
         target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 

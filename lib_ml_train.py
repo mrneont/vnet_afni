@@ -19,6 +19,10 @@ import lib_ml_cerebrum      as lmc
 import lib_nibabel_utils    as lnu
 import pytorchtools         as ptt
 
+from   fp16util         import convert_network
+import torch.backends.cudnn as cudnn
+from   adam_fp16        import Adam16
+
 # --------------------------------------------------------------------------
 
 # List of all possible net architectures to choose from.  Add any
@@ -253,6 +257,13 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         print('DEVICE BEING USED :', device)
         print('NUMBER OF EPOCHS  :', epochs)
 
+    half_prec =1
+
+    if half_prec == 1:
+        print('Half_precision')
+    else :
+        print('Full_precision')
+
 
     # Task : binary segmentation 
     # in_channels = 1, size = (H X W X Depth): in this case the entire MRI vol
@@ -271,9 +282,19 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     print("++ Network architecture type: {}".format(net_arch))
 
+    
     # move model to device
-    if device == 'cuda':
-        net.to(device).half()
+    if device == torch.device('cuda'):
+        
+        
+        if half_prec == 1:
+            net.to(device) #.half()
+            #net = network_to_half(net)
+            #print('Start to convert the net')
+            net = convert_network(net, dtype=torch.float16)
+            #net = convert_network(net, dtype = torch.cuda.HalfTensor) # gives error
+            torch.backends.cudnn.enabled
+
     else: # device == 'cpu'
         net.to(device)
 
@@ -285,7 +306,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     # load optimizer
     if optimizer == 'Adam':
-        optimizer      = optim.Adam(net.parameters(), lr=lr)
+        #optimizer      = optim.Adam(net.parameters(), lr=lr)
+        optimizer  = Adam16(net.parameters(),lr=1e-4, betas=(0.9, 0.999), eps=1e-8,
+                 weight_decay=0)
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
@@ -352,10 +375,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
             # creating an instance of loss function
             if 1 :
-                #loss = lml.CalcLoss_SoftDice_00()
+                loss = lml.CalcLoss_SoftDice_00()
                 #loss = lml.CalcLoss_WtSoftDice_01()
                 #loss = lml.Calc_Sorensen_Dice_02()
-                loss = lml.Calc_WtSorensen_Dice_03()
+                #loss = lml.Calc_WtSorensen_Dice_03()
                 
 
 
@@ -370,12 +393,14 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 else: 
                     orig_data = data_normalize(orig_data)
 
-                if device =='cuda':
+                if device == torch.device('cuda'):
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
                 else:# device == 'cpu'
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
+
+                print( 'orig_data.type()',orig_data.type())
 
                 ### CONV3D requires i/p in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
@@ -436,7 +461,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 
                 #if epoch == (epochs-1):
                 
-                if 1 :
+                if 0 :
                     # save the pred masks in output dir
                     target_save(mask_data[0][0],epoch, phase, i, 
                                    outdir = outdir)
