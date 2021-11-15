@@ -77,7 +77,7 @@ def get_args():
                         help='Number of epochs' + '\n' +
                         "(def: {})".format(str(def_E)))
 
-    def_LRATE = 0.001
+    def_LRATE = 0.0001
     parser.add_argument("-l", "--learning_rate", 
                         metavar='LRATE', 
                         dest="learning_rate", 

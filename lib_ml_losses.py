@@ -152,8 +152,9 @@ class CalcLoss_WtSoftDice_01(nn.Module):
         denom1 = 1.0 + pred[0][0].pow(2).sum() + \
             target[0][0].sum()
 
-        # channel corresponding to the brain region 
-        # the wts are multiplied only to the channel corresponding to the brain region 
+        # channel corresponding to the brain region;
+        # the wts are multiplied only to the channel corresponding to
+        # the brain region
         num2  = 2.0 * (wts* pred[0][1] * target[0][1]).sum()
         denom2 = 1.0 +  (wts*pred[0][1]).pow(2).sum() + \
             target[0][1].sum()
@@ -176,7 +177,7 @@ class CalcLoss_WtSoftDice_01(nn.Module):
 class Calc_Sorensen_Dice_02(nn.Module):
 
     '''
-    +  Sorensen–Dice index = 2|X∩Y|/ |X|+|Y|
+    +  Sorensen–Dice index = 2|X∩Y| / |X|+|Y|
     +  Ref :https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 
     '''

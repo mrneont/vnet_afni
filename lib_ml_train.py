@@ -19,9 +19,9 @@ import lib_ml_cerebrum      as lmc
 import lib_nibabel_utils    as lnu
 import pytorchtools         as ptt
 
-from   fp16util         import convert_network
+from   lib_fp16util     import convert_network
 import torch.backends.cudnn as cudnn
-from   adam_fp16        import Adam16
+from   lib_adam_fp16    import Adam16
 
 # --------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ list_net_arch = [ 'vnet_orig',
 # (the if-condition to use one is below). The [0th] one is the
 # default.
 list_optimizer = [ 'Adam',
-                   ]
+                   'Adam16']
 
 # --------------------------------------------------------------------------
 
@@ -272,9 +272,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     # Set up network - Initialize the net with the desired model
     if net_arch == 'vnet_orig' :
-        net = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
+        net = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = wt_norm, 
+                            verb=verb)
     elif net_arch == 'Cerebrum' :
-        net = lmc.Cerebrum(in_channels=1, num_class=2, wt_norm = wt_norm, verb=verb)
+        net = lmc.Cerebrum(in_channels=1, num_class=2, wt_norm = wt_norm, 
+                           verb=verb)
     else:
         print("There is no network architecture here of name: {}"
               "".format(net_arch))
@@ -285,7 +287,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     
     # move model to device
     if device == torch.device('cuda'):
-        
+        print("device : cuda")
         
         if half_prec == 1:
             net.to(device) #.half()
@@ -296,6 +298,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
             torch.backends.cudnn.enabled
 
     else: # device == 'cpu'
+        print("device : cpu")
         net.to(device)
 
 
@@ -306,9 +309,10 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     # load optimizer
     if optimizer == 'Adam':
-        #optimizer      = optim.Adam(net.parameters(), lr=lr)
-        optimizer  = Adam16(net.parameters(),lr=1e-4, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0)
+        optimizer = optim.Adam(net.parameters(), lr=lr)
+    elif optimizer == 'Adam16':
+        optimizer = Adam16(net.parameters(),lr=1e-4, betas=(0.9, 0.999), 
+                           eps=1e-8, weight_decay=0)
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
