@@ -21,6 +21,7 @@ def make_one_hot(labels, classes):
     '''
     + This function puts together a representation of categorical 
        variables as binary vectors
+
     + Here the categories are different classes/channels
 
     + Input labels is the ground truth data itself
@@ -29,17 +30,14 @@ def make_one_hot(labels, classes):
       equal to the  number of classes
 
     '''
-    shape = list(labels.size())
-    shape[1] = classes
+    shape    = list(labels.size())
+    shape[1] = classes           ### PTQ: what is this line for?
     
     
     one_hot =torch.zeros(shape,device=labels.device)
     target = one_hot.scatter_(1, labels.data.long(), 1)
     
     return target
-
-
-
 
 
 class CalcLoss_SoftDice_00(nn.Module):
@@ -49,7 +47,7 @@ class CalcLoss_SoftDice_00(nn.Module):
 
     def forward(self, pred, gt):
         '''Input two dsets, and calculate the loss function between them.
-    This is for the 2-channel case:  brain, and nonbrain.
+    This is for the 2-channel case:  brain and nonbrain.
 
     For this loss: the soft-Dice is calculated for each channel; the
     results are averaged; and the output is one minus that value.
@@ -73,21 +71,21 @@ class CalcLoss_SoftDice_00(nn.Module):
         # channel; same size as pred
         target      = make_one_hot(gt, classes=pred.size()[1])
 
-
         numerator   = 2.0 * (pred * target).sum(dim=(2, 3, 4))
+        ### PTQ: do we need the '1.0 +' in the denominator?  Is this
+        ### just being added to keep the denominator from being 0?  We
+        ### could use an 'if ...' instead, couldn't we?
         denominator = 1.0 + pred.pow(2).sum(dim=(2, 3, 4)) + \
-            target.sum(dim=(2, 3, 4))
+                      target.sum(dim=(2, 3, 4))
 
-        
         dice = numerator/denominator
        
+        ### PTQ: thought we discussed that we did not want to take the
+        ### mean here, actually?  For the 2channel case, it is not
+        ### necessary
         dice_mean = dice.mean()
-       
-       
 
         return 1 - dice_mean
-
-
 
 
 class CalcLoss_WtSoftDice_01(nn.Module):
@@ -124,62 +122,58 @@ class CalcLoss_WtSoftDice_01(nn.Module):
         # channel; same size as pred
         target      = make_one_hot(gt, classes=pred.size()[1])
 
-      
-        gt = gt.int()
+        gt    = gt.int()
         np_gt = gt.cpu().numpy()
         
-        
+        ### [pt] Note for future---'edims' should not be hardwired
+        ### here, because that will depend on actual data voxel
+        ### dimensions.  For now, this is OK for using 32x32x32 data.
         target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
-                               bounds_are_zero=True,
-                               edims=(8, 8, 8))
-
+                                           bounds_are_zero=True,
+                                           edims=(8, 8, 8))
        
-        wts  = target_EDT/target_EDT.max()
-        wtsexp = np.exp(-wts)
-        
-        
+        wts     = target_EDT/target_EDT.max()
+        wts_exp = np.exp(-wts)
+                
         # Please note : The neural network goes into saturation when  
         # exponential(depth_info) is normalized.
         # the best way to go about is to normalize the depth_info
         # and then calculate the exp(norm_depth_info)
         
-        wts = torch.from_numpy(wtsexp)
-        
+        wts = torch.from_numpy(wts_exp)
 
- 
-        # channel corresponding to the non brainm region 
-       
+        ### PTQ: I am happy that we know which channel is brain, and
+        ### which is nonbrain...  But how do we know which is which again?
+        # channel corresponding to the nonbrain region 
         num1   = 2.0 * ( pred[0][0] * target[0][0]).sum()
         denom1 = 1.0 + pred[0][0].pow(2).sum() + \
-            target[0][0].sum()
+                 target[0][0].sum()
 
         # channel corresponding to the brain region;
         # the wts are multiplied only to the channel corresponding to
         # the brain region
-        num2  = 2.0 * (wts* pred[0][1] * target[0][1]).sum()
+        num2   = 2.0 * (wts* pred[0][1] * target[0][1]).sum()
         denom2 = 1.0 +  (wts*pred[0][1]).pow(2).sum() + \
-            target[0][1].sum()
-
+                 target[0][1].sum()
 
         dice1 = num1 / denom1
-
         dice2 = num2 / denom2
 
+        ### PTQ: this is unused? Can remove?
+        #dice = [dice1, dice2]
         
-        dice = [dice1, dice2]
-
+        ### PTQ:  I don't think we want the mean here, as noted above?
         wtdicemean  = (dice1+dice2)/2
-     
 
         return 1 - wtdicemean
-
 
 
 class CalcLoss_Sorensen_Dice_02(nn.Module):
 
     '''
-    +  Sorensen–Dice index = 2|X∩Y| / |X|+|Y|
-    +  Ref :https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+    +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
+    +  Ref:
+       https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 
     '''
 
@@ -190,27 +184,21 @@ class CalcLoss_Sorensen_Dice_02(nn.Module):
     def forward(self, pred, gt):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
-
-        
-        
-        numerator    = 2.0 *  torch.sum(pred * target, dim=(2, 3, 4))
+        numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(pred + target, dim=(2, 3, 4))
-
         
-        dice = numerator/(denominator)
+        dice         = numerator/denominator
        
+        ### PTQ:  why mean here?  
         return 1 - torch.mean(dice)
        
-
-
-
-
 
 class CalcLoss_WtSorensen_Dice_03(nn.Module):
 
     '''
-    +  Sorensen–Dice index = 2|X∩Y|/ |X|+|Y|
-    +  Ref :https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+    +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
+    +  Ref:
+       https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 
     '''
 
@@ -225,32 +213,29 @@ class CalcLoss_WtSorensen_Dice_03(nn.Module):
         gt = gt.int()
         np_gt = gt.cpu().numpy()
         
-        
+        ### [pt] Note for future---'edims' should not be hardwired
+        ### here, because that will depend on actual data voxel
+        ### dimensions.  For now, this is OK for using 32x32x32 data.
         target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
                                bounds_are_zero=True,
                                edims=(8, 8, 8))
-
        
-        wts  = target_EDT/target_EDT.max()
-        wtsexp = np.exp(-wts)
-        
+        wts     = target_EDT/target_EDT.max()
+        wts_exp = np.exp(-wts)
         
         # Please note : The neural network goes into saturation when  
         # exponential(depth_info) is normalized.
         # the best way to go about is to normalize the depth_info
         # and then calculate the exp(norm_depth_info)
         
-        wts = torch.from_numpy(wtsexp)
-        
+        wts = torch.from_numpy(wts_exp)
 
-        
-        
-        numerator    = 2.0 *  torch.sum(wts*pred * target, dim=(2, 3, 4))
-        denominator  = torch.sum(wts *pred + wts*target, dim=(2, 3, 4))
-
+        numerator    = 2.0 * torch.sum(wts*pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(wts*pred + wts*target, dim=(2, 3, 4))
         
         dice = numerator/(denominator)
-       
+
+        ### PTQ:  why mean here?  
         return 1 - torch.mean(dice)
 
 
