@@ -264,6 +264,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     ### Or is this this uniquely tied to optimizer choice?  E.g., if
     ### choosing Adam16, then this is half_precision, while for any
     ### other optimizer, it should be full prec?
+    ##### PTQ2: how does/should this interact with using the .half()
+    ##### method, below? Shouldn't these be connected?
     half_prec = 1    
 
     if half_prec == 1:
@@ -397,28 +399,34 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                       "".format(loss_func))
                 sys.exit(5)
 
-            i = 1 # index for the datafile/volume in the DATASET
+            idx = 1 # index for the datafile/volume in the DATASET
 
             for orig_data, mask_data in dataloaders[phase]:
 
-                
+                ### PTQ: normalization should be something selected at
+                ### runtime, to be able to switch among different
+                ### methods for doing so.
                 if 1:
                     orig_data = z_scoring(orig_data)
                 else: 
                     orig_data = data_normalize(orig_data)
 
                 if device == torch.device('cuda'):
+                    ### PTQ: are we sure it is always half if using
+                    ### cuda?  Or is that only with the 'half_prec=1'
+                    ### above? I think we should be careful these are
+                    ### consistently used/flagged.
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
                 else:# device == 'cpu'
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
 
-                if i < 2 :
+                if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
 
-                ### CONV3D requires i/p in the format of:
+                ### CONV3D requires input in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
                 # Try to bring each data into the format: (1 X 1 X D X H X W)
                 orig_data = orig_data.unsqueeze(0) 
@@ -456,10 +464,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     #print('net.named_parameters()')
                     #print(net.named_parameters())
                     #plot_grad_flow_new(net.named_parameters(), 
-                    #                   epoch, i, outdir = outdir)
+                    #                   epoch, idx, outdir = outdir)
                     #print([z.grad for z in list(net.parameters())])
-                    
-
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
@@ -470,11 +476,12 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     #print(torch.equal(before[j].data, after[j].data))
                 with io.open(loss_file, 'a') as loss_log:
                     loss_log.write("  {:>5d}  {:10.4f}  {:10.4f}  {:10.4f}\n"
-                                   "".format(i, LOSS, 
+                                   "".format(idx, LOSS, 
                                              mask_pred.min(), mask_pred.max()))
                 
                 if verb :
-                    this_str = "... dset {:5d} / {:5d}".format(i, dataset_size)
+                    this_str = "... dset {:5d} / {:5d}".format(idx, 
+                                                               dataset_size)
                     this_str+= ", loss"
                     print("   {:30s} : {:.4f}"
                           "".format(this_str, LOSS))
@@ -483,14 +490,14 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 
                 if 0 :
                     # save the pred masks in output dir
-                    target_save(mask_data[0][0],epoch, phase, i, 
+                    target_save(mask_data[0][0],epoch, phase, idx, 
+                                outdir = outdir)
+                    mask_pred_save(mask_pred[0][0], epoch, phase, idx, 
                                    outdir = outdir)
-                    mask_pred_save(mask_pred[0][0], epoch, phase, i, 
-                                   outdir = outdir)
-                    mask_pred_save_opp(mask_pred[0][1], epoch, phase, i, 
-                                   outdir = outdir)
+                    mask_pred_save_opp(mask_pred[0][1], epoch, phase, idx, 
+                                       outdir = outdir)
                 
-                i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
+                idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
 
             end = time.time() # end of FOR loop for PHASE
             
