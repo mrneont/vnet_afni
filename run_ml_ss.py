@@ -310,6 +310,5 @@ if __name__ == '__main__':
     writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
                    verb=verb )
 
-    print("wt_norm = ".format(wt_norm))
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
                          optimizer, wt_norm, outdir, verb )

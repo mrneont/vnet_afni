@@ -255,15 +255,20 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
             torch.manual_seed(seed)
 
     if verb :
-        print('DEVICE BEING USED :', device)
-        print('NUMBER OF EPOCHS  :', epochs)
+        print("++ {:30s} : {}".format('Device being used', device))
+        print("++ {:30s} : {}".format('Number of epochs', epochs))
+        print("++ {:30s} : {}".format('Weight norm', wt_norm))
 
-    half_prec =1
+    ### PTQ: presumably, this can/should be set from runtime options?
+    ### Or is this this uniquely tied to optimizer choice?  E.g., if
+    ### choosing Adam16, then this is half_precision, while for any
+    ### other optimizer, it should be full prec?
+    half_prec = 1    
 
     if half_prec == 1:
-        print('Half_precision')
+        print("++ {:30s} : {}".format('Precision', 'half'))
     else :
-        print('Full_precision')
+        print("++ {:30s} : {}".format('Precision', 'full'))
 
 
     # Task : binary segmentation 
@@ -279,11 +284,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         net = lmc.Cerebrum(in_channels=1, num_class=2, wt_norm = wt_norm, 
                            verb=verb)
     else:
-        print("There is no network architecture here of name: {}"
+        print("** This should never happen! 'network architecture' is {}" 
               "".format(net_arch))
         sys.exit(1)
 
-    print("++ Network architecture type: {}".format(net_arch))
+    print("++ {:30s} : {}".format('Network architecture', net_arch))
 
     
     # move model to device
@@ -298,9 +303,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
             torch.backends.cudnn.enabled
 
     else: # device == 'cpu'
-        print("device : cpu")
         net.to(device)
-
 
     # print the model summary
     if verb > 1:
@@ -315,8 +318,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                            betas=(0.9, 0.999), 
                            eps=1e-8, weight_decay=0)
     else:
-        print("This should never happen! 'optimizer' is {}" 
+        print("** This should never happen! 'optimizer' is {}" 
               "".format(optimizer))
+        sys.exit(3)
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
@@ -339,12 +343,14 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
    
 
     with io.open(perf_file, 'a') as perf_log:
-        perf_log.write("{0!s:13} {1!s:13} {2!s:10}  {3!s:10}  {4!s:10} {5!s:10} {6!s:10}\n"
-                   "".format('EPOCH', 'Train_Loss',
-                             'Train_Loss_median', 'Train_Loss_stddev',
-                             'Val_Loss', 'Val_Loss_median','Val_Loss_stddev'))
-
-    start            = time.time()
+        perf_log.write("# {:5s}  "
+                       "{:>12s}  {:>12s}  {:>12s} "
+                       "{:>12s}  {:>12s}  {:>12s}\n"
+                       "".format('EPOCH', 
+                                 'train_loss', 'tr_loss_med', 'tr_loss_std',
+                                 'val_loss', 'val_loss_med', 'val_loss_std'))
+    
+    start = time.time()
 
 
     for epoch in range(epochs): # start of FOR loop for EPOCHS
@@ -365,8 +371,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 val_losses   = []
                 dataset_size = Nval 
             else:
-                print("This should never happen! 'phase' is: {}"
+                print("** This should never happen! 'phase' is: {}"
                       "".format(phase))
+                sys.exit(4)
 
             with io.open(loss_file, 'a') as loss_log:
                 loss_log.write("EPOCH  :{}\n".format(epoch))
@@ -492,10 +499,14 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         val_loss   = torch.mean(val_losses)
 
         with io.open(perf_file, 'a') as perf_log:
-            perf_log.write("{:5d} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f}\n"
-                           "".format(epoch, train_loss,torch.median(train_losses),
-                                     torch.std(train_losses),val_loss,
-                                     torch.median(val_losses),torch.std(val_losses)))
+            perf_log.write("  {:5d}  "
+                           "{:12.4f}  {:12.4f}  {:12.4f} "
+                           "{:12.4f}  {:12.4f}  {:12.4f}\n"
+                           "".format(epoch,
+                                     train_loss, torch.median(train_losses),
+                                     torch.std(train_losses),
+                                     val_loss, torch.median(val_losses),
+                                     torch.std(val_losses)))
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
@@ -513,6 +524,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         print(epochend) # end of FOR loop for EPOCHS
 
     ### [PT] I *think* these closes are unnecessary, now using io.open()
-    #loss_log.close()
-    #perf_log.close()
+    loss_log.close()
+    perf_log.close()
+
     return net
