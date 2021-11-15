@@ -214,7 +214,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 
 # --------------------------------------------------------------------------
 
-def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
+def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
               optimizer, wt_norm, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
@@ -224,7 +224,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     data_path    : top level directory of data (see program help for  
                    directory sub-structure)
-    epochs       : number of epochs for network (int)
+    num_epochs   : number of epochs for network (int)
     lr           : learning rate parameter 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
@@ -239,11 +239,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     """
 
     # file to track the training and validation loss 
-    loss_file = '/'.join([outdir, 'log_loss.txt'])
-    perf_file = '/'.join([outdir, 'log_performance.txt'])
-    dash      = '-' * 20
-    epochend  = '=' * 80
-    step      = 0         
+    loss_file_pre = '/'.join([outdir, 'log_loss'])
+    summ_file_pre = '/'.join([outdir, 'log_summ'])
+    perf_file     = '/'.join([outdir, 'log_performance.txt'])
+    dash          = '-' * 20
+    epochend      = '=' * 80
+    step          = 0         
 
     # check the device available 
     if torch.cuda.is_available():
@@ -256,7 +257,7 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
 
     if verb :
         print("++ {:30s} : {}".format('Device being used', device))
-        print("++ {:30s} : {}".format('Number of epochs', epochs))
+        print("++ {:30s} : {}".format('Number of epochs', num_epochs))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
 
     ### PTQ: presumably, this can/should be set from runtime options?
@@ -352,13 +353,15 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     
     start = time.time()
 
-
-    for epoch in range(epochs): # start of FOR loop for EPOCHS
-        print('EPOCH:', epoch)
+    for epoch in range(num_epochs): # start of FOR loop for EPOCHS
+        print("++ {:30s} : {}".format('Start of epoch', epoch))
+        strepoch  = "{:03d}".format(epoch)
+        summ_file = summ_file_pre + '_' + strepoch +'.txt'
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']: # start of FOR loop for PHASE
-            print("Starting phase: ", phase)
+            print("++ {:30s} : {}".format('Start of phase', phase))
+            loss_file = loss_file_pre + '_' + strepoch + '_' + phase +'.txt'
 
             if phase == 'train':
                 # Set model to training mode
@@ -376,25 +379,23 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 sys.exit(4)
 
             with io.open(loss_file, 'a') as loss_log:
-                loss_log.write("EPOCH  :{}\n".format(epoch))
-                loss_log.write("PHASE  :{}\n".format(phase))
-                loss_log.write("{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n"
-                               "".format('dataset_num', 'LOSS.item',
+                loss_log.write("# {:>5s}  {:>10s}  {:>10s}  {:>10s}\n"
+                               "".format('dset', 'loss', 
                                          'min_val', 'max_val'))
 
             # creating an instance of loss function
-            if 1 :
-                if loss_func == 'SoftDice_00' :
-                    loss = lml.CalcLoss_SoftDice_00()
-                elif loss_func == 'WtSoftDice_01' :
-                    loss = lml.CalcLoss_WtSoftDice_01()
-                elif loss_func == 'Sorensen_Dice_02' :
-                    loss = lml.CalcLoss_Sorensen_Dice_02()
-                elif loss_func == 'WtSorensen_Dice_03' :
-                    loss = lml.CalcLoss_WtSorensen_Dice_03()
-                else:
-                    print("This should never happen! 'loss_func' is: {}"
+            if loss_func == 'SoftDice_00' :
+                loss = lml.CalcLoss_SoftDice_00()
+            elif loss_func == 'WtSoftDice_01' :
+                loss = lml.CalcLoss_WtSoftDice_01()
+            elif loss_func == 'Sorensen_Dice_02' :
+                loss = lml.CalcLoss_Sorensen_Dice_02()
+            elif loss_func == 'WtSorensen_Dice_03' :
+                loss = lml.CalcLoss_WtSorensen_Dice_03()
+            else:
+                print("This should never happen! 'loss_func' is: {}"
                       "".format(loss_func))
+                sys.exit(5)
 
             i = 1 # index for the datafile/volume in the DATASET
 
@@ -413,7 +414,9 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
 
-                print( 'orig_data.type()',orig_data.type())
+                if i < 2 :
+                    print("++ {:30s} : {}".format('orig_data.type', 
+                                                  orig_data.type()))
 
                 ### CONV3D requires i/p in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
@@ -441,7 +444,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
                     LOSS = loss.forward(mask_pred, mask_data)
-                    # the output of loss.forward is a single value of type 'torch.DoubleTensor'
+                    # the output of loss.forward is a single value of
+                    # type 'torch.DoubleTensor'
 
                 # backward propagation and optimization only if in
                 # training phase
@@ -465,16 +469,17 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                     #print('CHANGE in Parameters \n')
                     #print(torch.equal(before[j].data, after[j].data))
                 with io.open(loss_file, 'a') as loss_log:
-                    loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
-                                   "".format(i, dataset_size, LOSS, 
+                    loss_log.write("  {:>5d}  {:10.4f}  {:10.4f}  {:10.4f}\n"
+                                   "".format(i, LOSS, 
                                              mask_pred.min(), mask_pred.max()))
-
+                
                 if verb :
-                    print("dset : {:5d} / {}  LOSS = {:1.4f}"
-                          "".format(i, dataset_size, LOSS))
+                    this_str = "... dset {:5d} / {:5d}".format(i, dataset_size)
+                    this_str+= ", loss"
+                    print("   {:30s} : {:.4f}"
+                          "".format(this_str, LOSS))
                 
-                
-                #if epoch == (epochs-1):
+                #if epoch == (num_epochs-1):
                 
                 if 0 :
                     # save the pred masks in output dir
@@ -486,13 +491,13 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                                    outdir = outdir)
                 
                 i+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
+
             end = time.time() # end of FOR loop for PHASE
             
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
         train_loss   = torch.mean(train_losses)
-
 
         # computing the loss pertaining to the validation data
         val_losses = torch.as_tensor(val_losses)
@@ -511,16 +516,16 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
 
-        with io.open(loss_file, 'a') as loss_log:
-            loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
-            loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
+        tot_time = "{:0.6f}".format(end-start)
+        with io.open(summ_file, 'a') as summ_log:
+            summ_log.write("train_loss_mean   : {:0.6f}\n".format(train_loss))
+            summ_log.write("val_loss_mean     : {:0.6f}\n".format(val_loss))
+            summ_log.write("total time to now : {}\n".format(tot_time))
 
         early_stopping(val_loss, net)
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
 
-        print("Time taken for all epochs= {}\n".format(end-start))
-        with io.open(loss_file, 'a') as loss_log:
-            loss_log.write("Time taken for all epochs= {}\n".format(end-start))
+        print("++ {:30s} : {} s".format(' --- total time to now', tot_time))
         print(epochend) # end of FOR loop for EPOCHS
 
     ### [PT] I *think* these closes are unnecessary, now using io.open()
