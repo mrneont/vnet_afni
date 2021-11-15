@@ -1,5 +1,5 @@
 
-import os
+import os, io
 import sys
 import time
 import numpy                as np
@@ -288,8 +288,6 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     
     # move model to device
     if device == torch.device('cuda'):
-        print("device : cuda")
-        
         if half_prec == 1:
             net.to(device) #.half()
             #net = network_to_half(net)
@@ -339,15 +337,14 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     avg_train_losses = []   # calculated over the entire dataset in an epoch
     avg_val_losses   = []   # calculated over the entire dataset in an epoch
    
-    perf_log  = open(perf_file, mode='a')
-    perf_log.write("{0!s:13} {1!s:13} {2!s:10}  {3!s:10}  {4!s:10} {5!s:10} {6!s:10}\n"
-                            "".format('EPOCH', 'Train_Loss',
-                                'Train_Loss_median', 'Train_Loss_stddev',
-                                'Val_Loss', 'Val_Loss_median','Val_Loss_stddev'))
-    
+
+    with io.open(perf_file, 'a') as perf_log:
+        perf_log.write("{0!s:13} {1!s:13} {2!s:10}  {3!s:10}  {4!s:10} {5!s:10} {6!s:10}\n"
+                   "".format('EPOCH', 'Train_Loss',
+                             'Train_Loss_median', 'Train_Loss_stddev',
+                             'Val_Loss', 'Val_Loss_median','Val_Loss_stddev'))
 
     start            = time.time()
-
 
 
     for epoch in range(epochs): # start of FOR loop for EPOCHS
@@ -371,16 +368,13 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 print("This should never happen! 'phase' is: {}"
                       "".format(phase))
 
+            with io.open(loss_file, 'a') as loss_log:
+                loss_log.write("EPOCH  :{}\n".format(epoch))
+                loss_log.write("PHASE  :{}\n".format(phase))
+                loss_log.write("{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n"
+                               "".format('dataset_num', 'LOSS.item',
+                                         'min_val', 'max_val'))
 
-            
-            loss_log  = open(loss_file, mode='a')
-            loss_log.write("EPOCH  :{}\n".format(epoch))
-            loss_log.write("PHASE  :{}\n".format(phase))
-            loss_log.write("{0!s:13} {1!s:10} {2!s:10} {3!s:10}\n"
-                           "".format('dataset_num', 'LOSS.item',
-                                     'min_val', 'max_val'))
-
-            
             # creating an instance of loss function
             if 1 :
                 if loss_func == 'SoftDice_00' :
@@ -394,7 +388,6 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 else:
                     print("This should never happen! 'loss_func' is: {}"
                       "".format(loss_func))
-
 
             i = 1 # index for the datafile/volume in the DATASET
 
@@ -464,9 +457,11 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                 #for j in range(len(before)):
                     #print('CHANGE in Parameters \n')
                     #print(torch.equal(before[j].data, after[j].data))
-                loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
-                               "".format(i, dataset_size, LOSS, 
-                                         mask_pred.min(), mask_pred.max()))
+                with io.open(loss_file, 'a') as loss_log:
+                    loss_log.write(" {}/{} {:15.4f} {:8.2f} {:8.2f}\n "
+                                   "".format(i, dataset_size, LOSS, 
+                                             mask_pred.min(), mask_pred.max()))
+
                 if verb :
                     print("dset : {:5d} / {}  LOSS = {:1.4f}"
                           "".format(i, dataset_size, LOSS))
@@ -496,23 +491,28 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
         val_losses = torch.as_tensor(val_losses)
         val_loss   = torch.mean(val_losses)
 
-        perf_log.write("{:5d} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f}\n"
-                    "".format(epoch, train_loss,torch.median(train_losses),
-                        torch.std(train_losses),val_loss,
-                        torch.median(val_losses),torch.std(val_losses)))
+        with io.open(perf_file, 'a') as perf_log:
+            perf_log.write("{:5d} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f} {:15.4f}\n"
+                           "".format(epoch, train_loss,torch.median(train_losses),
+                                     torch.std(train_losses),val_loss,
+                                     torch.median(val_losses),torch.std(val_losses)))
 
         avg_train_losses.append(train_loss)
         avg_val_losses.append(val_loss)
 
-        loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
-        loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
+        with io.open(loss_file, 'a') as loss_log:
+            loss_log.write(" avg_train_losses {} \n ".format(avg_train_losses))
+            loss_log.write(" avg_val_losses {} \n ".format(avg_val_losses))
+
         early_stopping(val_loss, net)
-        
         visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
 
         print("Time taken for all epochs= {}\n".format(end-start))
-        loss_log.write("Time taken for all epochs= {}\n".format(end-start))
+        with io.open(loss_file, 'a') as loss_log:
+            loss_log.write("Time taken for all epochs= {}\n".format(end-start))
         print(epochend) # end of FOR loop for EPOCHS
-    loss_log.close()
-    perf_log.close()
+
+    ### [PT] I *think* these closes are unnecessary, now using io.open()
+    #loss_log.close()
+    #perf_log.close()
     return net
