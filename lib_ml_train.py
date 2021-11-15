@@ -36,16 +36,18 @@ list_net_arch = [ 'vnet_orig',
 # (the if-condition to use one is below). The [0th] one is the
 # default.
 list_optimizer = [ 'Adam',
-                   'Adam16']
+                   'Adam16',
+                   ]
 
 # --------------------------------------------------------------------------
 
-
-def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
-    ave_grads = []
-    layers = []
-    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+### PTQ: isthis function used anymore?
+def plot_grad_flow(named_parameters, strepoch, count, outdir = '.'):
+    ave_grads       = []
+    layers          = []
+    grad_fname      = ("grad_{}_{}.png".format(strepoch, count))
     grad_fname_path = '/'.join([outdir, grad_fname])
+
     plt.figure(figsize=(10,9))
     for n, p in named_parameters:
         #print("n = {}".format(n))
@@ -54,48 +56,64 @@ def plot_grad_flow(named_parameters, epoch, count, outdir = '.'):
             layers.append(n)
             ave_grads.append(p.grad.abs().mean())
             #print("ave_grads = {}".format(ave_grads))
+
     plt.plot(ave_grads, alpha=0.3, color="b")
     plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+
     plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
     plt.xlim(xmin=0, xmax=len(ave_grads))
     plt.xlabel("Layers")
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
+
     plt.grid(True)
     plt.savefig(grad_fname_path, bbox_inches = "tight")
-    #fig.savefig(oimage, bbox_inches='tight')
 
-def plot_grad_flow_new(named_parameters,epoch, count, outdir = '.'):
-    '''Plots the gradients flowing through different layers in the net
+### PTQ: what is 'named_parameters' here?
+def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
+    '''Plot the gradients flowing through different layers in the net
     during training.  Can be used for checking for possible gradient
     vanishing / exploding problems.
     
     Usage: Plug this function in Trainer class after loss.backwards()
     as "plot_grad_flow(self.model.named_parameters())" to visualize
-    the gradient flow
+    the gradient flow.
+
+    Inputs
+    ------
+    named_parameters : type ***something***
+
+    strepoch         : (str) zeropadded epoch number
+    count            : (int?) something
+    outdir           : (str) directory for outputting image
 
     '''
-    ave_grads = []
-    max_grads= []
-    layers = []
-    grad_fname      = ("grad_{}_{}.png".format(epoch, count))
+
+    ave_grads       = []
+    max_grads       = []
+    layers          = []
+    grad_fname      = ("grad_{}_{}.png".format(strepoch, count))
     grad_fname_path = '/'.join([outdir, grad_fname])
+
     plt.figure(figsize=(10,9))
     for n, p in named_parameters:
         if(p.requires_grad) and ("bias" not in n):
             layers.append(n)
             ave_grads.append(p.grad.abs().mean())
             max_grads.append(p.grad.abs().max())
+
     plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
     plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+
     plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
     plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
     plt.xlim(left=0, right=len(ave_grads))
-    plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+    plt.ylim(bottom=-0.001, top=0.02) # zoom in on the lower gradient regions
     plt.xlabel("Layers")
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
     plt.grid(True)
+
     plt.legend([Line2D([0], [0], color="c", lw=4),
                 Line2D([0], [0], color="b", lw=4),
                 Line2D([0], [0], color="k", lw=4)], 
@@ -119,7 +137,6 @@ def z_scoring(img):
     data_mean  = img.mean()
     data_std   = img.std()
 
-    
     Z_normalized = (img - data_mean) / data_std
     #print("orig_data max = {}".format(Z_normalized.max()))
     #print("orig_data min = {}".format(Z_normalized.min()))
@@ -127,61 +144,35 @@ def z_scoring(img):
     return Z_normalized
 
 
+### PTQ: note really a Q, but below were three separate, but very
+### similar, functions to output a torch.Tensor to a NIFTI file on
+### disk.  It looked like the only difference was be a file output
+### prefix, which has now become an input label.
+
 # write the target masks into output directory 
-
-def target_save(mask, epoch, phase, count, outdir = '.'):
-    """
-    + The i/p 'mask' is a torch tensor, it is converted into numpy array
-      and written into nifti format as o/p 
-    """ 
-    mask_np    = mask.cpu().detach().numpy()
-    mask_fname      = ("target{}_{}_{:04d}.nii.gz".format(epoch, 
-                                                              phase, 
-                                                              count))
-    mask_fname_path = '/'.join([outdir, mask_fname])
-    #output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
-    #nib.save(output_image, pred_fname_path)
-
-    lnu.write_out_nifti_vol(mask_np, mask_fname_path,
-                            affmat=lnu.TEMP_M44_32iso_nib_ori)
-# write the predicated masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
-def mask_pred_save(mask_pred, epoch, phase, count, outdir = '.'):
+def write_tensor_to_disk_nifti(tt, opref, strepoch, phase, count, outdir = '.'):
+    """This function writes a torch tensor volume to disk as a NIFTI file.
 
-    """
-    + The i/p 'mask' is a torch tensor, it is converted into numpy array
-      and written into nifti format as o/p 
+    Inputs
+    ------
+    tt               : (torch.Tensor) 3D volume
+    opref            : (str) file prefix of output (e.g., to identify the 
+                       type of file)
+    strepoch         : (str) zeropadded epoch number
+    phase            : (str) label of type of dset ('train', 'val', etc.)
+    count            : (int?) something
+    outdir           : (str) directory for outputting image
+
     """ 
-    mask_pred_np    = mask_pred.cpu().detach().numpy()
-    pred_fname      = ("predmask_E{}_{}_{:04d}.nii.gz".format(epoch, 
-                                                              phase, 
-                                                              count))
-    pred_fname_path = '/'.join([outdir, pred_fname])
-    #output_image    = nib.Nifti1Image(mask_pred_np, affine=np.eye(4))
-    #nib.save(output_image, pred_fname_path)
 
-    lnu.write_out_nifti_vol(mask_pred_np, pred_fname_path,
-                            affmat=lnu.TEMP_M44_32iso_nib_ori)
+    # convert torch.Tensor to np.array
+    arr   = tt.cpu().detach().numpy()
+    fname = "{}_{}_{}_{:04d}.nii.gz".format(opref, strepoch, phase, count)
 
-# [PT] starting to translate this to having more correct header info.
-#    + pieces are still hardwired now, but these should overlay now
-def mask_pred_save_opp(mask_pred_opp, epoch, phase, count, outdir = '.'):
-
-    """
-    + The i/p 'mask' is a torch tensor, it is converted into numpy array
-      and written into nifti format as o/p 
-    """ 
-    
-    mask_pred_opp_np    = mask_pred_opp.cpu().detach().numpy()
-    pred_opp_fname      = ("predmask_opp_E{}_{}_{:04d}.nii.gz".format(epoch, 
-                                                                      phase, 
-                                                                      count))
-    pred_opp_fname_path = '/'.join([outdir, pred_opp_fname])
-    #output_image        = nib.Nifti1Image(mask_pred_opp_np, affine=np.eye(4))
-    #nib.save(output_image, pred_opp_fname_path)
-
-    lnu.write_out_nifti_vol(mask_pred_opp_np, pred_opp_fname_path,
+    fname_path = '/'.join([outdir, fname])
+    lnu.write_out_nifti_vol(arr, fname_path,
                             affmat=lnu.TEMP_M44_32iso_nib_ori)
 
 
@@ -215,7 +206,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 # --------------------------------------------------------------------------
 
 def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
-              optimizer, wt_norm, outdir, verb): 
+              optimizer, wt_norm, do_nifti, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -349,7 +340,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         perf_log.write("# {:5s}  "
                        "{:>12s}  {:>12s}  {:>12s} "
                        "{:>12s}  {:>12s}  {:>12s}\n"
-                       "".format('EPOCH', 
+                       "".format('epoch', 
                                  'train_loss', 'tr_loss_med', 'tr_loss_std',
                                  'val_loss', 'val_loss_med', 'val_loss_std'))
     
@@ -488,14 +479,19 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 
                 #if epoch == (num_epochs-1):
                 
-                if 0 :
-                    # save the pred masks in output dir
-                    target_save(mask_data[0][0],epoch, phase, idx, 
-                                outdir = outdir)
-                    mask_pred_save(mask_pred[0][0], epoch, phase, idx, 
-                                   outdir = outdir)
-                    mask_pred_save_opp(mask_pred[0][1], epoch, phase, idx, 
-                                       outdir = outdir)
+                if do_nifti :
+                    write_tensor_to_disk_nifti(mask_data[0][0], 
+                                               'target',
+                                               strepoch, phase, 
+                                               idx, outdir=outdir)
+                    write_tensor_to_disk_nifti(mask_pred[0][0], 
+                                               'predmask',
+                                               strepoch, phase, 
+                                               idx, outdir=outdir)
+                    write_tensor_to_disk_nifti(mask_pred[0][0], 
+                                               'predmask_OPP',
+                                               strepoch, phase, 
+                                               idx, outdir=outdir)
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
 

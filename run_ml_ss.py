@@ -142,6 +142,15 @@ def get_args():
                         "{}".format('\n  '.join(lmt.list_optimizer)) + '\n' +
                         '(def: {})'.format(str(def_optimizer)))
 
+    def_nifti = "don't write out dsets"
+    parser.add_argument("-W", "--write_nifti", 
+                        dest='do_nifti',
+                        action='store_true',
+                        #const=def_nifti,
+                        help='flag to turn on the writing of NIFTI' + '\n' +
+                        "datsets while processing" + '\n' +
+                        '(def: {})'.format(str(def_nifti)))
+
     return parser.parse_args()
 
 def prep_outdir(din, verb=1):
@@ -288,21 +297,22 @@ if __name__ == '__main__':
     optimizer = args.optimizer
     verb      = args.verb
     wt_norm   = args.weight_norm
+    do_nifti  = args.do_nifti
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
-    if not(check_opt_allowed( net_arch, lmt.list_net_arch, 
-                              desc_bad='This network architecture ' + 
-                                       'is not in the List:' )) or \
+    if  not(check_opt_allowed( net_arch, lmt.list_net_arch, 
+                               desc_bad='This network architecture ' + 
+                               'is not in the List:' )) or \
         not(check_opt_allowed( optimizer, lmt.list_optimizer, 
                                desc_bad='This optimizer ' + 
                                'is not in the List:' )) or \
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,
-                              desc_bad='This loss function ' + 
-                                       'is not in the List:' )) :
+                               desc_bad='This loss function ' + 
+                               'is not in the List:' )) :
         sys.exit(5)
 
     # save command used
@@ -311,4 +321,4 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         optimizer, wt_norm, outdir, verb )
+                         optimizer, wt_norm, do_nifti, outdir, verb )
