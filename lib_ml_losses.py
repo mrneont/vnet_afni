@@ -12,7 +12,8 @@ import numpy as np
 # default.
 list_CalcLoss = [ "SoftDice_00",
                   "WtSoftDice_01",
-                  ]
+                  "Sorensen_Dice_02",
+                  "WtSorensen_Dice_03" ]
 
 # =========================================================================
 
@@ -174,7 +175,7 @@ class CalcLoss_WtSoftDice_01(nn.Module):
 
 
 
-class Calc_Sorensen_Dice_02(nn.Module):
+class CalcLoss_Sorensen_Dice_02(nn.Module):
 
     '''
     +  Sorensen–Dice index = 2|X∩Y| / |X|+|Y|
@@ -183,7 +184,7 @@ class Calc_Sorensen_Dice_02(nn.Module):
     '''
 
     def __init__(self,):
-        super(Calc_Sorensen_Dice_02, self).__init__()
+        super(CalcLoss_Sorensen_Dice_02, self).__init__()
         self.eps = 1e-6
 
     def forward(self, pred, gt):
@@ -205,7 +206,7 @@ class Calc_Sorensen_Dice_02(nn.Module):
 
 
 
-class Calc_WtSorensen_Dice_03(nn.Module):
+class CalcLoss_WtSorensen_Dice_03(nn.Module):
 
     '''
     +  Sorensen–Dice index = 2|X∩Y|/ |X|+|Y|
@@ -214,7 +215,7 @@ class Calc_WtSorensen_Dice_03(nn.Module):
     '''
 
     def __init__(self,):
-        super(Calc_WtSorensen_Dice_03, self).__init__()
+        super(CalcLoss_WtSorensen_Dice_03, self).__init__()
         self.eps = 1e-6
 
     def forward(self, pred, gt):

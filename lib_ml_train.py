@@ -212,6 +212,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
     #plt.show()
     fig.savefig(oimage, bbox_inches='tight')
 
+# --------------------------------------------------------------------------
 
 def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
               optimizer, wt_norm, outdir, verb): 
@@ -294,7 +295,8 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
             #net = network_to_half(net)
             #print('Start to convert the net')
             net = convert_network(net, dtype=torch.float16)
-            #net = convert_network(net, dtype = torch.cuda.HalfTensor) # gives error
+            ### the following gives error
+            #net = convert_network(net, dtype = torch.cuda.HalfTensor) 
             torch.backends.cudnn.enabled
 
     else: # device == 'cpu'
@@ -311,8 +313,12 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
     if optimizer == 'Adam':
         optimizer = optim.Adam(net.parameters(), lr=lr)
     elif optimizer == 'Adam16':
-        optimizer = Adam16(net.parameters(),lr=1e-4, betas=(0.9, 0.999), 
+        optimizer = Adam16(net.parameters(), lr=lr, 
+                           betas=(0.9, 0.999), 
                            eps=1e-8, weight_decay=0)
+    else:
+        print("This should never happen! 'optimizer' is {}" 
+              "".format(optimizer))
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
@@ -375,16 +381,19 @@ def train_net(data_path, epochs, lr, seed, net_arch, loss_func,
                                      'min_val', 'max_val'))
 
             
-            
-
             # creating an instance of loss function
             if 1 :
-                loss = lml.CalcLoss_SoftDice_00()
-                #loss = lml.CalcLoss_WtSoftDice_01()
-                #loss = lml.Calc_Sorensen_Dice_02()
-                #loss = lml.Calc_WtSorensen_Dice_03()
-                
-
+                if loss_func == 'SoftDice_00' :
+                    loss = lml.CalcLoss_SoftDice_00()
+                elif loss_func == 'WtSoftDice_01' :
+                    loss = lml.CalcLoss_WtSoftDice_01()
+                elif loss_func == 'Sorensen_Dice_02' :
+                    loss = lml.CalcLoss_Sorensen_Dice_02()
+                elif loss_func == 'WtSorensen_Dice_03' :
+                    loss = lml.CalcLoss_WtSorensen_Dice_03()
+                else:
+                    print("This should never happen! 'loss_func' is: {}"
+                      "".format(loss_func))
 
 
             i = 1 # index for the datafile/volume in the DATASET
