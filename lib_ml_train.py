@@ -360,12 +360,12 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 # Set model to training mode
                 net.train()  
                 train_losses = [] 
-                dataset_size = Ntrain
+                Ndset = Ntrain
             elif phase == 'val':
                 # Set model to evaluate mode
                 net.eval()   
                 val_losses   = []
-                dataset_size = Nval 
+                Ndset = Nval 
             else:
                 print("** This should never happen! 'phase' is: {}"
                       "".format(phase))
@@ -391,7 +391,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 sys.exit(5)
 
             idx = 1 # index for the datafile/volume in the DATASET
-
             for orig_data, mask_data in dataloaders[phase]:
 
                 ### PTQ: normalization should be something selected at
@@ -439,7 +438,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     mask_pred = net.forward(orig_data, verb) 
                     # The output mask_pred is of type 'torch.FloatTensor'
 
-
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
                     LOSS = loss.forward(mask_pred, mask_data)
@@ -469,16 +467,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     loss_log.write("  {:>5d}  {:10.4f}  {:10.4f}  {:10.4f}\n"
                                    "".format(idx, LOSS, 
                                              mask_pred.min(), mask_pred.max()))
-                
+
                 if verb :
-                    this_str = "... dset {:5d} / {:5d}".format(idx, 
-                                                               dataset_size)
+                    this_str = "... dset {:5d} / {:5d}".format(idx, Ndset)
                     this_str+= ", loss"
                     print("   {:30s} : {:.4f}"
                           "".format(this_str, LOSS))
-                
-                #if epoch == (num_epochs-1):
-                
+
                 if do_nifti :
                     write_tensor_to_disk_nifti(mask_data[0][0], 
                                                'target',
@@ -496,7 +491,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
 
             end = time.time() # end of FOR loop for PHASE
-            
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)
