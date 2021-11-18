@@ -117,6 +117,24 @@ def get_args():
                         "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
                         '(def: {})'.format(str(def_net_arch)))
 
+
+    def_half_prec = 0
+    parser.add_argument("-hp", "--half_prec", 
+                        dest="half_prec", 
+                        type=int, default=def_half_prec,
+                        help='half precision' + '\n' +
+                        '(def: {})'.format(str(def_half_prec)))
+
+    def_data_norm = lmt.list_data_norm[0]
+    parser.add_argument("-dn", "--data_norm", 
+                        dest="data_norm", 
+                        type=str, default=def_data_norm,
+                        help="data normalization type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_data_norm)) + '\n' +
+                        '(def: {})'.format(str(def_data_norm)))
+
+
     def_wt_norm = 1
     parser.add_argument("-w", "--weight_norm", 
                         dest="weight_norm", 
@@ -296,8 +314,10 @@ if __name__ == '__main__':
     loss_func = args.loss_func
     optimizer = args.optimizer
     verb      = args.verb
+    half_prec = args.half_prec
     wt_norm   = args.weight_norm
     do_nifti  = args.do_nifti
+    data_norm = args.data_norm
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
@@ -312,7 +332,10 @@ if __name__ == '__main__':
                                'is not in the List:' )) or \
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,
                                desc_bad='This loss function ' + 
-                               'is not in the List:' )) :
+                               'is not in the List:' )) or \
+        not(check_opt_allowed( data_norm, lmt.list_data_norm,
+                               desc_bad='This data normalization ' + 
+                               'is not in the List:' ))  :
         sys.exit(5)
 
     # save command used
@@ -321,4 +344,4 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         optimizer, wt_norm, do_nifti, outdir, verb )
+                         optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb )

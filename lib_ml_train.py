@@ -39,37 +39,14 @@ list_optimizer = [ 'Adam',
                    'Adam16',
                    ]
 
+list_data_norm = [  'min_max_scale',
+                    'z_scoring',]
 # --------------------------------------------------------------------------
 
-### PTQ: isthis function used anymore?
-def plot_grad_flow(named_parameters, strepoch, count, outdir = '.'):
-    ave_grads       = []
-    layers          = []
-    grad_fname      = ("grad_{}_{}.png".format(strepoch, count))
-    grad_fname_path = '/'.join([outdir, grad_fname])
+### PTQ: isthis function used anymore? ##[YNS]: plot_grad_flow is not used any more and is removed 
 
-    plt.figure(figsize=(10,9))
-    for n, p in named_parameters:
-        #print("n = {}".format(n))
-        #print("p = {}".format(p)) # parameter containing tensor 
-        if(p.requires_grad) and ("bias" not in n):
-            layers.append(n)
-            ave_grads.append(p.grad.abs().mean())
-            #print("ave_grads = {}".format(ave_grads))
 
-    plt.plot(ave_grads, alpha=0.3, color="b")
-    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
-
-    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-    plt.xlim(xmin=0, xmax=len(ave_grads))
-    plt.xlabel("Layers")
-    plt.ylabel("average gradient")
-    plt.title("Gradient flow")
-
-    plt.grid(True)
-    plt.savefig(grad_fname_path, bbox_inches = "tight")
-
-### PTQ: what is 'named_parameters' here?
+### PTQ: what is 'named_parameters' here? ##[YNS] : done 
 def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
     '''Plot the gradients flowing through different layers in the net
     during training.  Can be used for checking for possible gradient
@@ -81,10 +58,11 @@ def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
 
     Inputs
     ------
-    named_parameters : type ***something***
+    named_parameters :  iterator over module/net, yielding both the name of the layer 
+                        as well as the parameter/weight.
 
     strepoch         : (str) zeropadded epoch number
-    count            : (int?) something
+    count            : (int) index for the datafile/volume in the DATASET
     outdir           : (str) directory for outputting image
 
     '''
@@ -121,8 +99,8 @@ def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
     plt.savefig(grad_fname_path, bbox_inches = "tight")
 
 # one idea of scaling the input dsets, to have a range of values [0,
-# 1], to start
-def data_normalize(img):
+# 1], to start  
+def min_max_scale(img):
    
     data_min   = img.min()
     data_max   = img.max()
@@ -162,7 +140,7 @@ def write_tensor_to_disk_nifti(tt, opref, strepoch, phase, count, outdir = '.'):
                        type of file)
     strepoch         : (str) zeropadded epoch number
     phase            : (str) label of type of dset ('train', 'val', etc.)
-    count            : (int?) something
+    count            : (int) index for the datafile/volume in the DATASET
     outdir           : (str) directory for outputting image
 
     """ 
@@ -206,7 +184,7 @@ def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
 # --------------------------------------------------------------------------
 
 def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
-              optimizer, wt_norm, do_nifti, outdir, verb): 
+              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -250,6 +228,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         print("++ {:30s} : {}".format('Device being used', device))
         print("++ {:30s} : {}".format('Number of epochs', num_epochs))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
+        print("++ {:30s} : {}".format('data normalization', data_norm))
+        
 
     ### PTQ: presumably, this can/should be set from runtime options?
     ### Or is this this uniquely tied to optimizer choice?  E.g., if
@@ -257,7 +237,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     ### other optimizer, it should be full prec?
     ##### PTQ2: how does/should this interact with using the .half()
     ##### method, below? Shouldn't these be connected?
-    half_prec = 1    
+    #####[YNS] the half_prec is treated as a parsed agruement and not hard wired now 
 
     if half_prec == 1:
         print("++ {:30s} : {}".format('Precision', 'half'))
@@ -286,18 +266,17 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
     
     # move model to device
+    net.to(device)
+    print("half_prec = ",half_prec)
     if device == torch.device('cuda'):
         if half_prec == 1:
-            net.to(device) #.half()
-            #net = network_to_half(net)
-            #print('Start to convert the net')
+            
             net = convert_network(net, dtype=torch.float16)
             ### the following gives error
             #net = convert_network(net, dtype = torch.cuda.HalfTensor) 
-            torch.backends.cudnn.enabled
+            #torch.backends.cudnn.enabled 
 
-    else: # device == 'cpu'
-        net.to(device)
+    
 
     # print the model summary
     if verb > 1:
@@ -306,15 +285,20 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
     # load optimizer
     if optimizer == 'Adam':
-        optimizer = optim.Adam(net.parameters(), lr=lr)
-    elif optimizer == 'Adam16':
-        optimizer = Adam16(net.parameters(), lr=lr, 
+        if half_prec == 1:
+
+            optimizer = Adam16(net.parameters(), lr=lr, 
                            betas=(0.9, 0.999), 
                            eps=1e-8, weight_decay=0)
+        else : #(half_prec == 0)
+           
+            optimizer = optim.Adam(net.parameters(), lr=lr)
+    
     else:
         print("** This should never happen! 'optimizer' is {}" 
               "".format(optimizer))
         sys.exit(3)
+
 
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath)
@@ -395,20 +379,34 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                 ### PTQ: normalization should be something selected at
                 ### runtime, to be able to switch among different
-                ### methods for doing so.
-                if 1:
+                ### methods for doing so. ##[YNS] done
+                if data_norm == 'z_scoring':
                     orig_data = z_scoring(orig_data)
-                else: 
-                    orig_data = data_normalize(orig_data)
 
-                if device == torch.device('cuda'):
+                elif data_norm == 'min_max_scale': 
+                    orig_data = min_max_scale(orig_data)
+
+                    #[YNS] add the other data normalizations 
+                    
+                else:
+                    print("This should never happen! 'data normalization' is: {}"
+                      "".format(data_norm))
+                    sys.exit(6)
+
+                
                     ### PTQ: are we sure it is always half if using
                     ### cuda?  Or is that only with the 'half_prec=1'
                     ### above? I think we should be careful these are
-                    ### consistently used/flagged.
+                    ### consistently used/flagged. ##[YNS] half_prec flag added 
+
+                
+                if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
+                    print("adding data to cuda device")
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
-                else:# device == 'cpu'
+                
+                else: 
+
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
 
@@ -452,8 +450,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     train_losses.append(LOSS.item())
                     #print('net.named_parameters()')
                     #print(net.named_parameters())
-                    #plot_grad_flow_new(net.named_parameters(), 
-                    #                   epoch, idx, outdir = outdir)
+                    plot_grad_flow_new(net.named_parameters(), 
+                                    epoch, idx, outdir = outdir)
                     #print([z.grad for z in list(net.parameters())])
                 elif phase == 'val':
                     # save the model weights
@@ -474,7 +472,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     print("   {:30s} : {:.4f}"
                           "".format(this_str, LOSS))
 
-                if do_nifti :
+                if (do_nifti and not(half_prec)) :
+                    
                     write_tensor_to_disk_nifti(mask_data[0][0], 
                                                'target',
                                                strepoch, phase, 
