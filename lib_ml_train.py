@@ -267,7 +267,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     
     # move model to device
     net.to(device)
-    print("half_prec = ",half_prec)
+    
     if device == torch.device('cuda'):
         if half_prec == 1:
             
@@ -401,7 +401,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                 
                 if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
-                    print("adding data to cuda device")
+                    
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
                 
@@ -450,8 +450,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     train_losses.append(LOSS.item())
                     #print('net.named_parameters()')
                     #print(net.named_parameters())
-                    plot_grad_flow_new(net.named_parameters(), 
-                                    epoch, idx, outdir = outdir)
+                    #plot_grad_flow_new(net.named_parameters(), 
+                                    #epoch, idx, outdir = outdir)
                     #print([z.grad for z in list(net.parameters())])
                 elif phase == 'val':
                     # save the model weights
