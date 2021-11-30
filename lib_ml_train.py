@@ -198,6 +198,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         print("++ {:30s} : {}".format('Number of epochs', num_epochs))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
         print("++ {:30s} : {}".format('data normalization', data_norm))
+        print("++ {:30s} : {}".format('loss function', loss_func))
         
 
     ### PTQ: presumably, this can/should be set from runtime options?
@@ -334,8 +335,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 loss = lml.CalcLoss_SoftDice_00()
             elif loss_func == 'WtSoftDice_01' :
                 loss = lml.CalcLoss_WtSoftDice_01()
-            elif loss_func == 'Sorensen_Dice_02' :
-                loss = lml.CalcLoss_Sorensen_Dice_02()
+            elif loss_func == 'Sorensen_Dice_mean' :
+                loss = lml.CalcLoss_Sorensen_Dice_mean()
+            elif loss_func == 'Sorensen_Dice_single_channel' :
+                loss = lml.CalcLoss_Sorensen_Dice_single_channel()
             elif loss_func == 'WtSorensen_Dice_03' :
                 loss = lml.CalcLoss_WtSorensen_Dice_03()
             else:

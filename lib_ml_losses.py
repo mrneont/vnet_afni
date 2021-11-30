@@ -12,7 +12,8 @@ import numpy as np
 # default.
 list_CalcLoss = [ "SoftDice_00",
                   "WtSoftDice_01",
-                  "Sorensen_Dice_02",
+                  "Sorensen_Dice_mean",
+                  "Sorensen_Dice_single_channel",
                   "WtSorensen_Dice_03" ]
 
 # =========================================================================
@@ -168,7 +169,7 @@ class CalcLoss_WtSoftDice_01(nn.Module):
         return 1 - wtdicemean
 
 
-class CalcLoss_Sorensen_Dice_02(nn.Module):
+class CalcLoss_Sorensen_Dice_mean(nn.Module):
 
     '''
     +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
@@ -178,7 +179,7 @@ class CalcLoss_Sorensen_Dice_02(nn.Module):
     '''
 
     def __init__(self,):
-        super(CalcLoss_Sorensen_Dice_02, self).__init__()
+        super(CalcLoss_Sorensen_Dice_mean, self).__init__()
         self.eps = 1e-6
 
     def forward(self, pred, gt):
@@ -189,8 +190,40 @@ class CalcLoss_Sorensen_Dice_02(nn.Module):
         
         dice         = numerator/denominator
        
-        ### PTQ:  why mean here?  
+          
         return 1 - torch.mean(dice)
+
+class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
+    
+
+    '''
+    +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
+    +  Ref:
+       https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+
+    '''
+
+    def __init__(self,):
+        super(CalcLoss_Sorensen_Dice_single_channel, self).__init__()
+        self.eps = 1e-6
+
+    def forward(self, pred, gt):
+
+        target       = make_one_hot(gt, classes=pred.size()[1])
+        numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(pred + target, dim=(2, 3, 4))
+
+
+        
+        dice         = numerator/denominator
+       
+        # this part of the code logic requires re-visit when handling multi-class data
+        # if the denominator of the predicted brain mask is zero them return loss as 1(high)
+        if denominator[0][1] == 0: #channel containing predicted brain mask.
+            return 1  # check the return type 
+
+        # returning the dice loss pertaining to the channel containing predicted brain mask. 
+        return 1 - dice[0][1]
        
 
 class CalcLoss_WtSorensen_Dice_03(nn.Module):
