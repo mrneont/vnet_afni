@@ -7,6 +7,16 @@ import pandas 	as pd
 import argparse as argp
 from IPython.display import display
 
+
+#****************************************************************************************************
+#  Purpose : This python file computes the dice metric of the pred_mask from different epochs and 
+#          target mask and populates the csv file.    
+#
+#  Usage : python populate_dice.py -d 'dir/folder/outdir' -f 'table_file_name'
+#
+#
+#****************************************************************************************************
+
 BIG = 1000
 
 def get_dice(pred, gt):
