@@ -234,7 +234,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         sys.exit(1)
 
 
-    if (device == torch.device('cpu')) and (half_prec == 1)
+    if (device == torch.device('cpu')) and (half_prec == 1):
         print("** The Half Precision operations are not supported in CPU ")
         sys.exit(2)
     
