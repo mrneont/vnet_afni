@@ -199,6 +199,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
         print("++ {:30s} : {}".format('data normalization', data_norm))
         print("++ {:30s} : {}".format('loss function', loss_func))
+        print("++ {:30s} : {}".format('Network architecture', net_arch))
         
 
     ### PTQ: presumably, this can/should be set from runtime options?
@@ -232,7 +233,11 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
               "".format(net_arch))
         sys.exit(1)
 
-    print("++ {:30s} : {}".format('Network architecture', net_arch))
+
+    if (device == torch.device('cpu')) and (half_prec == 1)
+        print("** The Half Precision operations are not supported in CPU ")
+        sys.exit(2)
+    
 
     
     # move model to device
