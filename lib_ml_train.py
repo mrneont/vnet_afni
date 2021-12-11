@@ -346,6 +346,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 loss = lml.CalcLoss_Sorensen_Dice_single_channel()
             elif loss_func == 'WtSorensen_Dice_03' :
                 loss = lml.CalcLoss_WtSorensen_Dice_03()
+            elif loss_func == 'WtSorensen_Dice_single_channel' :
+                loss = lml.CalcLoss_WtSorensen_Dice_single_channel()
+
+                
             else:
                 print("This should never happen! 'loss_func' is: {}"
                       "".format(loss_func))

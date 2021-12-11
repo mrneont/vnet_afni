@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lib_EDT
 import numpy as np
+import lib_nibabel_utils    as lnu
 
 
 # List of all lost function suffixes, so we can check if user has
@@ -14,7 +15,8 @@ list_CalcLoss = [ "SoftDice_00",
                   "WtSoftDice_01",
                   "Sorensen_Dice_mean",
                   "Sorensen_Dice_single_channel",
-                  "WtSorensen_Dice_03" ]
+                  "WtSorensen_Dice_03",
+                  "WtSorensen_Dice_single_channel"]
 
 # =========================================================================
 
@@ -185,6 +187,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
     def forward(self, pred, gt):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
+        pred[pred>0.5]  = 1
         numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(pred + target, dim=(2, 3, 4))
         
@@ -200,6 +203,8 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
     +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
     +  Ref:
        https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+       gt = dims(1, 1, 32, 32, 32).
+       pred, target = dims(1, 2, 32, 32, 32).
 
     '''
 
@@ -210,13 +215,62 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
     def forward(self, pred, gt):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
+        #print(pred.type())
+
+        '''
+
+        #arr_pred     = torch.clone(pred)
+        #arr_pred     = torch.tensor(pred)
+        #arr_pred[arr_pred < 0.5]  = 0
+        #arr_pred[arr_pred >= 0.5]  = 0
+        arr_pred[0][0][arr_pred[0][0] < 0.5] = 0
+        arr_pred[0][0][arr_pred[0][0]>= 0.5] = 1
+
+        arr_pred[0][1][arr_pred[0][1] < 0.5] = 0
+        arr_pred[0][1][arr_pred[0][1]>= 0.5] = 1
+        #print(arr_pred.type())
+
+
+        #with torch.autograd.set_detect_anomaly(True):
+        #pred[pred>0.5]  = 1
+        
+        
+        lnu.write_tensor_to_disk_nifti(pred[0][0], 
+                                               'pred_0_0',
+                                               0, 0, 
+                                               0, outdir='.')
+        lnu.write_tensor_to_disk_nifti(pred[0][1], 
+                                               'pred_0_1',
+                                               0, 0, 
+                                               0, outdir='.')
+
+        lnu.write_tensor_to_disk_nifti(arr_pred[0][0], 
+                                               'arr_pred_0_0',
+                                               0, 0, 
+                                               0, outdir='.')
+        lnu.write_tensor_to_disk_nifti(arr_pred[0][1], 
+                                               'arr_pred_0_1',
+                                               0, 0, 
+                                               0, outdir='.')
+
+        lnu.write_tensor_to_disk_nifti(target[0][0], 
+                                               'target_0_0',
+                                               0, 0, 
+                                               0, outdir='.')
+        lnu.write_tensor_to_disk_nifti(target[0][1], 
+                                               'target_0_1',
+                                               0, 0, 
+                                               0, outdir='.')
+
+        '''
         numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(pred + target, dim=(2, 3, 4))
 
-
-        
-        dice         = numerator/denominator
        
+        
+        dice         = (numerator)/denominator
+
+        #print("dice = ",dice)
         # this part of the code logic requires re-visit when handling multi-class data
         # if the denominator of the predicted brain mask is zero them return loss as 1(high)
         if denominator[0][1] == 0: #channel containing predicted brain mask.
@@ -270,6 +324,66 @@ class CalcLoss_WtSorensen_Dice_03(nn.Module):
 
         ### PTQ:  why mean here?  
         return 1 - torch.mean(dice)
+
+
+class CalcLoss_WtSorensen_Dice_single_channel(nn.Module):
+
+    '''
+    +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
+    +  Ref:
+       https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+
+    '''
+
+    def __init__(self,):
+        super(CalcLoss_WtSorensen_Dice_single_channel, self).__init__()
+        self.eps = 1e-6
+
+    def forward(self, pred, gt):
+
+        target       = make_one_hot(gt, classes=pred.size()[1])
+
+        gt = gt.int()
+        np_gt = gt.cpu().numpy()
+        
+        ### [pt] Note for future---'edims' should not be hardwired
+        ### here, because that will depend on actual data voxel
+        ### dimensions.  For now, this is OK for using 32x32x32 data.
+        target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
+                               bounds_are_zero=True,
+                               edims=(8, 8, 8))
+       
+        wts_norm    = target_EDT/target_EDT.max()
+        #wts_exp = np.exp(-wts)
+        wts         = 1  - (wts_norm)
+
+        
+        # Please note : The neural network goes into saturation when  
+        # exponential(depth_info) is normalized.
+        # the best way to go about is to normalize the depth_info
+        # and then calculate the exp(norm_depth_info)
+
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
+        
+        wts = torch.from_numpy(wts)
+
+        wts = wts.to(device)
+
+        numerator    = 2.0 * torch.sum(wts*pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(wts*pred + wts*target, dim=(2, 3, 4))
+
+        # this part of the code logic requires re-visit when handling multi-class data
+        # if the denominator of the predicted brain mask is zero them return loss as 1(high)
+        if denominator[0][1] == 0: #channel containing predicted brain mask.
+            return 1  # check the return type 
+        
+        dice = numerator/(denominator)
+
+        ### PTQ:  why mean here?  
+        return  -dice[0][1]
 
 
 
