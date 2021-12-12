@@ -103,7 +103,8 @@ def get_args():
 
     def_verb = 1
     parser.add_argument("-v", "--verb", 
-                        dest="verb", 
+                        metavar='VERB', 
+                        dest='verb', 
                         type=int, default=def_verb, 
                         help='verbosity for code running' + '\n' +
                         '(def: {})'.format(str(def_verb)))

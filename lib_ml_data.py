@@ -10,44 +10,73 @@ import glob
 
 
 class mridataset(data.Dataset):
-    """
-+ A 'mridataset' Dataset class is substantiated for the Dataloader.
+    """+ A 'mridataset' Dataset class is substantiated for the Dataloader.
+
 + The Dataset class is used by the Dataloader class.
-+ A custom Dataset class must implement three functions: __init__, __len__, and __getitem__.
-+ The __init__ function initializes the data directory, annotation file and any data tranforms.
+
++ A custom Dataset class must implement three functions: __init__,
+  __len__, and __getitem__.
+
++ The __init__ function initializes the data directory, annotation
+  file and any data tranforms.
+
 + The __len__ function returns the number of samples in the dataset.
-+ The __getitem__ function loads and returns a sample from the dataset at the given index. 
-  Based on the index, it converts the mri data into torch tensor using nibabel 'load'.
+
++ The __getitem__ function loads and returns a sample from the dataset
+  at the given index.
+
+  Based on the index, it converts the mri data into torch tensor using
+  nibabel 'load'.
+
   It retrieves the corresponding groundtruth/mask
     """
-    def __init__(self, root_path):
-        self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig','*.nii.gz'))]
-        self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask','*.nii.gz'))]
-        
 
+    def __init__(self, root_path, verb=0):
+        self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig', '*.nii.gz'))]
+        self.orig_data_list.sort()
+
+        Nroot = len(root_path)
+
+        self.mask_data_list = []
+
+        print(self.orig_data_list)
+       
+        for orig_dset in self.orig_data_list:
+            orig_file = orig_dset[Nroot:]
+            mask_file = orig_file.replace('orig', 'mask')
+            mask_dset = ''.join([root_path, mask_file])
+            self.mask_data_list.append(mask_dset)
+
+        #self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
+        #self.mask_data_list.sort()
+
+        if verb > 1:
+            print("++ Check matching of input dsets:")
+            for i in range(len(self.orig_data_list)):
+                print("{:20s} --- {:20s}".format(self.orig_data_list[i], 
+                                                 self.mask_data_list[i]))
 
     def __getitem__(self, index):
         
         self.orig_image  = nib.load(self.orig_data_list[index])
         self.mask_image  = nib.load(self.mask_data_list[index])
-        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32') 
+        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
-        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')  
+        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
         
         return (self.orig_data, self.mask_data)
 
     def __len__(self):
         return len(self.orig_data_list)
 
-
-
+# ------------------------------------------------------------------------
 
 def mat_generator(foldername, verb=1):
-    """Take a subdirectory (training, validation, etc.) and populate matrices
-    for the dsets.
+    """Take a subdirectory (training, validation, etc.) and populate
+    matrices for the dsets.
 
     Parameters
     ==========
@@ -59,7 +88,6 @@ def mat_generator(foldername, verb=1):
                    Any 'foldername' should contain 2 directories of
                    dsets: 'mask' and 'orig'.  These should each
                    contain N files (matched across the directories).
-
 
     Returns
     =======
@@ -185,12 +213,11 @@ def mat_generator(foldername, verb=1):
     
 
 def SSData_path(data_path):
-    #print(data_path)
-    
+
     training_path   = os.path.join(data_path, 'training')
     validation_path = os.path.join(data_path, 'validation')
     
-    return(str(training_path), str(validation_path))
+    return (str(training_path), str(validation_path))
 
 def is_mask_orig_pair(A, B):
     """Check if 2 dataset named A and B have filenames that match *except*

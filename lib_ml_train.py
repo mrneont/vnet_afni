@@ -43,10 +43,6 @@ list_data_norm = [  'min_max_scale',
                     'z_scoring',]
 # --------------------------------------------------------------------------
 
-### PTQ: isthis function used anymore? ##[YNS]: plot_grad_flow is not used any more and is removed 
-
-
-### PTQ: what is 'named_parameters' here? ##[YNS] : done 
 def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
     '''Plot the gradients flowing through different layers in the net
     during training.  Can be used for checking for possible gradient
@@ -169,6 +165,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     net_arch     : network architecture name, from available list (str)
     loss_func    : loss function name, from available list (str)
     optimizer    : optimizer name, from available list (str)
+    do_nifti     : binary switch about whether to write out nifti dsets 
+                   during the network run
     outdir       : directory for various outputs
     verb         : verbosity for stdout
 
@@ -201,15 +199,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         print("++ {:30s} : {}".format('loss function', loss_func))
         print("++ {:30s} : {}".format('Network architecture', net_arch))
         
-
-    ### PTQ: presumably, this can/should be set from runtime options?
-    ### Or is this this uniquely tied to optimizer choice?  E.g., if
-    ### choosing Adam16, then this is half_precision, while for any
-    ### other optimizer, it should be full prec?
-    ##### PTQ2: how does/should this interact with using the .half()
-    ##### method, below? Shouldn't these be connected?
-    #####[YNS] the half_prec is treated as a parsed agruement and not hard wired now 
-
     if half_prec == 1:
         print("++ {:30s} : {}".format('Precision', 'half'))
     else :
@@ -238,8 +227,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         print("** The Half Precision operations are not supported in CPU ")
         sys.exit(2)
     
-
-    
     # move model to device
     net.to(device)
     
@@ -250,7 +237,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             ### the following gives error
             #net = convert_network(net, dtype = torch.cuda.HalfTensor) 
             #torch.backends.cudnn.enabled 
-
     
 
     # print the model summary
@@ -276,11 +262,11 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
 
     train_datapath = os.path.join(data_path, 'training')
-    train_set      = lmd.mridataset(train_datapath)
+    train_set      = lmd.mridataset(train_datapath, verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
-    val_set        = lmd.mridataset(val_datapath)
+    val_set        = lmd.mridataset(val_datapath, verb=verb)
     Nval           = len(val_set)
    
     dataloaders = {
@@ -358,9 +344,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             idx = 1 # index for the datafile/volume in the DATASET
             for orig_data, mask_data in dataloaders[phase]:
 
-                ### PTQ: normalization should be something selected at
-                ### runtime, to be able to switch among different
-                ### methods for doing so. ##[YNS] done
                 if data_norm == 'z_scoring':
                     orig_data = z_scoring(orig_data)
 
@@ -374,13 +357,6 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                       "".format(data_norm))
                     sys.exit(6)
 
-                
-                    ### PTQ: are we sure it is always half if using
-                    ### cuda?  Or is that only with the 'half_prec=1'
-                    ### above? I think we should be careful these are
-                    ### consistently used/flagged. ##[YNS] half_prec flag added 
-
-                
                 if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
                     
                     orig_data = orig_data.to(device).half()
@@ -454,19 +430,33 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                           "".format(this_str, LOSS))
 
                 if (do_nifti and not(half_prec)) :
-                
-                    lnu.write_tensor_to_disk_nifti(mask_data[0][0], 
-                                               'target',
-                                               strepoch, phase, 
-                                               idx, outdir=outdir)
-                    lnu.write_tensor_to_disk_nifti(mask_pred[0][0], 
-                                               'predmask',
-                                               strepoch, phase, 
-                                               idx, outdir=outdir)
-                    lnu.write_tensor_to_disk_nifti(mask_pred[0][1], 
-                                               'predmask_OPP',
-                                               strepoch, phase, 
-                                               idx, outdir=outdir)
+                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
+                                                          strepoch, 
+                                                          phase, 
+                                                          idx )
+                    fname_targ = "{}/{}.nii.gz".format( outdir,
+                                                        pref_targ )
+                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                                                    fname=fname_targ )
+
+                    pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
+                                                          strepoch, 
+                                                          phase, 
+                                                          idx )
+                    fname_pred = "{}/{}.nii.gz".format( outdir,
+                                                        pref_pred )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                    fname=fname_pred )
+
+                    pref_pred_OPP = "{}_{}_{}_{:04d}".format( 'predmask_OPP',
+                                                              strepoch, 
+                                                              phase, 
+                                                              idx )
+                    fname_pred_OPP = "{}/{}.nii.gz".format( outdir,
+                                                            pref_pred_OPP )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
+                                                    fname=fname_pred_OPP )
+
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
 

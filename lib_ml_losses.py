@@ -234,7 +234,10 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         #with torch.autograd.set_detect_anomaly(True):
         #pred[pred>0.5]  = 1
         
-        
+        ### [PT] a comment about these: if these write_tensor*()
+        ### calls are uncommented, note that the syntax for the func
+        ### has changed---just taking the same [0]th argument but then
+        ### a pre-constructed string for output name
         lnu.write_tensor_to_disk_nifti(pred[0][0], 
                                                'pred_0_0',
                                                0, 0, 

@@ -280,12 +280,6 @@ string ocharA (e.g., 'LAI'), and reorient it to a new orientation
 
 
 
-
-
-
-
-
-
 # --------------------------------------------------------------------------
 # This is TEMPORARY way to give some correct header info to the output
 # dsets we have for 32x32x32 testing at the moment.  Later, we will
@@ -309,36 +303,28 @@ TEMP_M44_32iso_nib_ori = reorient_mat44(TEMP_M44_32iso_RAI,
 # --------------------------------------------------------------------------
 
 
-
-### PTQ: note really a Q, but below were three separate, but very
-### similar, functions to output a torch.Tensor to a NIFTI file on
-### disk.  It looked like the only difference was be a file output
-### prefix, which has now become an input label.
-
 # write the target masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
-def write_tensor_to_disk_nifti(tt, opref, strepoch, phase, count, outdir = '.'):
+def write_tensor_to_disk_nifti(tt, fname=None):
     """This function writes a torch tensor volume to disk as a NIFTI file.
 
     Inputs
     ------
     tt               : (torch.Tensor) 3D volume
-    opref            : (str) file prefix of output (e.g., to identify the 
-                       type of file)
-    strepoch         : (str) zeropadded epoch number
-    phase            : (str) label of type of dset ('train', 'val', etc.)
-    count            : (int) index for the datafile/volume in the DATASET
-    outdir           : (str) directory for outputting image
+    fname            : (str) full path+name of output dset (build name
+                       before using this func).    
 
     """ 
 
+    if not(fname) :
+        print("** ERROR: need fname for writing out tensor to nifti.")
+        sys.exit(7)
+
     # convert torch.Tensor to np.array
     arr   = tt.cpu().detach().numpy()
-    fname = "{}_{}_{}_{:04d}.nii.gz".format(opref, strepoch, phase, count)
 
-    fname_path = '/'.join([outdir, fname])
-    write_out_nifti_vol(arr, fname_path,
-                            affmat = TEMP_M44_32iso_nib_ori)
+    write_out_nifti_vol( arr, fname,
+                         affmat = TEMP_M44_32iso_nib_ori )
 
 
