@@ -38,14 +38,19 @@ class mridataset(data.Dataset):
         Nroot = len(root_path)
 
         self.mask_data_list = []
+        self.depth_map_data_list = []
 
-        print(self.orig_data_list)
+        #print(self.orig_data_list)
        
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
             mask_file = orig_file.replace('orig', 'mask')
             mask_dset = ''.join([root_path, mask_file])
             self.mask_data_list.append(mask_dset)
+            depth_map_file = orig_file.replace('orig', 'weight')
+            depth_map_dset = ''.join([root_path, depth_map_file])
+            self.depth_map_data_list.append(depth_map_dset)
+            
 
         #self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
         #self.mask_data_list.sort()
@@ -53,21 +58,24 @@ class mridataset(data.Dataset):
         if verb > 1:
             print("++ Check matching of input dsets:")
             for i in range(len(self.orig_data_list)):
-                print("{:20s} --- {:20s}".format(self.orig_data_list[i], 
-                                                 self.mask_data_list[i]))
+                print("{:20s} --- {:20s} --- {:20s}".format(self.orig_data_list[i], 
+                                                 self.mask_data_list[i],
+                                                 self.depth_map_data_list[i]))
 
     def __getitem__(self, index):
         
-        self.orig_image  = nib.load(self.orig_data_list[index])
-        self.mask_image  = nib.load(self.mask_data_list[index])
-        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
-        self.top99_thresh = np.percentile(self.orig_data, 99) 
+        self.orig_image       = nib.load(self.orig_data_list[index])
+        self.mask_image       = nib.load(self.mask_data_list[index])
+        self.depth_map_image  = nib.load(self.depth_map_data_list[index])
+        self.orig_data        = np.asanyarray(self.orig_image.dataobj).astype('float32')
+        self.top99_thresh     = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
-        self.down2_thresh = np.percentile(self.orig_data, 2) 
+        self.down2_thresh     = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
-        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
-        
-        return (self.orig_data, self.mask_data)
+        self.mask_data        = np.asanyarray(self.mask_image.dataobj).astype('float32')
+        self.depth_map_data   = np.asanyarray(self.depth_map_image.dataobj).astype('float32')
+
+        return (self.orig_data, self.mask_data, self.depth_map_data)
 
     def __len__(self):
         return len(self.orig_data_list)

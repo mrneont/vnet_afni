@@ -341,8 +341,9 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                       "".format(loss_func))
                 sys.exit(5)
 
-            idx = 1 # index for the datafile/volume in the DATASET
-            for orig_data, mask_data in dataloaders[phase]:
+            #idx = 1 # index for the datafile/volume in the DATASET
+            for idx, (orig_data, mask_data, depth_map_data) in enumerate(dataloaders[phase]):
+            #for orig_data, mask_data, depth_map_data in dataloaders[phase]:
 
                 if data_norm == 'z_scoring':
                     orig_data = z_scoring(orig_data)
@@ -359,17 +360,22 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                 if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
                     
-                    orig_data = orig_data.to(device).half()
-                    mask_data = mask_data.to(device).half()
+                    orig_data      = orig_data.to(device).half()
+                    mask_data      = mask_data.to(device).half()
+                    depth_map_data = depth_map_data.to(device).half()
                 
                 else: 
 
-                    orig_data = orig_data.to(device)
-                    mask_data = mask_data.to(device)
+                    orig_data      = orig_data.to(device)
+                    mask_data      = mask_data.to(device)
+                    depth_map_data = depth_map_data.to(device)
 
+                '''
+                # [YNS] : could this be removed??
                 if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
+                ''' 
 
                 ### CONV3D requires input in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
@@ -395,7 +401,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data)
+                    LOSS = loss.forward(mask_pred, mask_data, depth_map_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
