@@ -77,7 +77,7 @@ def get_args():
                         help='Number of epochs' + '\n' +
                         "(def: {})".format(str(def_E)))
 
-    def_LRATE = 0.001
+    def_LRATE = 0.0001
     parser.add_argument("-l", "--learning_rate", 
                         metavar='LRATE', 
                         dest="learning_rate", 
@@ -103,7 +103,8 @@ def get_args():
 
     def_verb = 1
     parser.add_argument("-v", "--verb", 
-                        dest="verb", 
+                        metavar='VERB', 
+                        dest='verb', 
                         type=int, default=def_verb, 
                         help='verbosity for code running' + '\n' +
                         '(def: {})'.format(str(def_verb)))
@@ -116,6 +117,24 @@ def get_args():
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
                         '(def: {})'.format(str(def_net_arch)))
+
+
+    def_half_prec = 0
+    parser.add_argument("-hp", "--half_prec", 
+                        dest="half_prec", 
+                        type=int, default=def_half_prec,
+                        help='half precision' + '\n' +
+                        '(def: {})'.format(str(def_half_prec)))
+
+    def_data_norm = lmt.list_data_norm[0]
+    parser.add_argument("-dn", "--data_norm", 
+                        dest="data_norm", 
+                        type=str, default=def_data_norm,
+                        help="data normalization type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_data_norm)) + '\n' +
+                        '(def: {})'.format(str(def_data_norm)))
+
 
     def_wt_norm = 1
     parser.add_argument("-w", "--weight_norm", 
@@ -141,6 +160,15 @@ def get_args():
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lmt.list_optimizer)) + '\n' +
                         '(def: {})'.format(str(def_optimizer)))
+
+    def_nifti = "don't write out dsets"
+    parser.add_argument("-W", "--write_nifti", 
+                        dest='do_nifti',
+                        action='store_true',
+                        #const=def_nifti,
+                        help='flag to turn on the writing of NIFTI' + '\n' +
+                        "datsets while processing" + '\n' +
+                        '(def: {})'.format(str(def_nifti)))
 
     return parser.parse_args()
 
@@ -287,22 +315,28 @@ if __name__ == '__main__':
     loss_func = args.loss_func
     optimizer = args.optimizer
     verb      = args.verb
+    half_prec = args.half_prec
     wt_norm   = args.weight_norm
+    do_nifti  = args.do_nifti
+    data_norm = args.data_norm
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
-    if not(check_opt_allowed( net_arch, lmt.list_net_arch, 
-                              desc_bad='This network architecture ' + 
-                                       'is not in the List:' )) or \
+    if  not(check_opt_allowed( net_arch, lmt.list_net_arch, 
+                               desc_bad='This network architecture ' + 
+                               'is not in the List:' )) or \
         not(check_opt_allowed( optimizer, lmt.list_optimizer, 
                                desc_bad='This optimizer ' + 
                                'is not in the List:' )) or \
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,
-                              desc_bad='This loss function ' + 
-                                       'is not in the List:' )) :
+                               desc_bad='This loss function ' + 
+                               'is not in the List:' )) or \
+        not(check_opt_allowed( data_norm, lmt.list_data_norm,
+                               desc_bad='This data normalization ' + 
+                               'is not in the List:' ))  :
         sys.exit(5)
 
     # save command used
@@ -310,6 +344,5 @@ if __name__ == '__main__':
     writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
                    verb=verb )
 
-    print("wt_norm = ".format(wt_norm))
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         optimizer, wt_norm, outdir, verb )
+                         optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb )
