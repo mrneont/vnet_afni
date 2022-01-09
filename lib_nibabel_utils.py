@@ -4,9 +4,6 @@ import numpy   as np
 import nibabel as nib
 
 
-
-
-
 ### Nibabel dset orientation notes, mostly from here:
 ### https://nipy.org/nibabel/image_orientation.html
 #
@@ -35,13 +32,9 @@ dict_flip_orient = { 'R' : 'L',
 
 # --------------------------------------------------------------------------
 
-
-
-
-
-def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
-                         aorient=None, affmat=np.eye(4),
-                         sform_code=1, qform_code=1):
+def write_out_nifti_vol_OLD( arr3d, fname='dset.nii.gz', outdir=None,
+                             aorient=None, affmat=np.eye(4),
+                             sform_code=1, qform_code=1):
     """Write out a 3D array arr3d as a NIFTI dataset.  This function uses
     nibabel under the hood, but inputs are in standard AFNI convention.
 
@@ -90,21 +83,55 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
 
     return 1
 
+def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
+                         header=None):
+    """Write out a 3D array arr3d as a NIFTI dataset.  This function uses
+    nibabel under the hood, but inputs are in standard AFNI convention.
 
 
+    Params
+    ------
+    arr3d       : (3D array or pytorch tensor) dset to be written out 
+                  as a NIFTI vol
+    fname       : (str) output filename, which can include path 
+    outdir      : (str) optional way to provide output dir path (could just
+                  be as part of fname, as well)
+    header      : (nibabel obj, NIFTI hdr) a dset header to give 
+                  appropriate voxelsize, etc.
 
+    Returns
+    -------
+    1 on success (NIFTI dataset written to disk), 0 on failure (not writing 
+    dset).
 
+    """
 
+    if not(header) :
+        print("** ERROR: no header provided to write out nifti vol")
+        print("          but THIS function requires one")
+        return 0
 
+    if fname.__contains__('/') and outdir != None :
+        print("** ERROR: can't both provide path in fname AND use outdir")
+        return 0
+    elif outdir :
+        if outdir[-1] == '/' :
+            fname = outdir + fname
+        else:
+            fname = outdir + '/' + fname
 
+    if header['sizeof_hdr'] == 348:
+        #print("++ I am NIFTI-1 format")
+        ovol = nib.Nifti1Image(arr3d, None, header=header)
+    elif header['sizeof_hdr'] == 540:
+        #print("++ I am NIFTI-2 format")
+        ovol = nib.Nifti2Image(arr3d, None, header=header)
+    else:
+        raise IOError("** Badly formatted header: not NIFTI-1 or -2")
 
+    nib.save(ovol, fname)
 
-
-
-
-
-
-
+    return 1
 
 
 
@@ -306,7 +333,7 @@ TEMP_M44_32iso_nib_ori = reorient_mat44(TEMP_M44_32iso_RAI,
 # write the target masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
-def write_tensor_to_disk_nifti(tt, fname=None):
+def write_tensor_to_disk_nifti(tt, fname=None, header=None):
     """This function writes a torch tensor volume to disk as a NIFTI file.
 
     Inputs
@@ -314,6 +341,8 @@ def write_tensor_to_disk_nifti(tt, fname=None):
     tt               : (torch.Tensor) 3D volume
     fname            : (str) full path+name of output dset (build name
                        before using this func).    
+    header           : (nibabel obj, NIFTI hdr) a dset header to give 
+                       appropriate voxelsize, etc.
 
     """ 
 
@@ -324,7 +353,13 @@ def write_tensor_to_disk_nifti(tt, fname=None):
     # convert torch.Tensor to np.array
     arr   = tt.cpu().detach().numpy()
 
-    write_out_nifti_vol( arr, fname,
-                         affmat = TEMP_M44_32iso_nib_ori )
+    if header :
+        write_out_nifti_vol( arr, fname=fname, header=header )
+
+    else:
+        # the OLD way, which is not really broadly relevant, and
+        # should go the way of the dinosaur
+        write_out_nifti_vol_OLD( arr, fname,
+                                 affmat = TEMP_M44_32iso_nib_ori )
 
 

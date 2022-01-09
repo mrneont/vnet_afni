@@ -1,4 +1,4 @@
-import os
+import os, copy
 import sys
 
 import lib_nibabel_utils     as lnu  
@@ -53,10 +53,13 @@ class mridataset(data.Dataset):
         # build a list of corresponding mask dsets
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
+
+            ### make matching list of mask dsets
             mask_file = orig_file.replace('orig', 'mask')
             mask_dset = ''.join([root_path, mask_file])
             self.mask_data_list.append(mask_dset)
 
+            ### make matching list of depth/weight dsets
             # first replacement = dir name; the second = filename postfix.
             # How this is done depends heavily on dirnames and filenames being 
             # used in practice, which might change
@@ -74,16 +77,53 @@ class mridataset(data.Dataset):
                     self.depth_data_list[i]))
 
     def __getitem__(self, index):
+        '''Return a tuple of numpy arrays (and one header) for dataset numero
+        'index' from the object's list of NIFTI dsets.
+
+        The present set of data output is listed under 'Return', below.
+
+        Parameters
+        ----------
+        index          :(int) index of which item to extract
         
+        Return
+        ------
+        orig_data      :(array, 3D) anatomical volume of given subj
+        orig_head      :(nibabel obj) the header info of the orig_data dset
+                        -> to be reattached later on the output (voxel size, etc.)
+        mask_data      :(array, 3D) mask associated with orig_data (should have matching
+                        header to orig_data, except perhaps for type)
+        depth_data     :(array, 3D) possible extra output: a depth map associated with
+                        mask data; should be a weight dataset derived from 3dEulerDist;
+                        (should have matching eader to orig_data, except perhaps for type)
+
+        '''
+        
+        # [PT] ponder if these should be self.orig_image, or just
+        # orig_image (and similarly for others).  These just get
+        # returned, so might not have to be attribute of the obj
         self.orig_image   = nib.load(self.orig_data_list[index])
         self.mask_image   = nib.load(self.mask_data_list[index])
+
+        self.depth_data   = None   # because we might not always have
+                                   # this; see notes on depth* items, below
+
+        # [PT] this should reside within an if-condition
         self.depth_image  = nib.load(self.depth_data_list[index])
+        
+        # NB: this method of reading in the dataset processes the data
+        # a bit (putting floor/ceiling values on).  Will double check
+        # if we want this here, based on other scaling/processing of
+        # initial dset.
         self.orig_data    = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
+
         self.mask_data    = np.asanyarray(self.mask_image.dataobj).astype('float32')
+
+        # [PT] this should reside within an if-condition
         self.depth_data   = np.asanyarray(self.depth_image.dataobj).astype('float32')
 
         return (self.orig_data, self.mask_data, self.depth_data)
@@ -93,6 +133,8 @@ class mridataset(data.Dataset):
 
 # ------------------------------------------------------------------------
 
+### [PT] I believe this function is no longer used any more for
+### getting datasets---see the mridataset class and its methods.
 def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate
     matrices for the dsets.
@@ -121,6 +163,8 @@ def mat_generator(foldername, verb=1):
 
     The output orig_mat and mask_mat should have the same length.  The
     size of each element should be the same: an MxMxM array of data.
+
+    ***Appears to be obsolete now:  see mridataset class and its methods. ***
 
     """
 
