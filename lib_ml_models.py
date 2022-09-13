@@ -2,15 +2,87 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn.utils import weight_norm
-                         
+
+
+# ==========================================================================
+'''
++   This code is the pytorch implementation of the Vnet neural network architecture proposed in the 
+    paper https://arxiv.org/pdf/1606.04797.pdf
+ 
++   The Vnet(volumetric neural net) processes 3D data by performing volumetric convolutions.
+
++   VNet_orig() function is implementation of Fig 2 from the above mentioned paper. The function VNet_orig
+    incorporates the various stages that operate at different resolutions both on the left side(enocder) 
+    and the right side(decoder) of the network. 
+ 
++   Vnet Architecture explained : It has the Encoder on the left hand side(LHS) and decoder on the 
+    right hand side 
++   please note that we keep increasing the channels on the encoder side and decreasing the channels on the decoder side 
+ 
+    -- ENCODER --
+        #  input layer : down1 = (Conv3d, ReLu)
+        # hidden layer : down2 = downconv(Conv3d,Relu) => 2x(Conv3d,Relu) (means 'downconv' followed by RepeatConv repeated twice)
+        # hidden layer : down3 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu) (means 'downconv' followed by RepeatConv repeated thrice)
+        # hidden layer : down4 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
+        # hidden layer : down5 = downconv(Conv3d,Relu) => 3x(Conv3d,Relu)
+                                                          
+                                                         
++   We keep increasing the channels on the encoder side at each stage from 1 to 16 to 32 to 64 to 128 to 256 
++   The first layer in the encoder is the input layer(denoted by the variable down1 in this code)made from 
+    volumetric kernels of size 5 x 5 x 5 voxels
++   The volumetric kernels are implemented using the  Conv3d function from Pytorch
+    torch.nn.Conv3d(in_channels, out_channels, kernel_size, stride)
+  
+    where in_channels - Number of channels in the input image
+         out_channels - Number of channels produced by the convolution
+         kernel_size (int or tuple) – Size of the convolving kernel
+        stride (int or tuple, optional) – Stride of the convolution
+
+    The input data is in the format: (1 X 1 X D X H X W) of datatype torch.FloatTensor
+   (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
+
++   down1 layer has conv3d and relu activation built in sequentially using nn.Sequential() function from pytorch 
++   The other 3 functions defined in this code are RepeatConv(), Down(),  Up() 
++   The function Down() incorporates the down convolution denoted by variable 'downconv' and RepeatConv()
++   'downconv' is Conv3d and relu activation built in sequentially which aides in the downsampling 
++   RepeatConv() is an ensemble of  kernels(5 x 5 x 5 voxels) in tandem of 2 or 3 
+
++   The function Up() incorporates the up convolution denoted by variable 'upconv' and RepeatConv()
++   'upconv'is ConvTranspose3d and relu activation built in sequentially which aides in the upsampling
++   The volumetric kernels for up sampling are implemented using the  ConvTranspose3d function from Pytorch
++   torch.nn.ConvTranspose3d(in_channels, out_channels, kernel_size, stride) 
++   We keep decreasing the channels on the decode side at each stage from 256 to 128 to 64 to 32 to 16  
+                -- DECODER --
+        # hidden layer : up1 = upconv(ConvTr3d,Relu) => 3x(Conv3d,Relu) (means 'upconv' followed by RepeatConv() repeated thrice)
+        # hidden layer : up2 = upconv(ConvTr3d,Relu) => 3x(Conv3d,Relu)
+        # hidden layer : up3 = upconv(ConvTr3d,Relu) => 2x(Conv3d,Relu)
+        # hidden layer : up4 = upconv(ConvTr3d,Relu) => 1x(Conv3d,Relu)
+        #    out layer : up5 = (Conv3d,Relu)
+
++ After the architecture of the neural network has been defined/set,  the neural network is 
+   initiated/called  using the 'forward' method in the training and the validation phases
+''' 
 # ==================================================================
-# pieces to be used within the model
+
 
 class RepeatConv(nn.Module): 
     """
+
+    This function builds an ensemble of  kernels(5 x 5 x 5 voxels) in tandem of 2 or 3 
+
     Repeat 'Conv + ReLU' n_conv times.
 
     NB:  out_channels = in_channels.
+
+    Params
+    ------
+    n_channels: is the number of channels after the downconvolution or upconvolution at each stage 
+    n_conv    : is the number of tandem repeats of the volumentric kernel
+    wt_norm   : is the flag to denote the normalization of weights 
+
+    Returns
+    -------
+    This function returns an ensemble of volumetric kernels(5 x 5 x 5 voxels) depending on the number 'n_conv'(either 2 or 3)
     """
 
     def __init__(self, n_channels, n_conv, wt_norm):
@@ -34,7 +106,24 @@ class RepeatConv(nn.Module):
 
 class Down(nn.Module):
     """
-    NB:  out_channels = 2 * in_channels.
+    This function is used to implement the encoder part of the neural network. 
+    It is called whenever there is a need to increase the number of out_channels comapred to the in_channels.
+    It has 2 parts 1) downsampling  2) feature extraction
+    The downsampling is done by 'downconv'. 'downconv' is variable used to denotes the Conv3d and ReLU activation function 
+    RepeatConv() is an ensemble of  kernels(5 x 5 x 5 voxels) in tandem of 2 or 3 
+    out_channels = 2 * in_channels.
+    
+    Params
+    ------
+    in_channels   : Number of channels in the input data at each stage 
+    out_channels  : Number of channels produced by the downconvolution
+    n_conv        : is the number of tandem repeats of the volumentric kernel
+    wt_norm       : is the flag to denote the normalization of weights 
+
+    Returns
+    -------
+    Returns filters required for downsampling and feature extraction at each stage of the encoder 
+
     """
 
     def __init__(self, in_channels, out_channels, n_conv, wt_norm): 
@@ -63,7 +152,25 @@ class Down(nn.Module):
 
 class Up(nn.Module):
     """
-    NB:  out_channels = in_channels / 2.
+    This function is used to implement the decoder part of the neural network. 
+    It is called whenever there is a need to decrease the number of out_channels comapred to the in_channels.
+    It has 2 parts 1) upsampling  2) feature extraction
+    The upsampling is done by 'upconv'. 'upconv' is variable used to denotes the ConvTranspose3d and ReLU activation function 
+    RepeatConv() is an ensemble of  kernels(5 x 5 x 5 voxels) in tandem of 2 or 3 
+    
+    out_channels = in_channels/2
+
+    Params
+    ------
+    in_channels   : Number of channels in the input data at each stage 
+    out_channels  : Number of channels produced by the upconvolution
+    n_conv        : is the number of tandem repeats of the volumentric kernel
+    wt_norm       : is the flag to denote the normalization of weights 
+
+    Returns
+    -------
+    Returns filters required for upsampling and feature extraction at each stage of the decoder 
+
     """
     def __init__(self, in_channels, out_channels, n_conv, wt_norm): 
         super(Up, self).__init__()
@@ -98,7 +205,9 @@ class VNet_orig(nn.Module):
     """Main model: VNet_orig is implementation of Fig 2 from the paper:
        https://arxiv.org/pdf/1606.04797.pdf
 
-    Here we set up the main model.
+    Here we set up the main model. 
+    The VNet_orig uses the functions  Down(), Up() and RepeatConv() defined in this file 
+    to put together neural network of predefined architecture  
 
     Parameters (init)
     =================
@@ -166,6 +275,8 @@ class VNet_orig(nn.Module):
         self.up3 = Up(128,  64, 2, wt_norm)
         self.up4 = Up(64,   32, 1, wt_norm)
 
+        # the final layer in the neural network uses the Softmax() function
+        # Reason of using softmax function[YNS-TBD] 
         if (wt_norm ==1):
             self.up5 = nn.Sequential(
                 weight_norm(nn.Conv3d(32, num_class, kernel_size=1)),
@@ -221,4 +332,17 @@ class VNet_orig(nn.Module):
         return up5
 
 
-
+'''
+ENCODER PART
+input layer  : down1 shape torch.Size([1, 16, 32, 32, 32])
+hidden layer : down2 shape torch.Size([1, 32, 16, 16, 16])
+hidden layer : down3 shape torch.Size([1, 64, 8, 8, 8])
+hidden layer : down4 shape torch.Size([1, 128, 4, 4, 4])
+hidden layer : down5 shape torch.Size([1, 256, 2, 2, 2])
+DECODER PART
+hidden layer : up1 shape torch.Size([1, 256, 4, 4, 4])
+hidden layer : up2 shape torch.Size([1, 128, 8, 8, 8])
+hidden layer : up3 shape torch.Size([1, 64, 16, 16, 16])
+hidden layer : up4 shape torch.Size([1, 32, 32, 32, 32])
+output layer : up5 shape torch.Size([1, 2, 32, 32, 32])
+'''
