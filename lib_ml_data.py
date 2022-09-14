@@ -1,4 +1,4 @@
-import os
+import os, copy
 import sys
 
 import lib_nibabel_utils     as lnu  
@@ -14,8 +14,8 @@ class mridataset(data.Dataset):
 
 + The Dataset class is used by the Dataloader class.
 
-+ A custom Dataset class must implement three functions: __init__,
-  __len__, and __getitem__.
++ A custom Dataset class must implement three functions: 
+    __init__, __len__, and __getitem__.
 
 + The __init__ function initializes the data directory, annotation
   file and any data tranforms.
@@ -32,48 +32,109 @@ class mridataset(data.Dataset):
     """
 
     def __init__(self, root_path, verb=0):
-        self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig', '*.nii.gz'))]
+
+        self.mask_data_list  = []
+        self.depth_data_list = []
+
+        #self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 
+        #                                                         'orig', 
+        #                                                         '*.nii.gz'))]
+
+        # [PT] not sure why the [x for x in ...] structure is needed
+        # above?  I think the following does the same (glob returns a
+        # list, which we then sort in the next command)
+        self.orig_data_list = glob.glob(os.path.join(root_path, 
+                                                     'orig', 
+                                                     '*.nii.gz'))
         self.orig_data_list.sort()
 
         Nroot = len(root_path)
 
-        self.mask_data_list = []
-
-        print(self.orig_data_list)
-       
+        # build a list of corresponding mask dsets
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
+
+            ### make matching list of mask dsets
             mask_file = orig_file.replace('orig', 'mask')
             mask_dset = ''.join([root_path, mask_file])
             self.mask_data_list.append(mask_dset)
 
-        #self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
-        #self.mask_data_list.sort()
-
+            ### make matching list of depth/weight dsets
+            # first replacement = dir name; the second = filename postfix.
+            # How this is done depends heavily on dirnames and filenames being 
+            # used in practice, which might change
+            depth_file = orig_file.replace('orig', 'weight', 1)
+            depth_file = depth_file.replace('orig', 'wtexp')
+            depth_dset = ''.join([root_path, depth_file])
+            self.depth_data_list.append(depth_dset)
+            
         if verb > 1:
             print("++ Check matching of input dsets:")
             for i in range(len(self.orig_data_list)):
-                print("{:20s} --- {:20s}".format(self.orig_data_list[i], 
-                                                 self.mask_data_list[i]))
+                print("{:20s} --- {:20s} --- {:20s}".format( 
+                    self.orig_data_list[i], 
+                    self.mask_data_list[i],
+                    self.depth_data_list[i]))
 
     def __getitem__(self, index):
+        '''Return a tuple of numpy arrays (and one header) for dataset numero
+        'index' from the object's list of NIFTI dsets.
+
+        The present set of data output is listed under 'Return', below.
+
+        Parameters
+        ----------
+        index          :(int) index of which item to extract
         
-        self.orig_image  = nib.load(self.orig_data_list[index])
-        self.mask_image  = nib.load(self.mask_data_list[index])
-        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
+        Return
+        ------
+        orig_data      :(array, 3D) anatomical volume of given subj
+        orig_head      :(nibabel obj) the header info of the orig_data dset
+                        -> to be reattached later on the output (voxel size, etc.)
+        mask_data      :(array, 3D) mask associated with orig_data (should have matching
+                        header to orig_data, except perhaps for type)
+        depth_data     :(array, 3D) possible extra output: a depth map associated with
+                        mask data; should be a weight dataset derived from 3dEulerDist;
+                        (should have matching eader to orig_data, except perhaps for type)
+
+        '''
+        
+        # [PT] ponder if these should be self.orig_image, or just
+        # orig_image (and similarly for others).  These just get
+        # returned, so might not have to be attribute of the obj
+        self.orig_image   = nib.load(self.orig_data_list[index])
+        self.mask_image   = nib.load(self.mask_data_list[index])
+
+        self.depth_data   = None   # because we might not always have
+                                   # this; see notes on depth* items, below
+
+        # [PT] this should reside within an if-condition
+        self.depth_image  = nib.load(self.depth_data_list[index])
+        
+        # NB: this method of reading in the dataset processes the data
+        # a bit (putting floor/ceiling values on).  Will double check
+        # if we want this here, based on other scaling/processing of
+        # initial dset.
+        self.orig_data    = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
-        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
-        
-        return (self.orig_data, self.mask_data)
+
+        self.mask_data    = np.asanyarray(self.mask_image.dataobj).astype('float32')
+
+        # [PT] this should reside within an if-condition
+        self.depth_data   = np.asanyarray(self.depth_image.dataobj).astype('float32')
+
+        return (self.orig_data, self.mask_data, self.depth_data)
 
     def __len__(self):
         return len(self.orig_data_list)
 
 # ------------------------------------------------------------------------
 
+### [PT] I believe this function is no longer used any more for
+### getting datasets---see the mridataset class and its methods.
 def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate
     matrices for the dsets.
@@ -102,6 +163,8 @@ def mat_generator(foldername, verb=1):
 
     The output orig_mat and mask_mat should have the same length.  The
     size of each element should be the same: an MxMxM array of data.
+
+    ***Appears to be obsolete now:  see mridataset class and its methods. ***
 
     """
 

@@ -48,7 +48,7 @@ class CalcLoss_SoftDice_00(nn.Module):
     def __init__(self,):
         super(CalcLoss_SoftDice_00, self).__init__()
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
         '''Input two dsets, and calculate the loss function between them.
     This is for the 2-channel case:  brain and nonbrain.
 
@@ -96,7 +96,7 @@ class CalcLoss_WtSoftDice_01(nn.Module):
     def __init__(self,):
         super(CalcLoss_WtSoftDice_01, self).__init__()
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
         '''Input two dsets, and calculate the loss function between them.
     This is for the 2-channel case:  brain, and nonbrain.
     
@@ -184,7 +184,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
         super(CalcLoss_Sorensen_Dice_mean, self).__init__()
         self.eps = 1e-6
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
         pred[pred>0.5]  = 1
@@ -212,7 +212,7 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         super(CalcLoss_Sorensen_Dice_single_channel, self).__init__()
         self.eps = 1e-6
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
         #print(pred.type())
@@ -296,13 +296,14 @@ class CalcLoss_WtSorensen_Dice_03(nn.Module):
         super(CalcLoss_WtSorensen_Dice_03, self).__init__()
         self.eps = 1e-6
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
 
         gt = gt.int()
         np_gt = gt.cpu().numpy()
         
+
         ### [pt] Note for future---'edims' should not be hardwired
         ### here, because that will depend on actual data voxel
         ### dimensions.  For now, this is OK for using 32x32x32 data.
@@ -342,51 +343,118 @@ class CalcLoss_WtSorensen_Dice_single_channel(nn.Module):
         super(CalcLoss_WtSorensen_Dice_single_channel, self).__init__()
         self.eps = 1e-6
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
 
         target       = make_one_hot(gt, classes=pred.size()[1])
 
+        #print("depth_map shape", depth_map[0].size())
+
+        #print("gt shape", gt.size())
+
+        #print("target shape", target.size())
+
+        
         gt = gt.int()
         np_gt = gt.cpu().numpy()
         
         ### [pt] Note for future---'edims' should not be hardwired
         ### here, because that will depend on actual data voxel
         ### dimensions.  For now, this is OK for using 32x32x32 data.
+        
         target_EDT  = lib_EDT.calc_EDT_3D( np_gt[0][0], do_sqrt = True, 
                                bounds_are_zero=True,
                                edims=(8, 8, 8))
+
+        
+        #print("target_EDT shape", target_EDT.shape)
+        
+        
        
         wts_norm    = target_EDT/target_EDT.max()
-        #wts_exp = np.exp(-wts)
-        wts         = 1  - (wts_norm)
+        wts_exp = np.exp(-wts_norm)
+        #wts         = 1  - (wts_norm)
+        
+       
+        #arr_pred     = torch.clone(pred)
+        #arr_pred     = torch.tensor(pred)
+        #arr_pred[arr_pred < 0.5]  = 0
+        #arr_pred[arr_pred >= 0.5]  = 1
+        #sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True)
 
+        with torch.no_grad():
+            arr_pred =pred.clone().detach()
+            arr_pred[0][0][arr_pred[0][0] < 0.5] = 0
+            arr_pred[0][0][arr_pred[0][0]>= 0.5] = 1
+
+            arr_pred[0][1][arr_pred[0][1] < 0.5] = 0
+            arr_pred[0][1][arr_pred[0][1]>= 0.5] = 1
+        
+        #print(arr_pred.type())
+       
+        
         
         # Please note : The neural network goes into saturation when  
         # exponential(depth_info) is normalized.
         # the best way to go about is to normalize the depth_info
         # and then calculate the exp(norm_depth_info)
-
+        
         if torch.cuda.is_available():
             device = torch.device('cuda')
         else:
             device = torch.device('cpu')
+
+
         
-        wts = torch.from_numpy(wts)
+        wts = torch.from_numpy(wts_exp)
 
         wts = wts.to(device)
 
-        numerator    = 2.0 * torch.sum(wts*pred * target, dim=(2, 3, 4))
-        denominator  = torch.sum(wts*pred + wts*target, dim=(2, 3, 4))
+        target_EDT_torch = torch.from_numpy(target_EDT)
+
+        #print(target_EDT_torch.size())
+        '''
+        lnu.write_tensor_to_disk_nifti(target_EDT_torch, fname='depth_map_code.nii.gz')
+
+        lnu.write_tensor_to_disk_nifti(wts, fname='wts_exp.nii.gz')
+        
+        lnu.write_tensor_to_disk_nifti(depth_map[0], fname='depth_map_tcsh.nii.gz')
+        lnu.write_tensor_to_disk_nifti(pred[0][1], fname='pred.nii.gz')
+        lnu.write_tensor_to_disk_nifti(depth_map[0]*pred[0][1], fname='depth_map_x_pred.nii.gz')
+        lnu.write_tensor_to_disk_nifti(wts*pred[0][1], fname='wts_x_pred.nii.gz')
+
+        '''
+        #print("wts shape", wts.size())
+        
+        #difference = wts - depth_map[0]
+
+        #print("difference shape", difference.size())
+
+        #print("difference unique",torch.unique(difference))
+       
+
+        arr_pred.backward(retain_graph=True)
+
+        num1    = 2.0 * torch.sum(arr_pred[0][0] * target[0][0])
+        denom1  = torch.sum(arr_pred[0][0] + target[0][0])
+
+
+        num2    = 2.0 * torch.sum(wts* arr_pred[0][1] * target[0][1])
+        denom2  = torch.sum((wts*arr_pred[0][1]) + (wts*target[0][1]))
+
+
+        dice1 = num1 / denom1
+        dice2 = num2 / denom2
 
         # this part of the code logic requires re-visit when handling multi-class data
         # if the denominator of the predicted brain mask is zero them return loss as 1(high)
-        if denominator[0][1] == 0: #channel containing predicted brain mask.
+        #if denominator[0][1] == 0: #channel containing predicted brain mask.
+        if denom2 == 0:
             return 1  # check the return type 
         
-        dice = numerator/(denominator)
+        
 
         ### PTQ:  why mean here?  
-        return  -dice[0][1]
+        return  1-dice2
 
 
 

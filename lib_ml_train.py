@@ -1,6 +1,6 @@
 
 import os, io
-import sys
+import sys, copy
 import time
 import numpy                as np
 import matplotlib.pyplot    as plt
@@ -334,42 +334,54 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 loss = lml.CalcLoss_WtSorensen_Dice_03()
             elif loss_func == 'WtSorensen_Dice_single_channel' :
                 loss = lml.CalcLoss_WtSorensen_Dice_single_channel()
-
-                
             else:
                 print("This should never happen! 'loss_func' is: {}"
                       "".format(loss_func))
                 sys.exit(5)
 
-            idx = 1 # index for the datafile/volume in the DATASET
-            for orig_data, mask_data in dataloaders[phase]:
 
+            for idx, (orig_data, mask_data, depth_data) \
+                in enumerate(dataloaders[phase]):
+
+                # DataLoader/dataloaders above returns a tensor of
+                # everything, so we can't return the dset header there
+                # (AFAIK, at the moment; will revisit). Ergo, we do it
+                # this way.
+                # Also, use dset_pre in output name?
+                if phase == 'train' :
+                    tmpname  = train_set.orig_data_list[idx]
+                elif phase == 'val ' :
+                    tmpname  = val_set.orig_data_list[idx]
+                tmpdset  = nib.load(tmpname)
+                dset_hdr = copy.deepcopy(tmpdset.header)
+                dset_pre = tmpname.split('/')[-1].replace('_orig.nii','').replace('.gz','')
+
+                # (re)center the data brightness values
+                #[YNS] add the other data normalizations 
                 if data_norm == 'z_scoring':
                     orig_data = z_scoring(orig_data)
-
                 elif data_norm == 'min_max_scale': 
                     orig_data = min_max_scale(orig_data)
-
-                    #[YNS] add the other data normalizations 
-                    
                 else:
-                    print("This should never happen! 'data normalization' is: {}"
-                      "".format(data_norm))
+                    print("This should never happen! 'data_norm' is: {}"
+                          "".format(data_norm))
                     sys.exit(6)
 
-                if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
-                    
-                    orig_data = orig_data.to(device).half()
-                    mask_data = mask_data.to(device).half()
-                
+                if (device == torch.device('cuda') and (half_prec == 1)): 
+                    orig_data      = orig_data.to(device).half()
+                    mask_data      = mask_data.to(device).half()
+                    depth_data     = depth_data.to(device).half()
                 else: 
+                    orig_data      = orig_data.to(device)
+                    mask_data      = mask_data.to(device)
+                    depth_data     = depth_data.to(device)
 
-                    orig_data = orig_data.to(device)
-                    mask_data = mask_data.to(device)
-
+                '''
+                # [YNS] : could this be removed??
                 if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
+                ''' 
 
                 ### CONV3D requires input in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
@@ -395,7 +407,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data)
+                    LOSS = loss.forward(mask_pred, mask_data, depth_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
@@ -430,32 +442,50 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                           "".format(this_str, LOSS))
 
                 if (do_nifti and not(half_prec)) :
-                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
+                    #pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
+                    #                                      strepoch, 
+                    #                                      phase, 
+                    #                                      idx )
+                    pref_targ = "{}_{}_{:04d}_{}_{}".format( phase[:2],
+                                                             strepoch, 
+                                                             idx,
+                                                             'targ', 
+                                                              dset_pre)
                     fname_targ = "{}/{}.nii.gz".format( outdir,
                                                         pref_targ )
                     lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
-                                                    fname=fname_targ )
+                                                    fname=fname_targ,
+                                                    header=dset_hdr)
 
-                    pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
+                    #pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
+                    #                                      strepoch, 
+                    #                                      phase, 
+                    #                                      idx )
+                    pref_pred = "{}_{}_{:04d}_{}_{}".format( phase[:2],
+                                                             strepoch, 
+                                                             idx,
+                                                             'pred0', 
+                                                             dset_pre )
                     fname_pred = "{}/{}.nii.gz".format( outdir,
                                                         pref_pred )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred )
+                                                    fname=fname_pred,
+                                                    header=dset_hdr)
 
-                    pref_pred_OPP = "{}_{}_{}_{:04d}".format( 'predmask_OPP',
-                                                              strepoch, 
-                                                              phase, 
-                                                              idx )
+                    #pref_pred_OPP = "{}_{}_{}_{:04d}".format( 'predmask_OPP',
+                    #                                          strepoch, 
+                    #                                          phase, 
+                    #                                          idx )
+                    pref_pred_OPP = "{}_{}_{:04d}_{}_{}".format( phase[:2],
+                                                                 strepoch, 
+                                                                 idx,
+                                                                 'pred1', 
+                                                                 dset_pre )
                     fname_pred_OPP = "{}/{}.nii.gz".format( outdir,
                                                             pref_pred_OPP )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_OPP )
+                                                    fname=fname_pred_OPP,
+                                                    header=dset_hdr)
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
