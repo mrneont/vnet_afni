@@ -213,7 +213,7 @@ def prep_outdir(din, verb=1):
             print("++ Path of outdir ({}) exists already".format(dout)) 
     else:
         if verb :
-            print("++ Path of outdir ({}) does NOT already".format(dout)) 
+            print("++ Path of outdir ({}) does NOT already exist".format(dout)) 
             print("   Will make it now.") 
         os.mkdir(dout)
 

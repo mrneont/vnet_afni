@@ -24,129 +24,26 @@ import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
 # --------------------------------------------------------------------------
-
-# List of all possible net architectures to choose from.  Add any
-# others here (the if-condition to use one is below). The [0th]
-# one is the default.
-list_net_arch = [ 'vnet_orig',
-                  'Cerebrum',
+'''
+List of  'list of various choices'. The choices could be appeneded to the list and there 
+exists an if condition in main training function 'train_net()' to choose one of them from the list.
+The [0th] choice is always the default.
+'''
+#List of all possible net architectures to choose from. 
+list_net_arch  = [ 'vnet_orig',
+                   'Cerebrum',
                   ]
 
-# List of all possible optimizers to choose from.  Add any others here
-# (the if-condition to use one is below). The [0th] one is the
-# default.
+# List of all possible optimizers to choose from. 
 list_optimizer = [ 'Adam',
                    'Adam16',
                    ]
 
-list_data_norm = [  'min_max_scale',
-                    'z_scoring',]
+# List of all possible data normalizations to choose from. 
+list_data_norm = [ 'min_max_scale',
+                   'z_scoring',]
 # --------------------------------------------------------------------------
 
-def plot_grad_flow_new(named_parameters, strepoch, count, outdir = '.'):
-    '''Plot the gradients flowing through different layers in the net
-    during training.  Can be used for checking for possible gradient
-    vanishing / exploding problems.
-    
-    Usage: Plug this function in Trainer class after loss.backwards()
-    as "plot_grad_flow(self.model.named_parameters())" to visualize
-    the gradient flow.
-
-    Inputs
-    ------
-    named_parameters :  iterator over module/net, yielding both the name of the layer 
-                        as well as the parameter/weight.
-
-    strepoch         : (str) zeropadded epoch number
-    count            : (int) index for the datafile/volume in the DATASET
-    outdir           : (str) directory for outputting image
-
-    '''
-
-    ave_grads       = []
-    max_grads       = []
-    layers          = []
-    grad_fname      = ("grad_{}_{}.png".format(strepoch, count))
-    grad_fname_path = '/'.join([outdir, grad_fname])
-
-    plt.figure(figsize=(10,9))
-    for n, p in named_parameters:
-        if(p.requires_grad) and ("bias" not in n):
-            layers.append(n)
-            ave_grads.append(p.grad.abs().mean())
-            max_grads.append(p.grad.abs().max())
-
-    plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
-    plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
-
-    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
-    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-    plt.xlim(left=0, right=len(ave_grads))
-    plt.ylim(bottom=-0.001, top=0.02) # zoom in on the lower gradient regions
-    plt.xlabel("Layers")
-    plt.ylabel("average gradient")
-    plt.title("Gradient flow")
-    plt.grid(True)
-
-    plt.legend([Line2D([0], [0], color="c", lw=4),
-                Line2D([0], [0], color="b", lw=4),
-                Line2D([0], [0], color="k", lw=4)], 
-               ['max-gradient', 'mean-gradient', 'zero-gradient'])
-    plt.savefig(grad_fname_path, bbox_inches = "tight")
-
-# one idea of scaling the input dsets, to have a range of values [0,
-# 1], to start  
-def min_max_scale(img):
-   
-    data_min   = img.min()
-    data_max   = img.max()
-    #print("orig_data max = {}".format(data_max))
-    #print("orig_data min = {}".format(data_min))
-    normalized = (img - data_min) / (data_max - data_min)
-
-    return normalized
-
-def z_scoring(img):
-   
-    data_mean  = img.mean()
-    data_std   = img.std()
-
-    Z_normalized = (img - data_mean) / data_std
-    #print("orig_data max = {}".format(Z_normalized.max()))
-    #print("orig_data min = {}".format(Z_normalized.min()))
-
-    return Z_normalized
-
-
-
-def visualize_loss(avg_train_losses, avg_val_losses, outdir = '.'):
-
-    oimage = '/'.join([outdir, 'loss_plot.png'])
-
-    # visualize the loss as the network trained
-    fig = plt.figure(figsize=(10,8))
-    plt.plot(range(1,len(avg_train_losses)+1), avg_train_losses, 
-             label='Training Loss')
-    plt.plot(range(1,len(avg_val_losses)+1), avg_val_losses,
-             label='Validation Loss')
-
-    # find position of lowest validation loss
-    minposs = avg_val_losses.index(min(avg_val_losses))+1 
-    
-    plt.axvline(minposs, linestyle='--', color='r',
-                label='Early Stopping Checkpoint')
-
-    plt.xlabel('epochs')
-    plt.ylabel('loss')
-    
-    plt.xlim(0, len(avg_train_losses)+1) # consistent scale
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    #plt.show()
-    fig.savefig(oimage, bbox_inches='tight')
-
-# --------------------------------------------------------------------------
 
 def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
               optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb): 
@@ -345,10 +242,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             for orig_data, mask_data in dataloaders[phase]:
 
                 if data_norm == 'z_scoring':
-                    orig_data = z_scoring(orig_data)
+                    orig_data = lmd.z_scoring(orig_data)
 
                 elif data_norm == 'min_max_scale': 
-                    orig_data = min_max_scale(orig_data)
+                    orig_data = lmd.min_max_scale(orig_data)
 
                     #[YNS] add the other data normalizations 
                     
@@ -379,13 +276,23 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             
                 # zero the parameter gradients
                 optimizer.zero_grad()
+
+
+                # + net.parameters() function returns the network's learnable/trainable parameters.
+                # + The parameters of a layer(in the network) are its weights and biases. 
+                # + print(torch.equal(before[j].data, after[j].data)) is a quick and dirty
+                #   way of finding if the weights of the network layers are still being learned(changing)
+                #   or have become stagnant
+                # + torch.equal(before[j].data, after[j].data) is False means the network's weights are changing
+                # + Note: the weights do not change during the validation phase  
                 #before = list(net.parameters())[0].clone()
+                
 
-                # forward propagation required in both training and
-                # validation phase
-
+                # forward propagation required in both training and validation phase
                 # set gradient calculation only for training phase
                 with torch.set_grad_enabled(phase == 'train'): 
+
+                    # Invoke Network's forward() method to run it. This is a Object Oriented way of doing things.
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
@@ -393,31 +300,33 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     mask_pred = net.forward(orig_data, verb) 
                     # The output mask_pred is of type 'torch.FloatTensor'
 
+                    # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
                     LOSS = loss.forward(mask_pred, mask_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
-                # backward propagation and optimization only if in
+                # backward propagation (where gradients are computed) and optimization only if in
                 # training phase
                 if phase == 'train':
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
-                    #print('net.named_parameters()')
-                    #print(net.named_parameters())
-                    #plot_grad_flow_new(net.named_parameters(), 
-                                    #epoch, idx, outdir = outdir)
-                    #print([z.grad for z in list(net.parameters())])
+                    # + plot the gradient flow to check poosible gradient vanishing / exploding problems.
+                    # + named parameters() provide an iterator that includes both the parameter label/name and the parameter.
+                    #ptt.plot_grad_flow(net.named_parameters(), epoch, idx, outdir = outdir)
+                    
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
                 
                 #after = list(net.parameters())[0].clone()
                 #for j in range(len(before)):
-                    #print('CHANGE in Parameters \n')
-                    #print(torch.equal(before[j].data, after[j].data))
+                    #print("{:30s} : {}".format('Network has stopped learning = ', 
+                        #torch.equal(before[j].data, after[j].data)))
+                    
+                    
                 with io.open(loss_file, 'a') as loss_log:
                     loss_log.write("  {:>5d}  {:10.4f}  {:10.4f}  {:10.4f}\n"
                                    "".format(idx, LOSS, 
@@ -490,7 +399,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             summ_log.write("total time to now : {}\n".format(tot_time))
 
         early_stopping(val_loss, net)
-        visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
+        ptt.visualize_loss(avg_train_losses, avg_val_losses, outdir=outdir)
 
         print("++ {:30s} : {} s".format(' --- total time to now', tot_time))
         print(epochend) # end of FOR loop for EPOCHS

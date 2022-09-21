@@ -39,7 +39,7 @@ class mridataset(data.Dataset):
 
         self.mask_data_list = []
 
-        print(self.orig_data_list)
+        #print(self.orig_data_list)
        
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
@@ -74,6 +74,33 @@ class mridataset(data.Dataset):
 
 # ------------------------------------------------------------------------
 
+
+
+# one idea of scaling the input dsets, to have a range of values [0,
+# 1], to start  
+def min_max_scale(img):
+   
+    data_min   = img.min()
+    data_max   = img.max()
+    #print("orig_data max = {}".format(data_max))
+    #print("orig_data min = {}".format(data_min))
+    normalized = (img - data_min) / (data_max - data_min)
+
+    return normalized
+
+def z_scoring(img):
+   
+    data_mean  = img.mean()
+    data_std   = img.std()
+
+    Z_normalized = (img - data_mean) / data_std
+    #print("orig_data max = {}".format(Z_normalized.max()))
+    #print("orig_data min = {}".format(Z_normalized.min()))
+
+    return Z_normalized
+
+# ------------------------------------------------------------------------
+    
 def mat_generator(foldername, verb=1):
     """Take a subdirectory (training, validation, etc.) and populate
     matrices for the dsets.
