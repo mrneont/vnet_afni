@@ -12,4 +12,4 @@ dependencies:
   - tqdm
   - pip
   - pip:
-    torchsummary
+    - torchsummary
