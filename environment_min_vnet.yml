@@ -10,3 +10,6 @@ dependencies:
   - pytorch                           # vnet mods
   - nibabel
   - tqdm
+  - pip
+  - pip:
+    torchsummary
