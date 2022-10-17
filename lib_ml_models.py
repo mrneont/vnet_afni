@@ -299,7 +299,7 @@ class VNet_orig(nn.Module):
                 #count= count+1
         '''
          
-    def forward(self, x, verb):
+    def forward(self, x, verb=0):
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
         down2 = self.down2(down1)
         down3 = self.down3(down2)
