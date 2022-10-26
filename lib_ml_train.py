@@ -219,20 +219,15 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                                          'min_val', 'max_val'))
 
             # creating an instance of loss function
-            if loss_func == 'SoftDice_00' :
-                loss = lml.CalcLoss_SoftDice_00()
-            elif loss_func == 'WtSoftDice_01' :
-                loss = lml.CalcLoss_WtSoftDice_01()
-            elif loss_func == 'Sorensen_Dice_mean' :
-                loss = lml.CalcLoss_Sorensen_Dice_mean()
-            elif loss_func == 'Sorensen_Dice_single_channel' :
-                loss = lml.CalcLoss_Sorensen_Dice_single_channel()
-            elif loss_func == 'WtSorensen_Dice_03' :
-                loss = lml.CalcLoss_WtSorensen_Dice_03()
-            elif loss_func == 'WtSorensen_Dice_single_channel' :
-                loss = lml.CalcLoss_WtSorensen_Dice_single_channel()
+            if loss_func == 'Sorensen_Dice_mean' :
 
-                
+                loss = lml.CalcLoss_Sorensen_Dice_mean()
+
+            elif loss_func == 'Sorensen_Dice_single_channel':
+
+                loss = lml.CalcLoss_Sorensen_Dice_single_channel()
+
+            
             else:
                 print("This should never happen! 'loss_func' is: {}"
                       "".format(loss_func))

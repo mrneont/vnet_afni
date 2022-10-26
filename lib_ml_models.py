@@ -82,7 +82,8 @@ class RepeatConv(nn.Module):
 
     Returns
     -------
-    This function returns an ensemble of volumetric kernels(5 x 5 x 5 voxels) depending on the number 'n_conv'(either 2 or 3)
+    This function returns the convolved data/ feature map of type 'torch.FloatTensor'
+
     """
 
     def __init__(self, n_channels, n_conv, wt_norm):
@@ -102,6 +103,8 @@ class RepeatConv(nn.Module):
         self.conv = nn.Sequential(*conv_list)
         
     def forward(self, x):
+        
+        #print("++ {:30s} : {}".format('RepeatConv() return data_type', self.conv(x).type()))
         return self.conv(x)
 
 class Down(nn.Module):
@@ -122,7 +125,7 @@ class Down(nn.Module):
 
     Returns
     -------
-    Returns filters required for downsampling and feature extraction at each stage of the encoder 
+    This function returns the convolved data/ feature map of type 'torch.FloatTensor'
 
     """
 
@@ -148,6 +151,9 @@ class Down(nn.Module):
         
     def forward(self, x):
         out = self.downconv(x)
+        
+        #print("++ {:30s} : {}".format('Down() return data_type', out.type()))
+       
         return out + self.conv(out)
 
 class Up(nn.Module):
@@ -169,7 +175,7 @@ class Up(nn.Module):
 
     Returns
     -------
-    Returns filters required for upsampling and feature extraction at each stage of the decoder 
+    This function returns the convolved data/ feature map of type 'torch.FloatTensor'
 
     """
     def __init__(self, in_channels, out_channels, n_conv, wt_norm): 
@@ -196,6 +202,7 @@ class Up(nn.Module):
         x   = self.upconv(x)
         # residual connection only in the decoder part 
         cat = torch.cat((x, down), dim=1) 
+        #print("++ {:30s} : {}".format('Up() return data_type', (cat + self.conv(cat)).type()))
         return cat + self.conv(cat)
 
 # ==================================================================
