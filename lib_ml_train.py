@@ -293,6 +293,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
                     mask_pred = net.forward(orig_data, verb) 
+                    mask_pred_uinq = np.unique((mask_pred).detach().numpy())
+                    #print('mask_pred unique = ',mask_pred_uinq)
+                    if (mask_pred_uinq.all() < 0):
+                        print('HELLO')
+                        sys.exit(10)
+                    
+
                     # The output mask_pred is of type 'torch.FloatTensor'
 
                     # Invoke loss function forward() method to run it.
@@ -333,6 +340,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     print("   {:30s} : {:.4f}"
                           "".format(this_str, LOSS))
 
+                   
                 if (do_nifti and not(half_prec)) :
                     pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
                                                           strepoch, 
@@ -342,24 +350,41 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                                                         pref_targ )
                     lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
                                                     fname=fname_targ )
+                    '''
+                    #predmask_000_train_0001.nii
+                    #ch00-fore_ep-000_train_sub-0001 
+                     ch00-fore_ep-000_train_sub-0001.nii
 
                     pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
                                                           strepoch, 
                                                           phase, 
                                                           idx )
-                    fname_pred = "{}/{}.nii.gz".format( outdir,
-                                                        pref_pred )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred )
 
-                    pref_pred_OPP = "{}_{}_{}_{:04d}".format( 'predmask_OPP',
+                        
+                    {}-{}_{}_{:04d}
+                    {ch00-fore_ep}-{000}_{train}_{:04d}
+                    ch01-back_ep-000_train_sub-0001
+                    '''
+
+                    pref_pred_ch00_fore   = "{}-{}_{}_{}-{:04d}".format('ch00-fore_ep', 
+                                                          strepoch, 
+                                                          phase,
+                                                          'sub', 
+                                                          idx )
+                    fname_pred_ch00_fore  = "{}/{}.nii.gz".format( outdir,
+                                                        pref_pred_ch00_fore )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                    fname=fname_pred_ch00_fore )
+
+                    pref_pred_ch01_back = "{}-{}_{}_{}-{:04d}".format('ch01-back_ep',
                                                               strepoch, 
-                                                              phase, 
+                                                              phase,
+                                                              'sub', 
                                                               idx )
-                    fname_pred_OPP = "{}/{}.nii.gz".format( outdir,
-                                                            pref_pred_OPP )
+                    fname_pred_ch01_back = "{}/{}.nii.gz".format( outdir,
+                                                            pref_pred_ch01_back )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_OPP )
+                                                    fname=fname_pred_ch01_back )
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
