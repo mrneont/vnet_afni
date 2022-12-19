@@ -366,25 +366,25 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     ch01-back_ep-000_train_sub-0001
                     '''
 
-                    pref_pred_ch00_fore   = "{}-{}_{}_{}-{:04d}".format('ch00-fore_ep', 
-                                                          strepoch, 
-                                                          phase,
-                                                          'sub', 
-                                                          idx )
-                    fname_pred_ch00_fore  = "{}/{}.nii.gz".format( outdir,
-                                                        pref_pred_ch00_fore )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred_ch00_fore )
-
-                    pref_pred_ch01_back = "{}-{}_{}_{}-{:04d}".format('ch01-back_ep',
+                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
                                                               strepoch, 
                                                               phase,
                                                               'sub', 
                                                               idx )
-                    fname_pred_ch01_back = "{}/{}.nii.gz".format( outdir,
-                                                            pref_pred_ch01_back )
+                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
+                                                            pref_pred_ch00_back )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                    fname=fname_pred_ch00_back )
+
+                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
+                                                          strepoch, 
+                                                          phase,
+                                                          'sub', 
+                                                          idx )
+                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
+                                                        pref_pred_ch01_fore )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_ch01_back )
+                                                    fname=fname_pred_ch01_fore )
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
