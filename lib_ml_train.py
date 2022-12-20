@@ -227,6 +227,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                 loss = lml.CalcLoss_Sorensen_Dice_single_channel()
 
+            elif loss_func == 'WtSorensen_Dice' :
+
+                loss = lml.CalcLoss_WtSorensen_Dice()
+
             
             else:
                 print("This should never happen! 'loss_func' is: {}"
@@ -234,7 +238,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 sys.exit(5)
 
             idx = 1 # index for the datafile/volume in the DATASET
-            for orig_data, mask_data in dataloaders[phase]:
+            for (orig_data, mask_data, depth_map_data) in dataloaders[phase]:
 
                 if data_norm == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
@@ -253,11 +257,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
+                    depth_map_data = depth_map_data.to(device).half()
                 
                 else: 
 
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
+                    depth_map_data = depth_map_data.to(device)
 
                 if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
@@ -293,19 +299,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
                     mask_pred = net.forward(orig_data, verb) 
-                    mask_pred_uinq = np.unique((mask_pred).detach().numpy())
-                    #print('mask_pred unique = ',mask_pred_uinq)
-                    if (mask_pred_uinq.all() < 0):
-                        print('HELLO')
-                        sys.exit(10)
-                    
-
+                   
                     # The output mask_pred is of type 'torch.FloatTensor'
 
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data)
+                    LOSS = loss.forward(mask_pred, mask_data, depth_map_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
@@ -385,6 +385,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                                                         pref_pred_ch01_fore )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
                                                     fname=fname_pred_ch01_fore )
+
+                    
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA

@@ -12,7 +12,8 @@ import lib_nibabel_utils    as lnu
 # name should be entered here.  The [0]th one in the list is the
 # default.
 list_CalcLoss = [ "Sorensen_Dice_mean",
-                  "Sorensen_Dice_single_channel"]
+                  "Sorensen_Dice_single_channel",
+                  "WtSorensen_Dice"]
 
 # =========================================================================
 
@@ -134,7 +135,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
         super(CalcLoss_Sorensen_Dice_mean, self).__init__()
         
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt , depth_map):
 
 
         # predicted_mask dim  is in the format of (batch_sz,num_out_ch, D, H, W)
@@ -171,7 +172,7 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         super(CalcLoss_Sorensen_Dice_single_channel, self).__init__()
         
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, depth_map):
 
         num_out_ch   = pred.size()[1]
         target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
@@ -193,3 +194,73 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         # returning the dice loss pertaining to the channel containing predicted brain mask. 
         return 1 - dice[0][1]
        
+
+
+class CalcLoss_WtSorensen_Dice(nn.Module):
+
+    '''
+    +  Sorensen–Dice index = 2*|X intersection Y| / |X| + |Y|
+    +  Ref:
+       https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+
+    '''
+
+    def __init__(self,):
+        super(CalcLoss_WtSorensen_Dice, self).__init__()
+        
+
+    def forward(self, pred, gt , depth_map):
+
+
+        # predicted_mask dim  is in the format of (batch_sz,num_out_ch, D, H, W)
+        # num_out_ch is the number of output channels and is equal to the number of classes 
+        
+
+        num_out_ch   = pred.size()[1]
+        #target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
+        target       = make_one_hot_stack(gt, num_classes = num_out_ch)
+
+        depth_map = depth_map.unsqueeze(0) 
+        #print('depth_map size= ',depth_map.size())
+
+        depth_map_abs =  torch.abs(depth_map)
+
+        #lnu.write_tensor_to_disk_nifti(depth_map[0][0], 'depth_map')
+        #print('depth_map_abs size= ',depth_map_abs.size())
+        wts           = depth_map_abs - depth_map_abs.min()
+        #print('wts size= ',wts.size())
+
+        flr = 0.2
+        dist_scale = 50
+
+
+        wts_exp = (1-flr)*torch.exp(-0.693*wts/dist_scale)+ flr
+        #print('wts_exp size= ',wts_exp.size())
+
+         #in order to check the wts, write the wts_exp as a NIFTI dataset 
+
+        #print('wts_exp[0][0] size= ',wts_exp[0][0].size())
+        #lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_exp')
+        
+        wtPT = wts_exp * pred * target
+        PT   = pred * target
+        #print('size of wts_exp = ',wts_exp.size())
+        #print('size of wtPT = ',wtPT.size())
+        #print('size of PT = ',PT.size())
+
+        #lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_expbackground')
+        lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_expforeground')
+        #lnu.write_tensor_to_disk_nifti(target[0][0], 'targetbackground')
+        lnu.write_tensor_to_disk_nifti(target[0][1], 'targetforeground')
+        #lnu.write_tensor_to_disk_nifti(wtPT[0][0], 'wtPTbackground')
+        lnu.write_tensor_to_disk_nifti(wtPT[0][1], 'wtPTforeground')
+        #lnu.write_tensor_to_disk_nifti(PT[0][0], 'PTbackground')
+        lnu.write_tensor_to_disk_nifti(PT[0][1], 'PTforeground')
+
+        numerator    = 2.0 * torch.sum(wts_exp * pred * target, dim=(2, 3, 4))
+        denominator  = torch.sum(wts_exp * (pred+target), dim=(2, 3, 4))
+        
+        dice         = numerator/denominator
+       
+          
+        return 1 - torch.mean(dice)
