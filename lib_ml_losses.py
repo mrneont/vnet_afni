@@ -248,15 +248,6 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
         #print('size of wtPT = ',wtPT.size())
         #print('size of PT = ',PT.size())
 
-        #lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_expbackground')
-        lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_expforeground')
-        #lnu.write_tensor_to_disk_nifti(target[0][0], 'targetbackground')
-        lnu.write_tensor_to_disk_nifti(target[0][1], 'targetforeground')
-        #lnu.write_tensor_to_disk_nifti(wtPT[0][0], 'wtPTbackground')
-        lnu.write_tensor_to_disk_nifti(wtPT[0][1], 'wtPTforeground')
-        #lnu.write_tensor_to_disk_nifti(PT[0][0], 'PTbackground')
-        lnu.write_tensor_to_disk_nifti(PT[0][1], 'PTforeground')
-
         numerator    = 2.0 * torch.sum(wts_exp * pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(wts_exp * (pred+target), dim=(2, 3, 4))
         
