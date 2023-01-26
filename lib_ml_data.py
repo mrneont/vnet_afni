@@ -39,23 +39,37 @@ class mridataset(data.Dataset):
 
         Nroot = len(root_path)
 
+        if Nroot == 0 :
+            print("** ERROR: no datasets found in '{}'".format(orig_path_str))
+            sys.exit(3)
+
         # lists of dsets made in parallel, must match item for item
         self.mask_data_list = []
         self.dpth_data_list = []
        
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
+
             mask_file = orig_file.replace('orig', 'mask')
             mask_dset = ''.join([root_path, mask_file])
             self.mask_data_list.append(mask_dset)
-            dpth_file = orig_file.replace('orig', 'edt')
 
+            dpth_file = orig_file.replace('orig', 'edt')
             dpth_dset = ''.join([root_path, dpth_file])
             self.dpth_data_list.append(dpth_dset)
 
-        #self.mask_data_list = [x for x in \
-        #glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
-        #self.mask_data_list.sort()
+        # verify that all the mask and dpth files exist
+        MISSING_DSET = 0
+        for dset in self.mask_data_list :
+            if not(os.path.isfile(dset)):
+                MISSING_DSET = 1
+                print("** ERROR: required dataset not found: {}".format(dset))
+        for dset in self.dpth_data_list :
+            if not(os.path.isfile(dset)):
+                MISSING_DSET = 1
+                print("** ERROR: required dataset not found: {}".format(dset))
+        if MISSING_DSET :
+            sys.exit(5)
 
         if verb > 1:
             print("++ Check matching of input dsets:")
