@@ -32,27 +32,29 @@ class mridataset(data.Dataset):
     """
 
     def __init__(self, root_path, verb=0):
-        self.orig_data_list = [x for x in glob.glob(os.path.join(root_path, 'orig', '*.nii.gz'))]
+
+        orig_path_str = os.path.join(root_path, 'orig', '*.nii.gz')
+        self.orig_data_list = glob.glob(orig_path_str)
         self.orig_data_list.sort()
 
         Nroot = len(root_path)
 
+        # lists of dsets made in parallel, must match item for item
         self.mask_data_list = []
-        self.depth_map_data_list = []
-
-        #print(self.orig_data_list)
+        self.dpth_data_list = []
        
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
             mask_file = orig_file.replace('orig', 'mask')
             mask_dset = ''.join([root_path, mask_file])
             self.mask_data_list.append(mask_dset)
-            depth_map_file = orig_file.replace('orig', 'edt')
+            dpth_file = orig_file.replace('orig', 'edt')
 
-            depth_map_dset = ''.join([root_path, depth_map_file])
-            self.depth_map_data_list.append(depth_map_dset)
+            dpth_dset = ''.join([root_path, dpth_file])
+            self.dpth_data_list.append(dpth_dset)
 
-        #self.mask_data_list = [x for x in glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
+        #self.mask_data_list = [x for x in \
+        #glob.glob(os.path.join(root_path, 'mask', '*.nii.gz'))]
         #self.mask_data_list.sort()
 
         if verb > 1:
@@ -60,22 +62,22 @@ class mridataset(data.Dataset):
             for i in range(len(self.orig_data_list)):
                 print("{:20s} --- {:20s}".format(self.orig_data_list[i], 
                                                  self.mask_data_list[i],
-                                                 self.depth_map_data_list[i]))
+                                                 self.dpth_data_list[i]))
 
     def __getitem__(self, index):
         
         self.orig_image  = nib.load(self.orig_data_list[index])
         self.mask_image  = nib.load(self.mask_data_list[index])
-        self.depth_map_image  = nib.load(self.depth_map_data_list[index])
+        self.dpth_image  = nib.load(self.dpth_data_list[index])
         self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
         self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
-        self.depth_map_data   = np.asanyarray(self.depth_map_image.dataobj).astype('float32')
+        self.dpth_data   = np.asanyarray(self.dpth_image.dataobj).astype('float32')
         
-        return (self.orig_data, self.mask_data,self.depth_map_data)
+        return (self.orig_data, self.mask_data, self.dpth_data)
 
     def __len__(self):
         return len(self.orig_data_list)

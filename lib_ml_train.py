@@ -242,7 +242,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 sys.exit(5)
 
             idx = 1 # index for the datafile/volume in the DATASET
-            for (orig_data, mask_data, depth_map_data) in dataloaders[phase]:
+            for (orig_data, mask_data, dpth_data) in dataloaders[phase]:
 
                 if data_norm == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
@@ -262,13 +262,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
-                    depth_map_data = depth_map_data.to(device).half()
+                    dpth_data = dpth_data.to(device).half()
                 
                 else: 
 
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
-                    depth_map_data = depth_map_data.to(device)
+                    dpth_data = dpth_data.to(device)
 
                 if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
@@ -294,7 +294,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 #   learned(changing) or have become stagnant
                 # + torch.equal(before[j].data, after[j].data) is
                 #   False means the network's weights are changing
-                # + Note: the weights do not change during the validation phase  
+                # + Note: the weights do not change during the validation 
+                #   phase  
                 #   before = list(net.parameters())[0].clone()
                 
                 # forward propagation required in both training and
@@ -316,7 +317,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data, depth_map_data)
+                    LOSS = loss.forward(mask_pred, mask_data, dpth_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 

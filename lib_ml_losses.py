@@ -142,7 +142,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
         super(CalcLoss_Sorensen_Dice_mean, self).__init__()
         
 
-    def forward(self, pred, gt , depth_map):
+    def forward(self, pred, gt , dpth):
 
         # predicted_mask dim is in the format of (batch_sz,num_out_ch,
         # D, H, W)
@@ -178,7 +178,7 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         super(CalcLoss_Sorensen_Dice_single_channel, self).__init__()
         
 
-    def forward(self, pred, gt, depth_map):
+    def forward(self, pred, gt, dpth):
 
         num_out_ch   = pred.size()[1]
         target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
@@ -214,7 +214,7 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
         super(CalcLoss_WtSorensen_Dice, self).__init__()
         
 
-    def forward(self, pred, gt , depth_map):
+    def forward(self, pred, gt , dpth):
 
         # predicted_mask dim is in the format of (batch_sz,num_out_ch,
         # D, H, W)
@@ -225,14 +225,14 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
         #target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
         target       = make_one_hot_stack(gt, num_classes = num_out_ch)
 
-        depth_map = depth_map.unsqueeze(0) 
-        #print('depth_map size= ',depth_map.size())
+        dpth = dpth.unsqueeze(0) 
+        #print('dpth size= ',dpth.size())
 
-        depth_map_abs =  torch.abs(depth_map)
+        dpth_abs =  torch.abs(dpth)
 
-        #lnu.write_tensor_to_disk_nifti(depth_map[0][0], 'depth_map')
-        #print('depth_map_abs size= ',depth_map_abs.size())
-        wts           = depth_map_abs - depth_map_abs.min()
+        #lnu.write_tensor_to_disk_nifti(dpth[0][0], 'dpth')
+        #print('dpth_abs size= ',dpth_abs.size())
+        wts           = dpth_abs - dpth_abs.min()
         #print('wts size= ',wts.size())
 
         flr = 0.2
