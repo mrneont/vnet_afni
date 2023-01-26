@@ -24,29 +24,33 @@ import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
 # --------------------------------------------------------------------------
-'''
-List of  'list of various choices'. The choices could be appeneded to the list and there 
-exists an if condition in main training function 'train_net()' to choose one of them from the list.
-The [0th] choice is always the default.
-'''
-#List of all possible net architectures to choose from. 
+
+# List of 'list of various choices'. The choices could be appended
+# to the list and there exists an if condition in main training function
+# 'train_net()' to choose one of them from the list.  The [0th] choice
+# is always the default.  
+
+# List of all possible net architectures to choose from. 
 list_net_arch  = [ 'vnet_orig',
                    'Cerebrum',
-                  ]
+]
 
 # List of all possible optimizers to choose from. 
 list_optimizer = [ 'Adam',
                    'Adam16',
-                   ]
+]
 
 # List of all possible data normalizations to choose from. 
 list_data_norm = [ 'min_max_scale',
-                   'z_scoring',]
+                   'z_scoring',
+]
+
 # --------------------------------------------------------------------------
 
 
 def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
-              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb): 
+              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, 
+              verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -249,11 +253,12 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     #[YNS] add the other data normalizations 
                     
                 else:
-                    print("This should never happen! 'data normalization' is: {}"
-                      "".format(data_norm))
+                    print("This should never happen! "
+                          "'data normalization' is: {}".format(data_norm))
                     sys.exit(6)
 
-                if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
+                if (device == torch.device('cuda') and (half_prec == 1)): 
+                    # device == "cuda"
                     
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
@@ -279,21 +284,27 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 optimizer.zero_grad()
 
 
-                # + net.parameters() function returns the network's learnable/trainable parameters.
-                # + The parameters of a layer(in the network) are its weights and biases. 
-                # + print(torch.equal(before[j].data, after[j].data)) is a quick and dirty
-                #   way of finding if the weights of the network layers are still being learned(changing)
-                #   or have become stagnant
-                # + torch.equal(before[j].data, after[j].data) is False means the network's weights are changing
+                # + net.parameters() function returns the network's
+                #   learnable/trainable parameters.
+                # + The parameters of a layer(in the network) are its
+                #   weights and biases.
+                # + print(torch.equal(before[j].data, after[j].data))
+                #   is a quick and dirty way of finding if the weights
+                #   of the network layers are still being
+                #   learned(changing) or have become stagnant
+                # + torch.equal(before[j].data, after[j].data) is
+                #   False means the network's weights are changing
                 # + Note: the weights do not change during the validation phase  
-                #before = list(net.parameters())[0].clone()
+                #   before = list(net.parameters())[0].clone()
                 
-
-                # forward propagation required in both training and validation phase
-                # set gradient calculation only for training phase
+                # forward propagation required in both training and
+                # validation phase set gradient calculation only for
+                # training phase
                 with torch.set_grad_enabled(phase == 'train'): 
 
-                    # Invoke Network's forward() method to run it. This is a Object Oriented way of doing things.
+                    # Invoke Network's forward() method to run
+                    # it. This is a Object Oriented way of doing
+                    # things.
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
@@ -309,16 +320,19 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
-                # backward propagation (where gradients are computed) and optimization only if in
-                # training phase
+                # backward propagation (where gradients are computed)
+                # and optimization only if in training phase
                 if phase == 'train':
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
-                    # + plot the gradient flow to check poosible gradient vanishing / exploding problems.
-                    # + named parameters() provide an iterator that includes both the parameter label/name and the parameter.
-                    #ptt.plot_grad_flow(net.named_parameters(), epoch, idx, outdir = outdir)
-                    
+                    # + plot the gradient flow to check poosible
+                    #   gradient vanishing / exploding problems.
+                    # + named parameters() provide an iterator that
+                    #   includes both the parameter label/name and the
+                    #   parameter.
+                    #ptt.plot_grad_flow(net.named_parameters(), epoch, 
+                    #                   idx, outdir = outdir)
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
