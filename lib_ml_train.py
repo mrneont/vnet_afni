@@ -92,14 +92,19 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         if seed != None :
             torch.manual_seed(seed)
 
+    # Some loss functions use weights derived from an additional input
+    # 'depth map' (dpth) dataset, and others do not.
+    USE_DPTH_WTS = lml.dict_CalcLoss[loss_func]
+
     if verb :
         print("++ {:30s} : {}".format('Device being used', device))
         print("++ {:30s} : {}".format('Number of epochs', num_epochs))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
-        print("++ {:30s} : {}".format('data normalization', data_norm))
-        print("++ {:30s} : {}".format('loss function', loss_func))
+        print("++ {:30s} : {}".format('Data normalization', data_norm))
+        print("++ {:30s} : {}".format('Loss function', loss_func))
+        print("++ {:30s} : {}".format('Using weight datasets', USE_DPTH_WTS))
         print("++ {:30s} : {}".format('Network architecture', net_arch))
-        
+
     if half_prec == 1:
         print("++ {:30s} : {}".format('Precision', 'half'))
     else :
@@ -163,11 +168,15 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
 
     train_datapath = os.path.join(data_path, 'training')
-    train_set      = lmd.mridataset(train_datapath, verb=verb)
+    train_set      = lmd.mridataset(train_datapath, 
+                                    use_dpth_wts=USE_DPTH_WTS, 
+                                    verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
-    val_set        = lmd.mridataset(val_datapath, verb=verb)
+    val_set        = lmd.mridataset(val_datapath, 
+                                    use_dpth_wts=USE_DPTH_WTS, 
+                                    verb=verb)
     Nval           = len(val_set)
    
     dataloaders = {
@@ -224,17 +233,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
             # creating an instance of loss function
             if loss_func == 'Sorensen_Dice_mean' :
-
                 loss = lml.CalcLoss_Sorensen_Dice_mean()
 
             elif loss_func == 'Sorensen_Dice_single_channel':
-
                 loss = lml.CalcLoss_Sorensen_Dice_single_channel()
 
             elif loss_func == 'WtSorensen_Dice' :
-
                 loss = lml.CalcLoss_WtSorensen_Dice()
-
             
             else:
                 print("This should never happen! 'loss_func' is: {}"
@@ -243,6 +248,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
             idx = 1 # index for the datafile/volume in the DATASET
             for (orig_data, mask_data, dpth_data) in dataloaders[phase]:
+                # orig_data and mask_data start as arrays here
+                # dpth_data will either be an array or a None
 
                 if data_norm == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
@@ -259,16 +266,16 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
                 if (device == torch.device('cuda') and (half_prec == 1)): 
                     # device == "cuda"
-                    
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
-                    dpth_data = dpth_data.to(device).half()
+                    if USE_DPTH_WTS :
+                        dpth_data = dpth_data.to(device).half()
                 
                 else: 
-
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
-                    dpth_data = dpth_data.to(device)
+                    if USE_DPTH_WTS :
+                        dpth_data = dpth_data.to(device)
 
                 if idx < 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
@@ -279,6 +286,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 # Try to bring each data into the format: (1 X 1 X D X H X W)
                 orig_data = orig_data.unsqueeze(0) 
                 mask_data = mask_data.unsqueeze(0) 
+                
+                # [PT] Q: should dpth_data also be unsqueezed here, if it
+                # is being used?
+
             
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -317,7 +328,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data, dpth_data)
+                    if USE_DPTH_WTS :
+                        LOSS = loss.forward(mask_pred, mask_data, dpth_data)
+                    else:
+                        LOSS = loss.forward(mask_pred, mask_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 

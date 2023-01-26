@@ -143,7 +143,7 @@ def get_args():
                         help='weight normalization' + '\n' +
                         '(def: {})'.format(str(def_wt_norm)))
 
-    def_loss_func = lml.list_CalcLoss[0]
+    def_loss_func = lml.DEF_CalcLoss
     parser.add_argument("-L", "--Loss", 
                         dest="loss_func", 
                         type=str, default=def_loss_func,
@@ -345,4 +345,5 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
-                         optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb )
+                         optimizer, half_prec, wt_norm, data_norm, do_nifti, 
+                         outdir, verb )

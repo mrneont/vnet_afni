@@ -6,14 +6,21 @@ import lib_EDT
 import numpy as np
 import lib_nibabel_utils    as lnu
 
+# =========================================================================
+# Loss function info
+# Every time a new loss function is added, its name should be entered here.
 
-# List of all lost function suffixes, so we can check if user has
-# input a valid one.  Every time a new loss function is added, its
-# name should be entered here.  The [0]th one in the list is the
-# default.
-list_CalcLoss = [ "Sorensen_Dice_mean",
-                  "Sorensen_Dice_single_channel",
-                  "WtSorensen_Dice"]
+# Dictionary, with T/F about whether a weight dset is needed.
+dict_CalcLoss = { "Sorensen_Dice_mean"           : False,
+                  "Sorensen_Dice_single_channel" : False,
+                  "WtSorensen_Dice"              : True,              
+}
+
+# The list of loss function names.  Actual function is: CalcLoss_<name>.
+list_CalcLoss = list(dict_CalcLoss.keys())
+list_CalcLoss.sort()
+
+DEF_CalcLoss  = "Sorensen_Dice_mean"   # default, if no loss stated
 
 # =========================================================================
 
@@ -142,7 +149,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
         super(CalcLoss_Sorensen_Dice_mean, self).__init__()
         
 
-    def forward(self, pred, gt , dpth):
+    def forward(self, pred, gt):
 
         # predicted_mask dim is in the format of (batch_sz,num_out_ch,
         # D, H, W)
@@ -178,7 +185,7 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         super(CalcLoss_Sorensen_Dice_single_channel, self).__init__()
         
 
-    def forward(self, pred, gt, dpth):
+    def forward(self, pred, gt):
 
         num_out_ch   = pred.size()[1]
         target       = make_one_hot_scatter(gt, num_classes = num_out_ch)

@@ -31,67 +31,116 @@ class mridataset(data.Dataset):
   It retrieves the corresponding groundtruth/mask
     """
 
-    def __init__(self, root_path, verb=0):
+    def __init__(self, root_path, use_dpth_wts=None, verb=0):
 
-        orig_path_str = os.path.join(root_path, 'orig', '*.nii.gz')
+        # initialize 
+        self.orig_data_list = []
+        self.mask_data_list = []
+        self.dpth_data_list = []        # only populated if use_dpth_wts
+
+        self.root_path      = root_path
+        self.use_dpth_wts   = use_dpth_wts
+        self.verb           = verb
+
+        # ===============================================================
+
+        orig_path_str = os.path.join(self.root_path, 'orig', '*.nii.gz')
         self.orig_data_list = glob.glob(orig_path_str)
         self.orig_data_list.sort()
 
-        Nroot = len(root_path)
+        if self.verb > 1 :
+            print("++ All orig dsets:")
+            for x in self.orig_data_list:
+                print(x)
 
-        if Nroot == 0 :
-            print("** ERROR: no datasets found in '{}'".format(orig_path_str))
+        # verify that we have data
+        Norig_dset = len(self.orig_data_list)
+        if Norig_dset == 0 :
+            print("** ERROR: no orig datasets found in '{}'"
+                  "".format(orig_path_str))
             sys.exit(3)
+        else:
+            print("++ Found {} orig dsets".format(Norig_dset))
+
+        # length of root string, used below
+        Nroot = len(self.root_path)
 
         # lists of dsets made in parallel, must match item for item
-        self.mask_data_list = []
-        self.dpth_data_list = []
-       
         for orig_dset in self.orig_data_list:
             orig_file = orig_dset[Nroot:]
 
             mask_file = orig_file.replace('orig', 'mask')
-            mask_dset = ''.join([root_path, mask_file])
+            mask_dset = ''.join([self.root_path, mask_file])
             self.mask_data_list.append(mask_dset)
 
-            dpth_file = orig_file.replace('orig', 'edt')
-            dpth_dset = ''.join([root_path, dpth_file])
-            self.dpth_data_list.append(dpth_dset)
+            if self.use_dpth_wts :
+                dpth_file = orig_file.replace('orig', 'edt')
+                dpth_dset = ''.join([self.root_path, dpth_file])
+                self.dpth_data_list.append(dpth_dset)
 
         # verify that all the mask and dpth files exist
         MISSING_DSET = 0
         for dset in self.mask_data_list :
             if not(os.path.isfile(dset)):
                 MISSING_DSET = 1
-                print("** ERROR: required dataset not found: {}".format(dset))
-        for dset in self.dpth_data_list :
-            if not(os.path.isfile(dset)):
-                MISSING_DSET = 1
-                print("** ERROR: required dataset not found: {}".format(dset))
+                print("** ERROR: required mask dataset not found: "
+                      "{}".format(dset))
+        if self.use_dpth_wts :
+            for dset in self.dpth_data_list :
+                if not(os.path.isfile(dset)):
+                    MISSING_DSET = 1
+                    print("** ERROR: required dpth dataset not found: "
+                          "{}".format(dset))
         if MISSING_DSET :
             sys.exit(5)
 
-        if verb > 1:
+        if self.verb > 1:
             print("++ Check matching of input dsets:")
             for i in range(len(self.orig_data_list)):
-                print("{:20s} --- {:20s}".format(self.orig_data_list[i], 
-                                                 self.mask_data_list[i],
-                                                 self.dpth_data_list[i]))
+                if self.use_dpth_wts :
+                    print("{:20s} --- {:20s}--- {:20s}"
+                          "".format(self.orig_data_list[i], 
+                                    self.mask_data_list[i],
+                                    self.dpth_data_list[i]))
+                else:
+                    print("{:20s} --- {:20s}"
+                          "".format(self.orig_data_list[i], 
+                                    self.mask_data_list[i]))
 
     def __getitem__(self, index):
+        """Output set of 3 index-th datasets as arrays.
+
+        The third item in the tuple might be an empty array, if the
+        dpth weights are not being used.  The DataLoader needed each
+        item to be an array (otherwise the third item might have been None).
+
+        Return
+        ------
+        orig_data     : array of original data
+        mask_data     : array of mask data
+        dpth_data     : if use_dpth_wts, an array of depth_map data; else, empty
+
+        """
         
+        # [PT] Q: do we always want these thesholding bits done, or
+        # should those be controlled by a user option?
         self.orig_image  = nib.load(self.orig_data_list[index])
-        self.mask_image  = nib.load(self.mask_data_list[index])
-        self.dpth_image  = nib.load(self.dpth_data_list[index])
         self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
+
+        self.mask_image  = nib.load(self.mask_data_list[index])
         self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
-        self.dpth_data   = np.asanyarray(self.dpth_image.dataobj).astype('float32')
-        
-        return (self.orig_data, self.mask_data, self.dpth_data)
+
+        if self.use_dpth_wts :
+            self.dpth_image  = nib.load(self.dpth_data_list[index])
+            self.dpth_data   = np.asanyarray(self.dpth_image.dataobj).astype('float32')
+        else:
+            self.dpth_data   = np.ndarray(0) 
+
+        return self.orig_data, self.mask_data, self.dpth_data
 
     def __len__(self):
         return len(self.orig_data_list)
