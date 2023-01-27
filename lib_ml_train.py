@@ -385,7 +385,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                         lnu.make_names_of_dsets(outdir, strepoch, phase, idx)
 
                     # this only needs to be written out in first iteration
-                    if idx == 1 :
+                    if epoch == 0 :
                         lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
                                                         fname=fname_targ,
                                                         head=orig_head)
