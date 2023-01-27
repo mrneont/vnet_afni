@@ -153,12 +153,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     # load optimizer
     if optimizer == 'Adam':
         if half_prec == 1:
-
             optimizer = Adam16(net.parameters(), lr=lr, 
                            betas=(0.9, 0.999), 
                            eps=1e-8, weight_decay=0)
         else : #(half_prec == 0)
-           
             optimizer = optim.Adam(net.parameters(), lr=lr)
     
     else:
@@ -248,9 +246,20 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
             idx = 1 # index for the datafile/volume in the DATASET
             for (orig_data, mask_data, dpth_data) in dataloaders[phase]:
-                # orig_data and mask_data start as arrays here
-                # dpth_data will either be an array or a None
+                # orig_data and mask_data start as (full) arrays here
+                # dpth_data will be either full array or an empty one
 
+                # ---- get the header for this dset
+                if phase == 'train' :
+                    idxm1 = idx - 1
+                    orig_head = train_set.orig_head_list[idxm1]
+                elif phase == 'val' :
+                    idxm1 = idx - 1
+                    orig_head = val_set.orig_head_list[idxm1]
+                else: 
+                    orig_head = None
+
+                # ---- scale/normalize the input data in some fashion
                 if data_norm == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
 
@@ -264,6 +273,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                           "'data normalization' is: {}".format(data_norm))
                     sys.exit(6)
 
+                # ---- possible GPU niceties
                 if (device == torch.device('cuda') and (half_prec == 1)): 
                     # device == "cuda"
                     orig_data = orig_data.to(device).half()
@@ -277,7 +287,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     if USE_DPTH_WTS :
                         dpth_data = dpth_data.to(device)
 
-                if idx < 2 :
+                if idx > 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
 
@@ -366,56 +376,30 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 if verb :
                     this_str = "... dset {:5d} / {:5d}".format(idx, Ndset)
                     this_str+= ", loss"
-                    print("   {:30s} : {:.4f}"
-                          "".format(this_str, LOSS))
+                    print("   {:30s} : {:.4f}".format(this_str, LOSS))
 
-                   
+                # [PT] Q: why can't we output dsets if half_prec is True?
                 if (do_nifti and not(half_prec)) :
-                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
-                    fname_targ = "{}/{}.nii.gz".format( outdir,
-                                                        pref_targ )
-                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
-                                                    fname=fname_targ )
-                    '''
-                    #predmask_000_train_0001.nii
-                    #ch00-fore_ep-000_train_sub-0001 
-                     ch00-fore_ep-000_train_sub-0001.nii
 
-                    pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
+                    fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
+                        lnu.make_names_of_dsets(outdir, strepoch, phase, idx)
 
-                        
-                    {}-{}_{}_{:04d}
-                    {ch00-fore_ep}-{000}_{train}_{:04d}
-                    ch01-back_ep-000_train_sub-0001
-                    '''
+                    # this only needs to be written out in first iteration
+                    if idx == 1 :
+                        lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                                                        fname=fname_targ,
+                                                        head=orig_head)
 
-                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
-                                                              strepoch, 
-                                                              phase,
-                                                              'sub', 
-                                                              idx )
-                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
-                                                            pref_pred_ch00_back )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred_ch00_back )
+                    # [PT] I don't think this needs to be written out
+                    # generally, at present.  Just at higher verbosity seems fine?
+                    if verb > 3 :
+                        lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                        fname=fname_pred_ch00_back,
+                                                        head=orig_head )
 
-                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
-                                                          strepoch, 
-                                                          phase,
-                                                          'sub', 
-                                                          idx )
-                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
-                                                        pref_pred_ch01_fore )
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_ch01_fore )
-
-                    
+                                                    fname=fname_pred_ch01_fore,
+                                                    head=orig_head )
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
@@ -460,3 +444,41 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     perf_log.close()
 
     return net
+
+
+
+
+"""
+                if (do_nifti and not(half_prec)) :
+                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
+                                                          strepoch, 
+                                                          phase, 
+                                                          idx )
+                    fname_targ = "{}/{}.nii.gz".format( outdir,
+                                                        pref_targ )
+                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                                                    fname=fname_targ,
+                                                    head=orig_head)
+
+                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
+                                                              strepoch, 
+                                                              phase,
+                                                              'sub', 
+                                                              idx )
+                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
+                                                            pref_pred_ch00_back )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                    fname=fname_pred_ch00_back,
+                                                    head=orig_head )
+
+                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
+                                                          strepoch, 
+                                                          phase,
+                                                          'sub', 
+                                                          idx )
+                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
+                                                        pref_pred_ch01_fore )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
+                                                    fname=fname_pred_ch01_fore,
+                                                    head=orig_head )
+"""

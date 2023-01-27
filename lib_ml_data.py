@@ -38,6 +38,8 @@ class mridataset(data.Dataset):
         self.mask_data_list = []
         self.dpth_data_list = []        # only populated if use_dpth_wts
 
+        self.orig_head_list = []        # store all the headers
+
         self.root_path      = root_path
         self.use_dpth_wts   = use_dpth_wts
         self.verb           = verb
@@ -67,6 +69,8 @@ class mridataset(data.Dataset):
 
         # lists of dsets made in parallel, must match item for item
         for orig_dset in self.orig_data_list:
+            A = nib.load(orig_dset)
+            self.orig_head_list.append(A.header.copy())
             orig_file = orig_dset[Nroot:]
 
             mask_file = orig_file.replace('orig', 'mask')
@@ -130,7 +134,6 @@ class mridataset(data.Dataset):
         self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
         self.down2_thresh = np.percentile(self.orig_data, 2) 
         self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
-
         self.mask_image  = nib.load(self.mask_data_list[index])
         self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
 
@@ -277,20 +280,12 @@ def mat_generator(foldername, verb=1):
         orig_image     = nib.load(orig_data_file)
         # from:
         # https://www.programcreek.com/python/example/98176/nibabel.load
-        ### [PT] Q: Should this always be "astype('int16')"?  Could we
-        ### save space with making the mask data binarized?  And is
-        ### there an issue that x was initialized above as type
-        ### 'float', while now the data array has type int16?
         orig_data       = np.asanyarray(orig_image.dataobj).astype('float32')  
         orig_mat[index] = orig_data
         
         mask_filename  = mask_data_list[index]
         mask_data_file = os.path.join(mask_data_path, mask_filename)
         mask_image     = nib.load(mask_data_file)
-        ### [PT] Q: Should this always be "astype('int16')"?  Could we
-        ### save space with making the mask data binarized (bool
-        ### type)?  As above, is there a problem that the y array was
-        ### initialized with float type, and this is int16?
         ##### [PT: Apr 5, 2020] There is still a type mismatch: 'mask'
         ##### defined above has np.float32; this is being read in
         ##### 'astype' bool... but it probably gets immediately

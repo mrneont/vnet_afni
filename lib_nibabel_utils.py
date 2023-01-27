@@ -40,6 +40,7 @@ dict_flip_orient = { 'R' : 'L',
 
 
 def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
+                         head=None,
                          aorient=None, affmat=np.eye(4),
                          sform_code=1, qform_code=1):
     """Write out a 3D array arr3d as a NIFTI dataset.  This function uses
@@ -53,13 +54,16 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
     fname       : (str) output filename, which can include path 
     outdir      : (str) optional way to provide output dir path (could just
                   be as part of fname, as well)
+    head        : (nibabel NIFTI header) header from nibabel; will get
+                  precedence over remaining kwargs, which are header elements
     aorient     : (str, len=3) orientation of dset to be output, in standard
                   AFNI interpretation (nibabel's is opposite of this)
                   **NOT USED RIGHT NOW: affmat CONTROLS THIS**
                   **STILL NEED TO FIGURE OUT IF/HOW TO USE THIS**
     affmat      : (arr, size=(4,4)) the affine matrix of the dset,
                   determining voxelsize and any obliquity; what
-                  nibabel.Nifti1Image() calls 'affine'
+                  nibabel.Nifti1Image() calls 'affine'; but if the head 
+                  kwarg is used, that gets precedence
     sform_code  : (arr, size=unsized; putting in int is fine) default is 1,
                   for orig space
     qform_code  : (arr, size=unsized; putting in int is fine) default is 1,
@@ -69,7 +73,8 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
     Returns
     -------
     1 on success (NIFTI dataset written to disk), 0 on failure (not writing 
-    dset).
+    dset).  If head is used, some parts of it will still be overwritten, 
+    to make sure the output header is consistent with the data itself
 
     """
 
@@ -82,9 +87,23 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
         else:
             fname = outdir + '/' + fname
 
-    ovol = nib.Nifti1Image(arr3d, affine=affmat)
-    ovol.header['qform_code'] = qform_code
-    ovol.header['sform_code'] = sform_code
+    if head :
+        # temp header, to get a few pieces of info
+        tmp = nib.Nifti1Image(arr3d, np.eye(4))
+
+        head['datatype']  = tmp.header['datatype']    # to get from arr dtype
+        head['scl_slope'] = tmp.header['scl_slope']   # should be non-info
+        head['scl_inter'] = tmp.header['scl_inter']   # should be non-info
+        head['dim']       = tmp.header['dim']         # to make based on arr
+        head['extents']   = tmp.header['extents']     # should be empty
+        head['cal_min']   = 0                         # nullify
+        head['cal_max']   = 0                         # nullify
+
+        ovol = nib.Nifti1Image(arr3d, affine=None, header=head)
+    else:
+        ovol = nib.Nifti1Image(arr3d, affine=affmat)
+        ovol.header['qform_code'] = qform_code
+        ovol.header['sform_code'] = sform_code
 
     nib.save(ovol, fname)
 
@@ -94,6 +113,49 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
 
 
 
+
+def make_names_of_dsets(outdir, strepoch, phase, idx):
+    """Create a series of informative (not brief!) names for outputting
+    datasets.
+
+    Parameters
+    ----------
+    outdir   : (str)
+               rel or abs path to output directory
+    strepoch : (str)
+               epoch number
+    phase    : (str)
+               which phase of processing are we in, such as 
+               'val', 'train', etc.
+    idx      : (str) 
+               related to index of dataset
+
+    Return
+    ------
+    fname_targ : (str)
+               output name of the target dataset
+    fname_pred_ch00_back : (str)
+               output name of the background channel dataset
+    fname_pred_ch00_fore : (str)
+               output name of the foreground channel dataset
+
+    """
+
+    pref_targ  = "{}_{}_{}_{:04d}".format( 'target', strepoch, phase, idx )
+
+    fname_targ = "{}/{}.nii.gz".format( outdir, pref_targ )
+
+    channel_suffix = "{}_{}_{}-{:04d}".format(strepoch, phase, 'sub', idx )
+
+    pref_pred_ch00_back  = "{}-{}".format('ch00-back_ep', channel_suffix)
+
+    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir, pref_pred_ch00_back )
+
+    pref_pred_ch01_fore  = "{}-{}".format('ch01-fore_ep', channel_suffix)
+
+    fname_pred_ch01_fore = "{}/{}.nii.gz".format( outdir, pref_pred_ch01_fore )
+
+    return fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore
 
 
 
@@ -306,7 +368,7 @@ TEMP_M44_32iso_nib_ori = reorient_mat44(TEMP_M44_32iso_RAI,
 # write the target masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
-def write_tensor_to_disk_nifti(tt, fname=None):
+def write_tensor_to_disk_nifti(tt, fname=None, head=None):
     """This function writes a torch tensor volume to disk as a NIFTI file.
 
     Inputs
@@ -314,6 +376,7 @@ def write_tensor_to_disk_nifti(tt, fname=None):
     tt               : (torch.Tensor) 3D volume
     fname            : (str) full path+name of output dset (build name
                        before using this func).    
+    head             : (nibabel NIFTI header) header from nibabel
 
     """ 
 
@@ -324,7 +387,10 @@ def write_tensor_to_disk_nifti(tt, fname=None):
     # convert torch.Tensor to np.array
     arr   = tt.cpu().detach().numpy()
 
-    write_out_nifti_vol( arr, fname,
-                         affmat = TEMP_M44_32iso_nib_ori )
-
+    if head :
+        write_out_nifti_vol( arr, fname,
+                             head=head )
+    else:
+        write_out_nifti_vol( arr, fname,
+                             affmat = TEMP_M44_32iso_nib_ori )
 
