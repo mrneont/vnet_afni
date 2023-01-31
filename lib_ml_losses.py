@@ -243,7 +243,7 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
         #print('wts size= ',wts.size())
 
         flr = 0.2
-        dist_scale = 50
+        dist_scale = 12.5
 
 
         wts_exp = (1-flr)*torch.exp(-0.693*wts/dist_scale)+ flr

@@ -128,6 +128,7 @@ class mridataset(data.Dataset):
         
         # [PT] Q: do we always want these thesholding bits done, or
         # should those be controlled by a user option?
+        self.orig_fname = os.path.basename(self.orig_data_list[index])
         self.orig_image  = nib.load(self.orig_data_list[index])
         self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
         self.top99_thresh = np.percentile(self.orig_data, 99) 
@@ -143,7 +144,7 @@ class mridataset(data.Dataset):
         else:
             self.dpth_data   = np.ndarray(0) 
 
-        return self.orig_data, self.mask_data, self.dpth_data
+        return self.orig_data, self.mask_data, self.dpth_data, self.orig_fname
 
     def __len__(self):
         return len(self.orig_data_list)

@@ -1,5 +1,5 @@
 # supplementary function around nibabel
-
+import os
 import numpy   as np
 import nibabel as nib
 
@@ -114,7 +114,7 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
 
 
 
-def make_names_of_dsets(outdir, strepoch, phase, idx):
+def make_names_of_dsets(outdir, orig_fname, strepoch, phase):
     """Create a series of informative (not brief!) names for outputting
     datasets.
 
@@ -141,21 +141,32 @@ def make_names_of_dsets(outdir, strepoch, phase, idx):
 
     """
 
-    pref_targ  = "{}_{}_{}_{:04d}".format( 'target', strepoch, phase, idx )
+    # removing the file_extension "nii.gz" to access the subject id
+    subj_id = orig_fname.rsplit( ".", 2 )[0]
+
+    pref_orig = "{}_{}_{}_{:s}".format( 'orig', phase, 'subj', subj_id[:-5])
+
+    # subj_id[:-5] removes the suffix "_orig"
+    fname_orig      = "{}/{}.nii.gz".format( outdir,pref_orig)
+
+  
+    pref_targ  = "{}_{}_{}_{}_{:s}".format( 'target', strepoch, phase,'subj', subj_id[:-5])
 
     fname_targ = "{}/{}.nii.gz".format( outdir, pref_targ )
 
-    channel_suffix = "{}_{}_{}-{:04d}".format(strepoch, phase, 'sub', idx )
+    channel_suffix = "{}_{}_{}-{:s}".format(strepoch, phase, 'subj', subj_id[:-5])
 
-    pref_pred_ch00_back  = "{}-{}".format('ch00-back_ep', channel_suffix)
+    #background channel->00
+    pref_pred_ch00_back  = "{}-{}".format('ch00_ep', channel_suffix)
 
     fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir, pref_pred_ch00_back )
 
-    pref_pred_ch01_fore  = "{}-{}".format('ch01-fore_ep', channel_suffix)
+    #foreground channel->01
+    pref_pred_ch01_fore  = "{}-{}".format('ch01_ep', channel_suffix)
 
     fname_pred_ch01_fore = "{}/{}.nii.gz".format( outdir, pref_pred_ch01_fore )
 
-    return fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore
+    return fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore
 
 
 

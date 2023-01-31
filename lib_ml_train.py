@@ -7,6 +7,7 @@ import matplotlib.pyplot    as plt
 from   matplotlib.lines import Line2D
 import nibabel              as nib
 
+
 import torch
 from   torch            import optim
 from   torch.utils.data import DataLoader
@@ -245,7 +246,9 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 sys.exit(5)
 
             idx = 1 # index for the datafile/volume in the DATASET
-            for (orig_data, mask_data, dpth_data) in dataloaders[phase]:
+            for (orig_data, mask_data, dpth_data, orig_fname) in dataloaders[phase]:
+
+
                 # orig_data and mask_data start as (full) arrays here
                 # dpth_data will be either full array or an empty one
 
@@ -287,7 +290,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     if USE_DPTH_WTS :
                         dpth_data = dpth_data.to(device)
 
-                if idx > 2 :
+                if verb > 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
 
@@ -381,11 +384,20 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 # [PT] Q: why can't we output dsets if half_prec is True?
                 if (do_nifti and not(half_prec)) :
 
-                    fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
-                        lnu.make_names_of_dsets(outdir, strepoch, phase, idx)
+                     # orig_fname is in a form tuple
+                    fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
+                        lnu.make_names_of_dsets(outdir, orig_fname[0], strepoch, phase)
+
+
 
                     # this only needs to be written out in first iteration
                     if epoch == 0 :
+                        # write orig_data in the form of nifti file
+                        
+                        lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
+                                                        fname=fname_orig,
+                                                        head=orig_head)
+
                         lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
                                                         fname=fname_targ,
                                                         head=orig_head)
