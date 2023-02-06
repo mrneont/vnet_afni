@@ -7,6 +7,7 @@ import matplotlib.pyplot    as plt
 from   matplotlib.lines import Line2D
 import nibabel              as nib
 
+
 import torch
 from   torch            import optim
 from   torch.utils.data import DataLoader
@@ -24,29 +25,33 @@ import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
 # --------------------------------------------------------------------------
-'''
-List of  'list of various choices'. The choices could be appeneded to the list and there 
-exists an if condition in main training function 'train_net()' to choose one of them from the list.
-The [0th] choice is always the default.
-'''
-#List of all possible net architectures to choose from. 
+
+# List of 'list of various choices'. The choices could be appended
+# to the list and there exists an if condition in main training function
+# 'train_net()' to choose one of them from the list.  The [0th] choice
+# is always the default.  
+
+# List of all possible net architectures to choose from. 
 list_net_arch  = [ 'vnet_orig',
                    'Cerebrum',
-                  ]
+]
 
 # List of all possible optimizers to choose from. 
 list_optimizer = [ 'Adam',
                    'Adam16',
-                   ]
+]
 
 # List of all possible data normalizations to choose from. 
 list_data_norm = [ 'min_max_scale',
-                   'z_scoring',]
+                   'z_scoring',
+]
+
 # --------------------------------------------------------------------------
 
 
 def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
-              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, verb): 
+              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, 
+              verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -88,14 +93,19 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
         if seed != None :
             torch.manual_seed(seed)
 
+    # Some loss functions use weights derived from an additional input
+    # 'depth map' (dpth) dataset, and others do not.
+    USE_DPTH_WTS = lml.dict_CalcLoss[loss_func]
+
     if verb :
         print("++ {:30s} : {}".format('Device being used', device))
         print("++ {:30s} : {}".format('Number of epochs', num_epochs))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
-        print("++ {:30s} : {}".format('data normalization', data_norm))
-        print("++ {:30s} : {}".format('loss function', loss_func))
+        print("++ {:30s} : {}".format('Data normalization', data_norm))
+        print("++ {:30s} : {}".format('Loss function', loss_func))
+        print("++ {:30s} : {}".format('Using weight datasets', USE_DPTH_WTS))
         print("++ {:30s} : {}".format('Network architecture', net_arch))
-        
+
     if half_prec == 1:
         print("++ {:30s} : {}".format('Precision', 'half'))
     else :
@@ -144,12 +154,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     # load optimizer
     if optimizer == 'Adam':
         if half_prec == 1:
-
             optimizer = Adam16(net.parameters(), lr=lr, 
                            betas=(0.9, 0.999), 
                            eps=1e-8, weight_decay=0)
         else : #(half_prec == 0)
-           
             optimizer = optim.Adam(net.parameters(), lr=lr)
     
     else:
@@ -159,11 +167,15 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
 
     train_datapath = os.path.join(data_path, 'training')
-    train_set      = lmd.mridataset(train_datapath, verb=verb)
+    train_set      = lmd.mridataset(train_datapath, 
+                                    use_dpth_wts=USE_DPTH_WTS, 
+                                    verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
-    val_set        = lmd.mridataset(val_datapath, verb=verb)
+    val_set        = lmd.mridataset(val_datapath, 
+                                    use_dpth_wts=USE_DPTH_WTS, 
+                                    verb=verb)
     Nval           = len(val_set)
    
     dataloaders = {
@@ -220,13 +232,13 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
             # creating an instance of loss function
             if loss_func == 'Sorensen_Dice_mean' :
-
                 loss = lml.CalcLoss_Sorensen_Dice_mean()
 
             elif loss_func == 'Sorensen_Dice_single_channel':
-
                 loss = lml.CalcLoss_Sorensen_Dice_single_channel()
 
+            elif loss_func == 'WtSorensen_Dice' :
+                loss = lml.CalcLoss_WtSorensen_Dice()
             
             else:
                 print("This should never happen! 'loss_func' is: {}"
@@ -234,8 +246,23 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 sys.exit(5)
 
             idx = 1 # index for the datafile/volume in the DATASET
-            for orig_data, mask_data in dataloaders[phase]:
+            for (orig_data, mask_data, dpth_data, orig_fname) in dataloaders[phase]:
 
+
+                # orig_data and mask_data start as (full) arrays here
+                # dpth_data will be either full array or an empty one
+
+                # ---- get the header for this dset
+                if phase == 'train' :
+                    idxm1 = idx - 1
+                    orig_head = train_set.orig_head_list[idxm1]
+                elif phase == 'val' :
+                    idxm1 = idx - 1
+                    orig_head = val_set.orig_head_list[idxm1]
+                else: 
+                    orig_head = None
+
+                # ---- scale/normalize the input data in some fashion
                 if data_norm == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
 
@@ -245,21 +272,25 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     #[YNS] add the other data normalizations 
                     
                 else:
-                    print("This should never happen! 'data normalization' is: {}"
-                      "".format(data_norm))
+                    print("This should never happen! "
+                          "'data normalization' is: {}".format(data_norm))
                     sys.exit(6)
 
-                if (device == torch.device('cuda') and (half_prec == 1)): # device == "cuda"
-                    
+                # ---- possible GPU niceties
+                if (device == torch.device('cuda') and (half_prec == 1)): 
+                    # device == "cuda"
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
+                    if USE_DPTH_WTS :
+                        dpth_data = dpth_data.to(device).half()
                 
                 else: 
-
                     orig_data = orig_data.to(device)
                     mask_data = mask_data.to(device)
+                    if USE_DPTH_WTS :
+                        dpth_data = dpth_data.to(device)
 
-                if idx < 2 :
+                if verb > 2 :
                     print("++ {:30s} : {}".format('orig_data.type', 
                                                   orig_data.type()))
 
@@ -268,57 +299,68 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 # Try to bring each data into the format: (1 X 1 X D X H X W)
                 orig_data = orig_data.unsqueeze(0) 
                 mask_data = mask_data.unsqueeze(0) 
+                
+                # [PT] Q: should dpth_data also be unsqueezed here, if it
+                # is being used?
+
             
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
 
-                # + net.parameters() function returns the network's learnable/trainable parameters.
-                # + The parameters of a layer(in the network) are its weights and biases. 
-                # + print(torch.equal(before[j].data, after[j].data)) is a quick and dirty
-                #   way of finding if the weights of the network layers are still being learned(changing)
-                #   or have become stagnant
-                # + torch.equal(before[j].data, after[j].data) is False means the network's weights are changing
-                # + Note: the weights do not change during the validation phase  
-                #before = list(net.parameters())[0].clone()
+                # + net.parameters() function returns the network's
+                #   learnable/trainable parameters.
+                # + The parameters of a layer(in the network) are its
+                #   weights and biases.
+                # + print(torch.equal(before[j].data, after[j].data))
+                #   is a quick and dirty way of finding if the weights
+                #   of the network layers are still being
+                #   learned(changing) or have become stagnant
+                # + torch.equal(before[j].data, after[j].data) is
+                #   False means the network's weights are changing
+                # + Note: the weights do not change during the validation 
+                #   phase  
+                #   before = list(net.parameters())[0].clone()
                 
-
-                # forward propagation required in both training and validation phase
-                # set gradient calculation only for training phase
+                # forward propagation required in both training and
+                # validation phase set gradient calculation only for
+                # training phase
                 with torch.set_grad_enabled(phase == 'train'): 
 
-                    # Invoke Network's forward() method to run it. This is a Object Oriented way of doing things.
+                    # Invoke Network's forward() method to run
+                    # it. This is a Object Oriented way of doing
+                    # things.
                     ## reminder: F.conv3d expects the data to be Double
 
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
                     mask_pred = net.forward(orig_data, verb) 
-                    mask_pred_uinq = np.unique((mask_pred).detach().numpy())
-                    #print('mask_pred unique = ',mask_pred_uinq)
-                    if (mask_pred_uinq.all() < 0):
-                        print('HELLO')
-                        sys.exit(10)
-                    
-
+                   
                     # The output mask_pred is of type 'torch.FloatTensor'
 
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    LOSS = loss.forward(mask_pred, mask_data)
+                    if USE_DPTH_WTS :
+                        LOSS = loss.forward(mask_pred, mask_data, dpth_data)
+                    else:
+                        LOSS = loss.forward(mask_pred, mask_data)
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
-                # backward propagation (where gradients are computed) and optimization only if in
-                # training phase
+                # backward propagation (where gradients are computed)
+                # and optimization only if in training phase
                 if phase == 'train':
                     LOSS.backward()
                     optimizer.step()
                     train_losses.append(LOSS.item())
-                    # + plot the gradient flow to check poosible gradient vanishing / exploding problems.
-                    # + named parameters() provide an iterator that includes both the parameter label/name and the parameter.
-                    #ptt.plot_grad_flow(net.named_parameters(), epoch, idx, outdir = outdir)
-                    
+                    # + plot the gradient flow to check poosible
+                    #   gradient vanishing / exploding problems.
+                    # + named parameters() provide an iterator that
+                    #   includes both the parameter label/name and the
+                    #   parameter.
+                    #ptt.plot_grad_flow(net.named_parameters(), epoch, 
+                    #                   idx, outdir = outdir)
                 elif phase == 'val':
                     # save the model weights
                     val_losses.append(LOSS.item())
@@ -337,54 +379,39 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 if verb :
                     this_str = "... dset {:5d} / {:5d}".format(idx, Ndset)
                     this_str+= ", loss"
-                    print("   {:30s} : {:.4f}"
-                          "".format(this_str, LOSS))
+                    print("   {:30s} : {:.4f}".format(this_str, LOSS))
 
-                   
+                # [PT] Q: why can't we output dsets if half_prec is True?
                 if (do_nifti and not(half_prec)) :
-                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
-                    fname_targ = "{}/{}.nii.gz".format( outdir,
-                                                        pref_targ )
-                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
-                                                    fname=fname_targ )
-                    '''
-                    #predmask_000_train_0001.nii
-                    #ch00-fore_ep-000_train_sub-0001 
-                     ch00-fore_ep-000_train_sub-0001.nii
 
-                    pref_pred = "{}_{}_{}_{:04d}".format( 'predmask', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
+                     # orig_fname is in a form tuple
+                    fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
+                        lnu.make_names_of_dsets(outdir, orig_fname[0], strepoch, phase)
 
+
+
+                    # this only needs to be written out in first iteration
+                    if epoch == 0 :
+                        # write orig_data in the form of nifti file
                         
-                    {}-{}_{}_{:04d}
-                    {ch00-fore_ep}-{000}_{train}_{:04d}
-                    ch01-back_ep-000_train_sub-0001
-                    '''
+                        lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
+                                                        fname=fname_orig,
+                                                        head=orig_head)
 
-                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
-                                                              strepoch, 
-                                                              phase,
-                                                              'sub', 
-                                                              idx )
-                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
-                                                            pref_pred_ch00_back )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred_ch00_back )
+                        lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                                                        fname=fname_targ,
+                                                        head=orig_head)
 
-                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
-                                                          strepoch, 
-                                                          phase,
-                                                          'sub', 
-                                                          idx )
-                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
-                                                        pref_pred_ch01_fore )
+                    # [PT] I don't think this needs to be written out
+                    # generally, at present.  Just at higher verbosity seems fine?
+                    if verb > 3 :
+                        lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                        fname=fname_pred_ch00_back,
+                                                        head=orig_head )
+
                     lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_ch01_fore )
+                                                    fname=fname_pred_ch01_fore,
+                                                    head=orig_head )
 
                 
                 idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
@@ -429,3 +456,41 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     perf_log.close()
 
     return net
+
+
+
+
+"""
+                if (do_nifti and not(half_prec)) :
+                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
+                                                          strepoch, 
+                                                          phase, 
+                                                          idx )
+                    fname_targ = "{}/{}.nii.gz".format( outdir,
+                                                        pref_targ )
+                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                                                    fname=fname_targ,
+                                                    head=orig_head)
+
+                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
+                                                              strepoch, 
+                                                              phase,
+                                                              'sub', 
+                                                              idx )
+                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
+                                                            pref_pred_ch00_back )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                                                    fname=fname_pred_ch00_back,
+                                                    head=orig_head )
+
+                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
+                                                          strepoch, 
+                                                          phase,
+                                                          'sub', 
+                                                          idx )
+                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
+                                                        pref_pred_ch01_fore )
+                    lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
+                                                    fname=fname_pred_ch01_fore,
+                                                    head=orig_head )
+"""
