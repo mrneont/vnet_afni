@@ -98,6 +98,7 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
         head['extents']   = tmp.header['extents']     # should be empty
         head['cal_min']   = 0                         # nullify
         head['cal_max']   = 0                         # nullify
+        head.extensions.clear()                       # remove extensions
 
         ovol = nib.Nifti1Image(arr3d, affine=None, header=head)
     else:
