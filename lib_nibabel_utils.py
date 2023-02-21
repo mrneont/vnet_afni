@@ -49,7 +49,7 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
 
     Params
     ------
-    arr3d       : (3D array or pytorch tensor) dset to be written out 
+    arr3d       : (3D numpy array) dset to be written out 
                   as a NIFTI vol
     fname       : (str) output filename, which can include path 
     outdir      : (str) optional way to provide output dir path (could just
@@ -87,6 +87,14 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
         else:
             fname = outdir + '/' + fname
 
+    # all floats to float32 ( **just a start, continue!** )
+    adt = arr3d.dtype
+    DO_FLOAT_HEADER = 0
+    if isinstance(adt, float) :
+        DO_FLOAT_HEADER = 1
+        if not(isinstance(adt, np.float32)) :
+            arr3d = arr3d.astype(np.float32)
+
     if head :
         # temp header, to get a few pieces of info
         tmp = nib.Nifti1Image(arr3d, np.eye(4))
@@ -98,6 +106,7 @@ def write_out_nifti_vol( arr3d, fname='dset.nii.gz', outdir=None,
         head['extents']   = tmp.header['extents']     # should be empty
         head['cal_min']   = 0                         # nullify
         head['cal_max']   = 0                         # nullify
+        head.extensions.clear()                       # remove extensions
 
         ovol = nib.Nifti1Image(arr3d, affine=None, header=head)
     else:
