@@ -167,19 +167,19 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
 
 
     train_datapath = os.path.join(data_path, 'training')
-    train_set      = lmd.mridataset(train_datapath, data_norm,
+    train_set      = lmd.mridataset(train_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
                                     verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
-    val_set        = lmd.mridataset(val_datapath, data_norm,
+    val_set        = lmd.mridataset(val_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
                                     verb=verb)
     Nval           = len(val_set)
    
     dataloaders = {
-        'train': DataLoader(train_set, shuffle=False, batch_size=1),
+        'train': DataLoader(train_set, shuffle=False, batch_size=2),
         'val'  : DataLoader(val_set,   shuffle=False, batch_size=1)
     }
 
@@ -248,7 +248,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             idx = 1 # index for the datafile/volume in the DATASET
             for (orig_data, mask_data, dpth_data, orig_fname) in dataloaders[phase]:
 
-
+                print('data size place 1',orig_data.size())
                 # orig_data and mask_data start as (full) arrays here
                 # dpth_data will be either full array or an empty one
 
@@ -262,6 +262,20 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 else: 
                     orig_head = None
 
+                
+                # ---- scale/normalize the input data in some fashion
+                if data_norm == 'z_scoring':
+                    orig_data = lmd.z_scoring(orig_data)
+
+                elif data_norm == 'min_max_scale': 
+                    orig_data = lmd.min_max_scale(orig_data)
+
+                    #[YNS] add the other data normalizations 
+                    
+                else:
+                    print("This should never happen! "
+                          "'data normalization' is: {}".format(data_norm))
+                    sys.exit(6)
 
                 # ---- possible GPU niceties
                 if (device == torch.device('cuda') and (half_prec == 1)): 
@@ -284,9 +298,10 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                 ### CONV3D requires input in the format of:
                 ### (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
                 # Try to bring each data into the format: (1 X 1 X D X H X W)
-                #orig_data = orig_data.unsqueeze(0) 
-                #mask_data = mask_data.unsqueeze(0) 
+                orig_data = orig_data.unsqueeze(1) 
+                mask_data = mask_data.unsqueeze(1) 
                 
+                #print('data size place 2',orig_data.size())
                 # [PT] Q: should dpth_data also be unsqueezed here, if it
                 # is being used?
 
@@ -322,7 +337,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
                     mask_pred = net.forward(orig_data, verb) 
-                   
+                    #print('pred_mask size',mask_pred.size())
                     # The output mask_pred is of type 'torch.FloatTensor'
 
                     # Invoke loss function forward() method to run it.

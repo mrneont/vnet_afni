@@ -58,7 +58,7 @@ def make_one_hot_stack(gt, num_classes):
     values = [gt == i for i in range(num_classes)]
     
     masks = torch.stack(values, dim=2).float()
-    masks_squeezed = torch.squeeze(masks ,dim=0)
+    masks_squeezed = torch.squeeze(masks ,dim=1)
     #print('masks size \n',masks_squeeze.size())
     #print('gt size \n'   ,gt.size())
     #print(' mask type \n' , masks_squeezed.type())
@@ -159,6 +159,7 @@ class CalcLoss_Sorensen_Dice_mean(nn.Module):
         num_out_ch   = pred.size()[1]
         #target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
         target       = make_one_hot_stack(gt, num_classes = num_out_ch)
+        #print('target size',target.size())
 
         numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(pred + target, dim=(2, 3, 4))

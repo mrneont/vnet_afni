@@ -1,15 +1,13 @@
+
 import os
 import sys
 
-import lib_ml_train  as lmt
 import lib_nibabel_utils     as lnu  
-import lib_ml_data          as lmd
+
 import numpy   as np
 import nibabel as nib
 import torch.utils.data as data
 import glob
-
-
 
 
 class mridataset(data.Dataset):
@@ -34,7 +32,7 @@ class mridataset(data.Dataset):
   It retrieves the corresponding groundtruth/mask
     """
 
-    def __init__(self, root_path, data_norm ,use_dpth_wts=None, verb=0):
+    def __init__(self, root_path, use_dpth_wts=None, verb=0):
 
         # initialize 
         self.orig_data_list = []
@@ -46,7 +44,6 @@ class mridataset(data.Dataset):
         self.root_path      = root_path
         self.use_dpth_wts   = use_dpth_wts
         self.verb           = verb
-        self.data_norm      = data_norm
 
         # ===============================================================
 
@@ -147,27 +144,8 @@ class mridataset(data.Dataset):
             self.dpth_data   = np.asanyarray(self.dpth_image.dataobj).astype('float32')
         else:
             self.dpth_data   = np.ndarray(0) 
-            # numpy unsqueezed in 1 x D X H X W
 
-        self.orig_data = np.expand_dims(self.orig_data, 0)
-        self.mask_data = np.expand_dims(self.mask_data, 0)
-
-        # ---- scale/normalize the input data in some fashion
-        if self.data_norm == lmt.list_data_norm[0]:
-            self.orig_data = lmd.z_scoring(self.orig_data)
-
-        elif self.data_norm == lmt.list_data_norm[1]: 
-            
-            self.orig_data = lmd.min_max_scale(self.orig_data)
-    
-            #[YNS] add the other data normalizations 
-                    
-        else:
-            print("This should never happen! "
-                    "'data normalization' is: {}".format(self.data_norm))
-            sys.exit(6)
         
-
         return self.orig_data, self.mask_data, self.dpth_data, self.orig_fname
 
     def __len__(self):
