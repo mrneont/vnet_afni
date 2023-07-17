@@ -136,7 +136,7 @@ def get_args():
                         '(def: {})'.format(str(def_data_norm)))
 
 
-    def_wt_norm = 1
+    def_wt_norm = 0
     parser.add_argument("-w", "--weight_norm", 
                         dest="weight_norm", 
                         type=int, default=def_wt_norm,
