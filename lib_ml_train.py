@@ -247,22 +247,21 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                       "".format(loss_func))
                 sys.exit(5)
 
-            idx = 1 # index for the datafile/volume in the DATASET
-            for (orig_data, mask_data, dpth_data, orig_fname) in dataloaders[phase]:
+            idx = 1 # index for the number of steps in an epoch
+            for (orig_data, mask_data, dpth_data, orig_fname_tup, index_tup) in dataloaders[phase]:
 
-                #print('data size place 1',orig_data.size())
+                
                 # orig_data and mask_data start as (full) arrays here
                 # dpth_data will be either full array or an empty one
 
-                # ---- get the header for this dset
-                if phase == 'train' :
-                    idxm1 = idx - 1
-                    orig_head = train_set.orig_head_list[idxm1]
-                elif phase == 'val' :
-                    idxm1 = idx - 1
-                    orig_head = val_set.orig_head_list[idxm1]
-                else: 
-                    orig_head = None
+                #  index_tup is equal to the first element in the tuple 'index_tup'
+                index_tup = index_tup[0]
+
+
+                # batchsize should be equal to the length of the index_tup
+                # 'index_tup' has indices of the data volumes in the train/validation dataset 
+                bsize = len(index_tup)
+
 
                 
                 # ---- scale/normalize the input data in some fashion
@@ -388,37 +387,56 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 # [PT] Q: why can't we output dsets if half_prec is True?
                 if (do_nifti and not(half_prec)) :
 
-                     # orig_fname is in a form tuple
-                    fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
-                        lnu.make_names_of_dsets(outdir, orig_fname[0], strepoch, phase)
+                    ### loop over each dataset in the batchsize(bsize)
+                    for bb in range (bsize):
 
 
-
-                    # this only needs to be written out in first iteration
-                    if epoch == 0 :
-                        # write orig_data in the form of nifti file
+                        index = index_tup[bb]
+                    
+                        orig_fname = orig_fname_tup[bb] 
                         
-                        lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
+                        if phase == 'train' :
+                            orig_head  = train_set.orig_head_list[index] #global lists
+                            
+                        elif phase == 'val' :
+                            orig_head = val_set.orig_head_list[index]
+                            
+                        else: 
+                            orig_head = None
+
+                        # orig_fname is in a form tuple
+                        fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
+                            lnu.make_names_of_dsets(outdir, orig_fname, strepoch, phase)
+
+
+
+                        # this only needs to be written out in first iteration
+                        if epoch == 0 :
+                            # write orig_data in the form of nifti file
+                        
+                            lnu.write_tensor_to_disk_nifti(orig_data[bb][0], 
                                                         fname=fname_orig,
                                                         head=orig_head)
 
-                        lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                            lnu.write_tensor_to_disk_nifti( mask_data[bb][0], 
                                                         fname=fname_targ,
                                                         head=orig_head)
 
-                    # [PT] I don't think this needs to be written out
-                    # generally, at present.  Just at higher verbosity seems fine?
-                    if verb > 3 :
-                        lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
+                        # [PT] I don't think this needs to be written out
+                        # generally, at present.  Just at higher verbosity seems fine?
+                        if verb > 3 :
+                            lnu.write_tensor_to_disk_nifti( mask_pred[bb][0], 
                                                         fname=fname_pred_ch00_back,
                                                         head=orig_head )
 
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
+                        lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
                 
-                idx+= 1 # end of FOR loop for ORIG_DATA, MASK_DATA
+                    # end of bb loop : for bb in range (bsize)
+                idx+= 1 # number of steps in an epoch
+                # end of the loop for all batches in the epoch
 
             end = time.time() # end of FOR loop for PHASE
 

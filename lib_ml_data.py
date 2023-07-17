@@ -145,8 +145,11 @@ class mridataset(data.Dataset):
         else:
             self.dpth_data   = np.ndarray(0) 
 
+        if type(index) != tuple :
+            index = tuple([index])
+
         
-        return self.orig_data, self.mask_data, self.dpth_data, self.orig_fname
+        return self.orig_data, self.mask_data, self.dpth_data, self.orig_fname, index
 
     def __len__(self):
         return len(self.orig_data_list)
