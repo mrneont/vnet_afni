@@ -49,7 +49,7 @@ list_data_norm = [ 'min_max_scale',
 # --------------------------------------------------------------------------
 
 
-def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
+def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
               optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, 
               verb): 
     """
@@ -62,6 +62,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
                    directory sub-structure)
     num_epochs   : number of epochs for network (int)
     lr           : learning rate parameter 
+    tr_bsize     : batch size for training 
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
     net_arch     : network architecture name, from available list (str)
@@ -100,6 +101,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     if verb :
         print("++ {:30s} : {}".format('Device being used', device))
         print("++ {:30s} : {}".format('Number of epochs', num_epochs))
+        print("++ {:30s} : {}".format('Batch size for training', tr_bsize))
         print("++ {:30s} : {}".format('Weight norm', wt_norm))
         print("++ {:30s} : {}".format('Data normalization', data_norm))
         print("++ {:30s} : {}".format('Loss function', loss_func))
@@ -179,8 +181,8 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
     Nval           = len(val_set)
    
     dataloaders = {
-        'train': DataLoader(train_set, shuffle=False, batch_size=2),
-        'val'  : DataLoader(val_set,   shuffle=False, batch_size=1)
+        'train': DataLoader(train_set, shuffle = False, batch_size = tr_bsize),
+        'val'  : DataLoader(val_set,   shuffle = False, batch_size = 1)
     }
 
     # initialize the early_stopping object
@@ -248,7 +250,7 @@ def train_net(data_path, num_epochs, lr, seed, net_arch, loss_func,
             idx = 1 # index for the datafile/volume in the DATASET
             for (orig_data, mask_data, dpth_data, orig_fname) in dataloaders[phase]:
 
-                print('data size place 1',orig_data.size())
+                #print('data size place 1',orig_data.size())
                 # orig_data and mask_data start as (full) arrays here
                 # dpth_data will be either full array or an empty one
 

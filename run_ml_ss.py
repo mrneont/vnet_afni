@@ -109,6 +109,15 @@ def get_args():
                         help='verbosity for code running' + '\n' +
                         '(def: {})'.format(str(def_verb)))
 
+    def_train_batch_size = 1
+    parser.add_argument("-trb", "--train_batch_size", 
+                        metavar='TRAIN_BATCH_SIZE', 
+                        dest='train_batch_size', 
+                        type=int, default=def_train_batch_size, 
+                        help='batch size for training' + '\n' +
+                        '(def: {})'.format(str(def_train_batch_size)))
+
+
     def_net_arch = lmt.list_net_arch[0]
     parser.add_argument("-a", "--architecture", 
                         dest="net_arch", 
@@ -310,6 +319,7 @@ if __name__ == '__main__':
     data_path = args.data_dir
     epochs    = args.epochs
     lr        = args.learning_rate
+    tr_bsize  = args.train_batch_size
     seed      = args.seed
     net_arch  = args.net_arch
     loss_func = args.loss_func
@@ -344,6 +354,6 @@ if __name__ == '__main__':
     writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
                    verb=verb )
 
-    net = lmt.train_net( data_path, epochs, lr, seed, net_arch, loss_func,
+    net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
                          optimizer, half_prec, wt_norm, data_norm, do_nifti, 
                          outdir, verb )
