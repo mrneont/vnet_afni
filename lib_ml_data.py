@@ -129,27 +129,27 @@ class mridataset(data.Dataset):
         
         # [PT] Q: do we always want these thesholding bits done, or
         # should those be controlled by a user option?
-        self.orig_fname = os.path.basename(self.orig_data_list[index])
-        self.orig_image  = nib.load(self.orig_data_list[index])
-        self.orig_data   = np.asanyarray(self.orig_image.dataobj).astype('float32')
-        self.top99_thresh = np.percentile(self.orig_data, 99) 
-        self.orig_data[self.orig_data >self.top99_thresh] = self.top99_thresh
-        self.down2_thresh = np.percentile(self.orig_data, 2) 
-        self.orig_data[self.orig_data <self.down2_thresh] = self.down2_thresh
-        self.mask_image  = nib.load(self.mask_data_list[index])
-        self.mask_data   = np.asanyarray(self.mask_image.dataobj).astype('float32')
+        orig_fname = os.path.basename(self.orig_data_list[index])
+        orig_image  = nib.load(self.orig_data_list[index])
+        orig_data   = np.asanyarray(orig_image.dataobj).astype('float32')
+        top99_thresh = np.percentile(orig_data, 99) 
+        orig_data[orig_data >top99_thresh] = top99_thresh
+        down2_thresh = np.percentile(orig_data, 2) 
+        orig_data[orig_data < down2_thresh] = down2_thresh
+        mask_image  = nib.load(self.mask_data_list[index])
+        mask_data   = np.asanyarray(mask_image.dataobj).astype('float32')
 
         if self.use_dpth_wts :
-            self.dpth_image  = nib.load(self.dpth_data_list[index])
-            self.dpth_data   = np.asanyarray(self.dpth_image.dataobj).astype('float32')
+            dpth_image  = nib.load(self.dpth_data_list[index])
+            dpth_data   = np.asanyarray(dpth_image.dataobj).astype('float32')
         else:
-            self.dpth_data   = np.ndarray(0) 
+            dpth_data   = np.ndarray(0) 
 
         if type(index) != tuple :
             index = tuple([index])
 
         
-        return self.orig_data, self.mask_data, self.dpth_data, self.orig_fname, index
+        return orig_data, mask_data, dpth_data, orig_fname, index
 
     def __len__(self):
         return len(self.orig_data_list)
