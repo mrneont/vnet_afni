@@ -302,7 +302,8 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 orig_data = orig_data.unsqueeze(1) 
                 mask_data = mask_data.unsqueeze(1) 
                 
-                #print('data size place 2',orig_data.size())
+                #print('orig_data size ',orig_data.size())
+                #print('mask_data size ',mask_data.size())
                 # [PT] Q: should dpth_data also be unsqueezed here, if it
                 # is being used?
 
@@ -348,6 +349,24 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                         LOSS = loss.forward(mask_pred, mask_data, dpth_data)
                     else:
                         LOSS = loss.forward(mask_pred, mask_data)
+                    '''
+                    # Notes about how the dice and loss is calculated when batch_size >1 
+
+                            When the batch size is greater than 2, 
+                            For eg., when training batch size = 2, 
+                            then orig_data.size() =  torch.Size([2, 1, D, H, W])
+                                  mask_data.size() =  torch.Size([2, 1, D, H, W])
+                            i.e., [batchsz, Channels, Depth, Height , width ]
+
+                            the dice for the above data will be something like 
+                            dice = tensor([[0.8069, 0.2942],
+                                           [0.7746, 0.2963]], grad_fn=<DivBackward0>)
+
+                            the return from loss function will be the mean of the dice. 
+
+                            Loss = 1-dice.mean()
+                    '''
+                    #print('LOSS.item()=',LOSS.item())
                     # the output of loss.forward is a single value of
                     # type 'torch.DoubleTensor'
 
@@ -356,6 +375,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 if phase == 'train':
                     LOSS.backward()
                     optimizer.step()
+                    #print('LOSS.item()=',LOSS.item())
                     train_losses.append(LOSS.item())
                     # + plot the gradient flow to check poosible
                     #   gradient vanishing / exploding problems.
