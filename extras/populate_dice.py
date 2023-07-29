@@ -68,7 +68,7 @@ if __name__ == '__main__':
     for idx in range(0, BIG, multiple): # counter for number of epochs 
     
 
-        print('idx =',idx)
+        
         list_pred_mask = [os.path.basename(x) for x in  glob.glob(os.path.join(foldername,"ch01_ep-*_train_subj-pac_*.nii.gz"))
                     if float(os.path.basename(x)[8:11]) == idx]
 
@@ -80,6 +80,7 @@ if __name__ == '__main__':
     
         if(len(sorted_list_pred_mask)==0):
             break
+        print('idx =',idx)
 
         #print('sorted_list_pred_mask =',len(sorted_list_pred_mask))
         #print('sorted_list_target =',len(sorted_list_target))
@@ -93,7 +94,8 @@ if __name__ == '__main__':
             #compute dice for pred_mask and target 
         
             #print('idy =',idy)
-            pred_mask_data1 = nib.load(sorted_list_pred_mask[idy])
+            pred_path_str   = os.path.join(foldername, sorted_list_pred_mask[idy])
+            pred_mask_data1 = nib.load(pred_path_str)
             target_data2    = nib.load( sorted_list_target[idy])
             pred_mask_data1 = np.asanyarray(pred_mask_data1.dataobj).astype('float32')
             target_data2    = np.asanyarray(target_data2.dataobj).astype('float32')
