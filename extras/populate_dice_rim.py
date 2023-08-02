@@ -14,8 +14,10 @@ from IPython.display import display
 #  Purpose : This python file computes the dice metric of the pred_mask from different epochs and 
 #          target mask and populates the csv file.    
 #
-#  Usage : python populate_dice.py -d 'dir/folder/outdir' -f 'table_file_name' -m 2
-#
+#  Usage : python populate_dice.py -d 'dir/folder/predmasks'
+#                                  -e 'dir/data_folder/edt'
+#                                  -f 'table_file_name' 
+#                                  -m 2
 #
 #****************************************************************************************************
 
@@ -83,8 +85,16 @@ if __name__ == '__main__':
         targ_path_str = os.path.join(foldername, 'target_000_train*.nii.gz')
         list_target = glob.glob(targ_path_str)
 
+        
+        # The algorithms generally perform well in the core region of the 
+        # predicted mask. The challenge lies in classifying the voxels at the 
+        # rim appropriately. In order to evaluate the algorithm performance at
+        # the rim we used the depth info to seperate out the rim region of the 
+        # predicated mask 
+
         edt_path_str = os.path.join(edt_foldername, '*.nii.gz')
         list_edt = glob.glob(edt_path_str)
+
 
         sorted_list_pred_mask = sorted(list_pred_mask) 
         sorted_list_target    = sorted(list_target)
@@ -99,7 +109,11 @@ if __name__ == '__main__':
         #print('sorted_list_target =',len(sorted_list_target))
     
         #add condition that sorted_list_pred_mask == sorted_list_target
-          
+        
+        # The rim region is further divided into inner_rim 
+        # and outer_rim regions. The inner_rim pertains to the 
+        # 'class 1' that is foreground. The outer_rim pertains 
+        # to the 'class 0' that is the background.   
         dice_inner_rim_list = [] 
         dice_outer_rim_list = []    
         
