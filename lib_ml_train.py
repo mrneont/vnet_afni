@@ -253,9 +253,15 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 
                 # orig_data and mask_data start as (full) arrays here
                 # dpth_data will be either full array or an empty one
-
+                
+                index_dset = np.array2string (index_tup[0].numpy())
+                
                 #  index_tup is equal to the first element in the tuple 'index_tup'
                 index_tup = index_tup[0]
+                #print('index tup2 =',index_tup)
+
+                #print('index tup2 type =',type(index_tup))
+
 
 
                 # batchsize should be equal to the length of the index_tup
@@ -400,7 +406,10 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                              mask_pred.min(), mask_pred.max()))
 
                 if verb :
-                    this_str = "... dset {:5d} / {:5d}".format(idx, Ndset)
+                    sss = str(int(index_tup[0]))
+                    if len(index_tup) > 1:
+                        sss+= "-" + str(int(index_tup[-1]))
+                    this_str = "... dset {:11s} / {:5d}".format(sss, Ndset)
                     this_str+= ", loss"
                     print("   {:30s} : {:.4f}".format(this_str, LOSS))
 
