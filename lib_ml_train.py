@@ -50,7 +50,7 @@ list_data_norm = [ 'min_max_scale',
 
 
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
-              optimizer, half_prec, wt_norm, data_norm, do_nifti, outdir, 
+              optimizer, half_prec, wt_norm, restart, data_norm, do_nifti, outdir, 
               verb): 
     """
     Main training function. Sends training to either GPU or CPU.
@@ -68,6 +68,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     net_arch     : network architecture name, from available list (str)
     loss_func    : loss function name, from available list (str)
     optimizer    : optimizer name, from available list (str)
+    restart      : Restart using checkpoint weights
     do_nifti     : binary switch about whether to write out nifti dsets 
                    during the network run
     outdir       : directory for various outputs
@@ -83,7 +84,8 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     perf_file     = '/'.join([outdir, 'log_performance.txt'])
     dash          = '-' * 20
     epochend      = '=' * 80
-    step          = 0         
+    step          = 0   
+          
 
     # check the device available 
     if torch.cuda.is_available():
@@ -106,6 +108,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
         print("++ {:30s} : {}".format('Data normalization', data_norm))
         print("++ {:30s} : {}".format('Loss function', loss_func))
         print("++ {:30s} : {}".format('Using weight datasets', USE_DPTH_WTS))
+        print("++ {:30s} : {}".format('Restart using checkpoint weights', restart))
         print("++ {:30s} : {}".format('Network architecture', net_arch))
 
     if half_prec == 1:
@@ -130,6 +133,11 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
         print("** This should never happen! 'network architecture' is {}" 
               "".format(net_arch))
         sys.exit(1)
+
+    if (restart ==1) :# loading model from checkpoint.pt file
+
+        net.load_state_dict(torch.load('checkpoint.pt'),strict=False)
+
 
 
     if (device == torch.device('cpu')) and (half_prec == 1):
@@ -464,10 +472,19 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
                 
                     # end of bb loop : for bb in range (bsize)
+
+                    # save the checkpoint 
+                    if (epoch%10 == 0) and (phase == 'train') :
+                        checkpoint_flname  =  "{}_{}_{}{}".format('checkpoint',
+                                                                phase, strepoch,'.pt')
+                        torch.save(net.state_dict(), checkpoint_flname)
+
+
                 idx+= 1 # number of steps in an epoch
                 # end of the loop for all batches in the epoch
 
-            end = time.time() # end of FOR loop for PHASE
+            end = time.time()
+             # end of FOR loop for PHASE
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)

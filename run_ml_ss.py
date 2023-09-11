@@ -152,6 +152,13 @@ def get_args():
                         help='weight normalization' + '\n' +
                         '(def: {})'.format(str(def_wt_norm)))
 
+    def_restart = 0
+    parser.add_argument("-r", "--restart", 
+                        dest="restart", 
+                        type=int, default=def_restart,
+                        help='restart using checkpoint weights' + '\n' +
+                        '(def: {})'.format(str(def_restart)))  
+
     def_loss_func = lml.DEF_CalcLoss
     parser.add_argument("-L", "--Loss", 
                         dest="loss_func", 
@@ -329,6 +336,7 @@ if __name__ == '__main__':
     wt_norm   = args.weight_norm
     do_nifti  = args.do_nifti
     data_norm = args.data_norm
+    restart   = args.restart  
     outdir    = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
@@ -355,5 +363,5 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
-                         optimizer, half_prec, wt_norm, data_norm, do_nifti, 
+                         optimizer, half_prec, wt_norm, restart, data_norm, do_nifti, 
                          outdir, verb )
