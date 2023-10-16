@@ -20,7 +20,7 @@ import lib_ml_cerebrum      as lmc
 import lib_nibabel_utils    as lnu
 import pytorchtools         as ptt
 
-from   lib_fp16util     import convert_network
+from   lib_fp16util     import network_to_half
 import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
@@ -150,11 +150,8 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     if device == torch.device('cuda'):
         if half_prec == 1:
             
-            net = convert_network(net, dtype=torch.float16)
-            ### the following gives error
-            #net = convert_network(net, dtype = torch.cuda.HalfTensor) 
-            #torch.backends.cudnn.enabled 
-    
+            net = network_to_half(net)
+          
 
     # print the model summary
     if verb > 1:
@@ -164,9 +161,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     # load optimizer
     if optimizer == 'Adam':
         if half_prec == 1:
-            optimizer = Adam16(net.parameters(), lr=lr, 
-                           betas=(0.9, 0.999), 
-                           eps=1e-8, weight_decay=0)
+            optimizer = optim.Adam(net.parameters(), lr=lr, eps=1e-4)
         else : #(half_prec == 0)
             optimizer = optim.Adam(net.parameters(), lr=lr)
     
@@ -352,7 +347,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
-                    mask_pred = net.forward(orig_data, verb) 
+                    mask_pred = net.forward(orig_data) 
                     #print('pred_mask size',mask_pred.size())
                     # The output mask_pred is of type 'torch.FloatTensor'
 
@@ -453,22 +448,22 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                         
                             lnu.write_tensor_to_disk_nifti(orig_data[bb][0], 
                                                         fname=fname_orig,
-                                                        head=orig_head)
+                                                        head=orig_head, half_prec=half_prec)
 
                             lnu.write_tensor_to_disk_nifti( mask_data[bb][0], 
                                                         fname=fname_targ,
-                                                        head=orig_head)
+                                                        head=orig_head, half_prec=half_prec)
 
                         # [PT] I don't think this needs to be written out
                         # generally, at present.  Just at higher verbosity seems fine?
                         if verb > 3 :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][0], 
                                                         fname=fname_pred_ch00_back,
-                                                        head=orig_head )
+                                                        head=orig_head, half_prec=half_prec)
 
                         lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
-                                                    head=orig_head )
+                                                    head=orig_head , half_prec=half_prec)
 
                 
                     # end of bb loop : for bb in range (bsize)

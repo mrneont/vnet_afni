@@ -388,7 +388,7 @@ TEMP_M44_32iso_nib_ori = reorient_mat44(TEMP_M44_32iso_RAI,
 # write the target masks into output directory 
 # [PT] starting to translate this to having more correct header info.
 #    + pieces are still hardwired now, but these should overlay now
-def write_tensor_to_disk_nifti(tt, fname=None, head=None):
+def write_tensor_to_disk_nifti(tt, fname=None, head=None, half_prec=False):
     """This function writes a torch tensor volume to disk as a NIFTI file.
 
     Inputs
@@ -406,6 +406,9 @@ def write_tensor_to_disk_nifti(tt, fname=None, head=None):
 
     # convert torch.Tensor to np.array
     arr   = tt.cpu().detach().numpy()
+
+    if half_prec:
+        arr = arr.astype(np.float32)
 
     if head :
         write_out_nifti_vol( arr, fname,

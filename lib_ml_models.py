@@ -306,7 +306,7 @@ class VNet_orig(nn.Module):
                 #count= count+1
         '''
          
-    def forward(self, x, verb=0):
+    def forward(self, x):
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
         down2 = self.down2(down1)
         down3 = self.down3(down2)
@@ -319,7 +319,7 @@ class VNet_orig(nn.Module):
         up4 = self.up4(up3, down1)
         up5 = self.up5(up4)
 
-        if verb >=2 :
+        if 0 :
             print('\n')
             print('*****************  NETWORK LAYERS *************************')
             print('ENCODER PART')
