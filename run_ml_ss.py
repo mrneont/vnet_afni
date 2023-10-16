@@ -135,6 +135,13 @@ def get_args():
                         help='half precision' + '\n' +
                         '(def: {})'.format(str(def_half_prec)))
 
+    def_mixed_prec = 0
+    parser.add_argument("-mp", "--mixed_prec", 
+                        dest="mixed_prec", 
+                        type=int, default=def_mixed_prec,
+                        help='mixed precision' + '\n' +
+                        '(def: {})'.format(str(def_mixed_prec)))
+
     def_data_norm = lmt.list_data_norm[0]
     parser.add_argument("-dn", "--data_norm", 
                         dest="data_norm", 
@@ -322,22 +329,23 @@ if __name__ == '__main__':
 
     # get args (path and parameter settings) , and prepare to pass
     # along to the main training net prog
-    args      = get_args()
-    data_path = args.data_dir
-    epochs    = args.epochs
-    lr        = args.learning_rate
-    tr_bsize  = args.train_batch_size
-    seed      = args.seed
-    net_arch  = args.net_arch
-    loss_func = args.loss_func
-    optimizer = args.optimizer
-    verb      = args.verb
-    half_prec = args.half_prec
-    wt_norm   = args.weight_norm
-    do_nifti  = args.do_nifti
-    data_norm = args.data_norm
-    restart   = args.restart  
-    outdir    = prep_outdir(args.outdir, verb=verb)
+    args       = get_args()
+    data_path  = args.data_dir
+    epochs     = args.epochs
+    lr         = args.learning_rate
+    tr_bsize   = args.train_batch_size
+    seed       = args.seed
+    net_arch   = args.net_arch
+    loss_func  = args.loss_func
+    optimizer  = args.optimizer
+    verb       = args.verb
+    half_prec  = args.half_prec
+    mixed_prec = args.mixed_prec
+    wt_norm    = args.weight_norm
+    do_nifti   = args.do_nifti
+    data_norm  = args.data_norm
+    restart    = args.restart  
+    outdir     = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
@@ -363,5 +371,5 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
-                         optimizer, half_prec, wt_norm, restart, data_norm, do_nifti, 
+                         optimizer, half_prec, mixed_prec, wt_norm, restart, data_norm, do_nifti, 
                          outdir, verb )

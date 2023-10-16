@@ -1,4 +1,3 @@
-
 import os, io
 import sys
 import time
@@ -24,6 +23,7 @@ from   lib_fp16util     import network_to_half
 import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
+from torch.cuda.amp import autocast, GradScaler
 # --------------------------------------------------------------------------
 
 # List of 'list of various choices'. The choices could be appended
@@ -50,7 +50,7 @@ list_data_norm = [ 'min_max_scale',
 
 
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
-              optimizer, half_prec, wt_norm, restart, data_norm, do_nifti, outdir, 
+              optimizer, half_prec, mixed_prec, wt_norm, restart, data_norm, do_nifti, outdir, 
               verb): 
     """
     Main training function. Sends training to either GPU or CPU.
@@ -85,7 +85,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     dash          = '-' * 20
     epochend      = '=' * 80
     step          = 0   
-          
+    #mixed_prec    = 0      
 
     # check the device available 
     if torch.cuda.is_available():
@@ -113,6 +113,8 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
     if half_prec == 1:
         print("++ {:30s} : {}".format('Precision', 'half'))
+    elif mixed_prec == 1:
+        print("++ {:30s} : {}".format('Precision', 'mixed'))
     else :
         print("++ {:30s} : {}".format('Precision', 'full'))
 
@@ -160,9 +162,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
     # load optimizer
     if optimizer == 'Adam':
-        if half_prec == 1:
+        if (half_prec == 1) or (mixed_prec == 1):
             optimizer = optim.Adam(net.parameters(), lr=lr, eps=1e-4)
-        else : #(half_prec == 0)
+        else : #(full_prec == 1)
             optimizer = optim.Adam(net.parameters(), lr=lr)
     
     else:
@@ -204,6 +206,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                  'val_loss', 'val_loss_med', 'val_loss_std'))
     
     start = time.time()
+
+    if mixed_prec == 1 :
+        scaler = GradScaler()
 
     for epoch in range(num_epochs): # start of FOR loop for EPOCHS
         print("++ {:30s} : {}".format('Start of epoch', epoch))
@@ -261,12 +266,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 
                 #  index_tup is equal to the first element in the tuple 'index_tup'
                 index_tup = index_tup[0]
-                #print('index tup2 =',index_tup)
-
-                #print('index tup2 type =',type(index_tup))
-
-
-
+                
                 # batchsize should be equal to the length of the index_tup
                 # 'index_tup' has indices of the data volumes in the train/validation dataset 
                 bsize = len(index_tup)
@@ -347,17 +347,28 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
-                    mask_pred = net.forward(orig_data) 
+                    if (mixed_prec == 1):
+                        
+                        with autocast():
+                            mask_pred = net.forward(orig_data) 
                     #print('pred_mask size',mask_pred.size())
                     # The output mask_pred is of type 'torch.FloatTensor'
 
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
-                    if USE_DPTH_WTS :
-                        LOSS = loss.forward(mask_pred, mask_data, dpth_data)
-                    else:
-                        LOSS = loss.forward(mask_pred, mask_data)
+                            if USE_DPTH_WTS :
+                                LOSS = loss.forward(mask_pred, mask_data, dpth_data)
+                            else:
+                                LOSS = loss.forward(mask_pred, mask_data)
+
+                    else: 
+                        
+                        mask_pred = net.forward(orig_data) 
+                        if USE_DPTH_WTS :
+                                LOSS = loss.forward(mask_pred, mask_data, dpth_data)
+                        else:
+                                LOSS = loss.forward(mask_pred, mask_data)
                     '''
                     # Notes about how the dice and loss is calculated when batch_size >1 
 
@@ -382,10 +393,21 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 # backward propagation (where gradients are computed)
                 # and optimization only if in training phase
                 if phase == 'train':
-                    LOSS.backward()
-                    optimizer.step()
+
+                    if mixed_prec == 1:
+                        
+                        scaler.scale(LOSS).backward()
+                        scaler.step(optimizer)
+                    else: 
+                        LOSS.backward()
+                        optimizer.step()
                     #print('LOSS.item()=',LOSS.item())
                     train_losses.append(LOSS.item())
+
+                    # Updates the scale for next iteration.
+                    if mixed_prec == 1:
+                        
+                        scaler.update()
                     # + plot the gradient flow to check poosible
                     #   gradient vanishing / exploding problems.
                     # + named parameters() provide an iterator that
@@ -463,7 +485,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
                         lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
-                                                    head=orig_head , half_prec=half_prec)
+                                                    head=orig_head, half_prec=half_prec)
 
                 
                     # end of bb loop : for bb in range (bsize)
