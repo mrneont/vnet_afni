@@ -1,0 +1,14 @@
+name: vnet_ymac_2023_12_19                       # conda env create -f environment_vnet_ymac_2023_12_19.yml
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10                        # afni python...
+  - matplotlib  #=3.3.4                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch=2.0.1                           # vnet mods
+  - nibabel
+    #  - pip
+    #  - pip:
+    #    - torchsummary

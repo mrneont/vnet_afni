@@ -1,0 +1,14 @@
+name: vnet_tech_2024_01_02                       # conda env create -f environment_vnet_tech_2024_01_02.yml
+channels:
+  - conda-forge
+dependencies:
+  - python                        # afni python...
+  - matplotlib  #=3.3.4                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch                           # vnet mods
+  - nibabel
+    #  - pip
+    #  - pip:
+    #    - torchsummary
