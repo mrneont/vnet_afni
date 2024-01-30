@@ -13,60 +13,48 @@ set param_level = ${here}/param_1D
 
 # subdirs (some exist, some to be made)
 
-cd ${param_level}
+set orig_folder = '/Users/narayanaswamyy2/RR_AFNI_VNET/mridataset/data_augment_master/FQC_data_FS_208/training/orig'
+set mask_folder = '/Users/narayanaswamyy2/RR_AFNI_VNET/mridataset/data_augment_master/FQC_data_FS_208/training/mask'
+set trans_folder = '/Users/narayanaswamyy2/RR_AFNI_VNET/mridataset/data_augment_master/transformation'
+set param_folder = '/Users/narayanaswamyy2/RR_AFNI_VNET/mridataset/data_augment_master/transformation/param_1D_files'
+cd  ${orig_folder}
 
-set dir_trans  = ${PWD}/transformed
-mkdir ${dir_trans}
+set dset      = sub-705_orig.nii.gz 
 
-set dset_trans_dir      = ${dir_trans}/orig
-set dset_mask_trans_dir = ${dir_trans}/mask
-mkdir ${dset_trans_dir}
-mkdir ${dset_mask_trans_dir}
+set dset_mask = sub-705_mask.nii.gz
 
-set dset      = pac_125_orig.nii.gz 
+set param_fl  = shift_minus30y.1D
 
-set dset_mask = pac_125_mask.nii.gz
-
-
-set fl1D = ( *.1D)
-# loop over all the 1D param files in the folder 
-foreach param_fl  (${fl1D})
 	
-
-	# print the 1D param file which contains the 12 parameters
-	# required for transformation
-	echo " ${param_fl}"
+# print the 1D param file which contains the 12 parameters
+# required for transformation
+echo " ${param_fl}"
 
 	
 
-	set prefix      = `python -c  "print('${param_fl}'.split('.')[0])"`
+set prefix      = `python -c  "print('${param_fl}'.split('.')[0])"`
 
+echo "prefix= ${prefix}"
+
+set dset_trans  =  `python -c "print('${dset}'.split('.')[0] +'_'+'${prefix}'+\
+                                    '.'+'${dset}'.split('.')[-2] +\
+                                    '.'+'${dset}'.split('.')[-1])"`
+
+set dset_mask_trans  =  `python -c "print('${dset_mask}'.split('.')[0]+'_'+ \
+					    '${prefix}' + '.' + '${dset_mask}'.split('.')[-2]+ \
+					     '.'+ '${dset_mask}'.split('.')[-1] )"`
 	
 
-	set dset_trans  =  `python -c "print('${dset}'.split('_')[0]+'_'+  \
-					    '${prefix}' + '_' + '${dset}'.split('_')[1]+ \
-					     '_'+ '${dset}'.split('_')[2] )"`
-
-	set dset_mask_trans  =  `python -c "print('${dset_mask}'.split('_')[0]+'_'+ \
-					    '${prefix}' + '_' + '${dset_mask}'.split('_')[1]+ \
-					     '_'+ '${dset_mask}'.split('_')[2] )"`
-	
-
-	3dAllineate -overwrite -input ${dset}       \
-                -master ${dset}   \
-                -prefix ${dset_trans_dir}/${dset_trans}  \
+3dAllineate -overwrite -input ${orig_folder}/${dset}       \
+                -master ${orig_folder}/${dset}   \
+                -prefix ${trans_folder}/${dset_trans}  \
                 -final wsinc5  \
-                -1Dparam_apply ${param_fl}
+                -1Dparam_apply ${param_folder}/${param_fl}
 
 
-   	3dAllineate -overwrite -input ${dset_mask}       \
-                -master ${dset_mask}       \
-                -prefix ${dset_mask_trans_dir}/${dset_mask_trans}  \
+3dAllineate -overwrite -input ${mask_folder}/${dset_mask}       \
+                -master ${mask_folder}/${dset_mask}       \
+                -prefix ${trans_folder}/${dset_mask_trans}  \
                 -final NN          \
-                -1Dparam_apply ${param_fl}
+                -1Dparam_apply ${param_folder}/${param_fl}
 
-
-
-
-
-end 

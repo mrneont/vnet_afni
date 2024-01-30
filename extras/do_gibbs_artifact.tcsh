@@ -1,38 +1,92 @@
 #!/bin/tcsh
 
+# script to introduce the gibbs/ringing artifact into the datasets. 
 
-# FFT to complex
-3dFFT -overwrite   -altIN  -complex  -prefix sub_001_orig_FFT.nii.gz sub_001_orig.nii.gz
+# DA_dir      : is the data Data augmentation directory 
+# dataset_dir : is the dataset directory
 
+# set Data augmentation directory : DA_dir
+set DA_dir       =  $1
+set dataset_dir  =  $2
+set fl_name      = 'FILE.txt'
+# list of orig dataset into which the gain inhomogenity will be applied
+set v=`cat  ${DA_dir}/${fl_name}`
+#echo ${v}
+set i=1
 
-# back to 
-#3dFFT -overwrite   -inverse -prefix  pac_125_FFT_DONE.nii.gz   pac_125_orig_128sz_FFT.nii.gz
+set orig_folder  = "training/orig"
+set mask_folder  = "training/mask"
+set trans_folder = "gibbs" 
+echo " orig_folder = ${orig_folder}"
 
+#cd  ${orig_folder}
+echo " mask_folder = ${mask_folder} "
 
-3dcalc -a sub_001_orig.nii.gz                                              \
-	    -expr 'step(300-(i-128)*(i-128)-(j-128)*(j-128)-(k-128)*(k-128))' \
-	    -prefix ball.nii.gz \
-	    -overwrite
-
-
-3dcalc -overwrite \
-  -a sub_001_orig_FFT.nii.gz \
-  -b ball.nii.gz \
-        -expr 'a*b'  \
-        -prefix sub_001_orig_FFT_roi.nii.gz
-
-
-
-
-# back to 
-3dFFT -overwrite  -altIN -inverse -prefix  sub_001_orig_FFT_gibbs.nii.gz   sub_001_orig_FFT_roi.nii.gz
-
+#echo "HELLO"
+#echo ${dset_list}
+set rad = 100
 
 
+while ( $i < = 10 )
+    set dset = $v[$i]
+    
 
-3dcalc -overwrite \
-  -a sub_001_orig.nii.gz \
-  -b sub_001_orig_FFT_gibbs.nii.gz \
-        -expr 'a-b'  \
-        -prefix sub_256_res.nii.gz
+    echo ${dset}
 
+	set dset_FFT  =  `python -c "print('${dset}'.split('.')[0] +'_'+'FFT'+\
+                                    '.'+'${dset}'.split('.')[-2] +\
+                                    '.'+'${dset}'.split('.')[-1])"`
+
+    set dset_ZP =  `python -c "print('${dset}'.split('.')[0] +'_'+'FFT'+\
+    								'_'+'ZP'+\
+                                    '.'+'${dset}'.split('.')[-2] +\
+                                    '.'+'${dset}'.split('.')[-1])"`
+
+    set dset_roi =  `python -c "print('${dset}'.split('.')[0] +'_'+'FFT'+\
+    								'_'+'ZP'+\
+    								'_'+'roi'+\
+                                    '.'+'${dset}'.split('.')[-2] +\
+                                    '.'+'${dset}'.split('.')[-1])"`
+    
+    set dset_trans = `python -c "print('${dset}'.split('.')[0] +'_'+'FFT'+\
+    								'_'+'gibbs'+\
+                                    '.'+'${dset}'.split('.')[-2] +\
+                                    '.'+'${dset}'.split('.')[-1])"`
+    echo ${dset_FFT} 
+    echo ${dset_ZP}                                 
+    echo ${dset_roi}   
+    echo ${dset_trans}   
+
+
+	# FFT to complex
+	3dFFT -overwrite   -altIN  -complex  -prefix ${DA_dir}/${trans_folder}/${dset_FFT} \
+           ${dataset_dir}/${orig_folder}/${dset}
+
+    3dZeropad -overwrite -prefix ${DA_dir}/${trans_folder}/${dset_ZP} \
+              -RL $rad -AP $rad  ${DA_dir}/${trans_folder}/${dset_FFT}
+
+    3dZeropad  -overwrite -prefix ${DA_dir}/${trans_folder}/${dset_roi} \
+               -master ${dataset_dir}/${orig_folder}/${dset}  ${DA_dir}/${trans_folder}/${dset_ZP}
+
+    3dFFT -overwrite  -inverse -prefix  ${DA_dir}/${trans_folder}/${dset_trans} \
+          -abs ${DA_dir}/${trans_folder}/${dset_roi}
+
+    rm ${DA_dir}/${trans_folder}/${dset_ZP}
+    rm ${DA_dir}/${trans_folder}/${dset_FFT}
+    rm ${DA_dir}/${trans_folder}/${dset_roi}
+
+    echo " dset = ${dset} "
+    set mask = ${dset:gas/orig/mask/}
+    echo " mask = ${mask} "
+
+    set mask_trans = "${dset_trans:gas/orig/mask/}"
+    echo " mask_trans = ${mask_trans} "
+    
+    cp  ${dataset_dir}/${mask_folder}/${mask} ${DA_dir}/${trans_folder}/${mask_trans}
+
+
+    @ i = $i + 1
+
+
+
+end
