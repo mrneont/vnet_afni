@@ -1,0 +1,14 @@
+name: vnet_ymac_2024_02_14                      # conda env create -f environment_vnet_ymac_2024_02_14.yml
+channels:
+  - conda-forge
+dependencies:
+  - python                        # afni python...
+  - matplotlib  #=3.3.4                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch = 2.1.0   #maintain same pytorch version as in technetium # vnet mods
+  - nibabel
+    #  - pip
+    #  - pip:
+    #    - torchsummary
