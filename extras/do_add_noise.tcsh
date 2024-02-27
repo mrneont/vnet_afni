@@ -29,27 +29,27 @@ set percent = (10 20 30) #SNR percentage
 
 while ( $i < = 25 )
     set dset = $v[$i]
-	echo ${dset}
+    echo ${dset}
 
-	# find the median  of the voxel value in the dset
-	set vals   = `3dBrickStat -slow -automask -median ${dataset_dir}/${orig_folder}/${dset}`
-	
-	set med    = ${vals[2]}
+    # find the median  of the voxel value in the dset
+    set vals   = `3dBrickStat -slow -automask -median ${dataset_dir}/${orig_folder}/${dset}`
+    
+    set med    = ${vals[2]}
 
-	echo ${med}
+    echo ${med}
 
     set axis_ran = (`ccalc -i '1+iran(2)'`)
     echo ${axis_ran}
-	foreach x (${axis_ran}) # counter for the array 'axis'
-    	
-		# prefix denotes the type of artifact inrtoduced into the dset
+    foreach x (${axis_ran}) # counter for the array 'axis'
+        
+        # prefix denotes the type of artifact inrtoduced into the dset
 
-    	set prefix  = `python -c "print('noise'+ '${percent[${x}]}')"`
+        set prefix  = `python -c "print('noise'+ '${percent[${x}]}')"`
 
-    	# dset_trans is the transformed dset
-    	
+        # dset_trans is the transformed dset
+        
 
-		set dset_trans  =  `python -c "print('${dset}'.split('.')[0] +'_'+'${prefix}'+\
+        set dset_trans  =  `python -c "print('${dset}'.split('.')[0] +'_'+'${prefix}'+\
                                     '.'+'${dset}'.split('.')[-2] +\
                                     '.'+'${dset}'.split('.')[-1])"`
 
@@ -61,16 +61,16 @@ while ( $i < = 25 )
 
         set mask_trans = "${dset_trans:gas/orig/mask/}"
         echo " mask_trans = ${mask_trans} "
-    	# add zero-centered Gaussian random noise (whose stdev = dset's
-		# median), and then scale that to reach our stated SNR
-		#echo  ${noise_lvl[${x}]}
+        # add zero-centered Gaussian random noise (whose stdev = dset's
+        # median), and then scale that to reach our stated SNR
+        #echo  ${noise_lvl[${x}]}
 
-		3dcalc                   \
-   		-overwrite  			 \
-    	-a ${dataset_dir}/${orig_folder}/${dset}     		  \
-    	-expr "a + gran(0,${med})* ${noise_lvl[${x}]}"          \
-    	-prefix ${DA_dir}/${trans_folder}/${dset_trans} \
-    	-datum float \
+        3dcalc                   \
+        -overwrite               \
+        -a ${dataset_dir}/${orig_folder}/${dset}               \
+        -expr "a + gran(0,${med})* ${noise_lvl[${x}]}"          \
+        -prefix ${DA_dir}/${trans_folder}/${dset_trans} \
+        -datum float \
         -nscale 
         #copy the corresponding mask file
         cp  ${dataset_dir}/${mask_folder}/${mask} ${DA_dir}/${trans_folder}/${mask_trans}
