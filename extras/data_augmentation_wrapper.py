@@ -18,9 +18,10 @@ import re #regular expression
 * flag |  input
 *  -a  | --data_augment_path (data_path for data augmentation folder)
 *  -d  | --data_dir (data path for the dataset folder)
-*  -l  | --file_list (file having the list of datasets )
-*  -da | --data_aug (data augmentation type)
-*  -ph | --phase (training phase or validation phase)
+*  
+* 
+* + Please note create a log folder to capture the results of
+*   master_script.tcsh
 * 
 * sample usage of the code : python data_augmentation_wrapper.py 
 *                           -a '/Users/name/data_augmentation' 
@@ -120,7 +121,7 @@ def get_daug_dict(fl_basename):
             # Default scaling range  is plus/minus 20% of grid size
             # Default shearing range is plus/minus 0.1111
             # Default angle range    is plus/minus 30 degrees
-
+            # yns: option to pick without replacement 
             affine_rand = random.choices(['rotation','scale','shear','shift'], k=2)
             # condition to avoid random selection of same two augmentation types
             while (affine_rand[0] == affine_rand[1]):
@@ -128,8 +129,14 @@ def get_daug_dict(fl_basename):
 
             affine_type = affine_rand[0]+'_'+ affine_rand[1]
             # DEFINITION OF AFFINE TRANSFORMATION PARAMETERS
+            #pt : # x-shift  y-shift  z-shift   \
+            #       z-angle  x-angle  y-angle \
+            #       x-scale  y-scale  z-scale  \
+            #      y/x-shear  z/x-shear  z/y-shear 
             # param_map = [#1  #2  #3  #4 #5 #6  #7  #8  #9  #10  #11  #12]
-            # param_map = [Shz Shx Shy Rz Rx Ry Scz Scx Scy  Shez Shex Shey]
+            
+            # param_map = [Shx Shy Shz Rz Rx Ry Scx Scy Scz  Sheyx Shezx Shezy]
+           
 
             # empty list for param1D of 2 types of affine_transforms
             param1D=[[],[]]
@@ -183,12 +190,13 @@ def get_daug_dict(fl_basename):
                             Shy = 0
                             Shz = rand_shift
                         
-                        param1D[x] = [Shz, Shx, Shy, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                        param1D[x] = [Shx, Shy, Shz, 0, 0, 0, 0, 0, 0, 0, 0, 0]
                     
                     case 'scale':
                         #do_something(affine_trans)
                         print("augmentation type : doing scale")
                         # scaling applies to all axis
+                        #yns range is (0.8,1.2) 
                         rand_scale   = round(random.uniform(-0.8, 0.8), 1)
                         # condition to avoid the scaling =0
                         while (rand_scale == 0):
@@ -198,7 +206,7 @@ def get_daug_dict(fl_basename):
                         Scy          = rand_scale
                         
                         
-                        param1D[x] = [ 0, 0, 0, 0, 0, 0, Scz, Scx, Scy, 0, 0, 0]
+                        param1D[x] = [ 0, 0, 0, 0, 0, 0, Scx, Scy, Scz, 0, 0, 0]
                         
                     case 'shear':
                         #do_something(affine_trans)
@@ -221,13 +229,15 @@ def get_daug_dict(fl_basename):
                             Shey = 0
                             Shez = rand_shear
 
-                        param1D[x] = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, Shez, Shex, Shey]
+                        param1D[x] = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, Shex, Shez, Shey]
                         
                         
             #adding element wise the param list of the two  affine transformations
             list_param1D  = [x + y for x, y in zip(param1D[0], param1D[1])]
+            param1D      =  " ".join(map(str, list_param1D))
+            print(param1D)
             daug1_keys   = ['type', 'param1D']
-            daug1_values = [affine_type, list_param1D]
+            daug1_values = [affine_type, param1D]
 
     match phase2_daug:
 
@@ -279,61 +289,70 @@ def get_daug_dict(fl_basename):
     return daug_dict
 
 
-def write_script(da_dict):
+def write_script(da_dict,fl_name, daug):
     # set the filename for the shell script based on the dataset
-    file_name = da_dict['fl_basename'].split('.')[0]
+    file_name = os.path.basename(fl_name)
     new_extension = ".tcsh"
     #print('file_name=',file_name)
-    script_fl = file_name +new_extension
-    #print('script_fl =', script_fl)
+    script_fl = file_name.split('.')[0] +new_extension
+    print('script_fl =', script_fl)
     f = open(script_fl, "w")
     f.write("#!/bin/tcsh")
     f.write('\n \n \n')
 
+    # notes 
+    # + the individual shell script need the 
+    #   absolute path to the dataset 
+    #print("write_script fl_name =  ",fl_name)
     # phase-1  data augmentation shell script
-
-    if (da_dict['daug_ph1']['type'] == 'gibbs'):#(weightage =15%)
-        gibbs_radius = da_dict['daug_ph1']['radius']
-        print('gibbs_radius =',gibbs_radius)
-        f.write("tcsh do_gibbs.tcsh {} {}""".format(da_dict['fl_basename'],\
+    if (daug == 1):
+        if (da_dict['daug_ph1']['type'] == 'gibbs'):#(weightage =15%)
+            gibbs_radius = da_dict['daug_ph1']['radius']
+            print('gibbs_radius =',gibbs_radius)
+            f.write("tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
                                                         gibbs_radius))
-        f.write('\n \n \n')
-    else: # all cominations of affine_transform(weightage =85%)
-        param1D = da_dict['daug_ph1']['param1D']
-        f.write("tcsh do_affine.tcsh {} {}""".format(da_dict['fl_basename'],\
+            f.write('\n \n \n')
+        else: # all cominations of affine_transform(weightage =85%)
+            param1D = da_dict['daug_ph1']['param1D']
+            f.write("tcsh do_affine.tcsh {} {}""".format(fl_name,\
                                                         param1D))
-        f.write('\n \n \n')
-    # phase-2  data augmentation shell script
+            f.write('\n \n \n')
+        # phase-2  data augmentation shell script
 
-    phase2_daug = da_dict['daug_ph2']['type']
+        phase2_daug = da_dict['daug_ph2']['type']
 
-    match phase2_daug:
+        match phase2_daug:
 
-        case 'gain_inhom':
-            axis   = da_dict['daug_ph2']['axis']
-            window = da_dict['daug_ph2']['window']
-            f.write("tcsh do_gain_inhomogenity.tcsh {} {} {}""".format(da_dict['fl_basename'],\
+            case 'gain_inhom':
+                axis   = da_dict['daug_ph2']['axis']
+                window = da_dict['daug_ph2']['window']
+                f.write("tcsh do_gain_inhomogenity.tcsh {} {} {}""".format(fl_name,\
                                                         axis, window))
 
-        case 'zipper':
-            axis  = da_dict['daug_ph2']['axis']
-            width = da_dict['daug_ph2']['zip_width']
-            f.write("tcsh do_zipper_noise.tcsh {} {} {}""".format(da_dict['fl_basename'],\
+            case 'zipper':
+                axis  = da_dict['daug_ph2']['axis']
+                width = da_dict['daug_ph2']['zip_width']
+                f.write("tcsh do_zipper_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, width))
 
-        case 'add_noise':
-            axis         = da_dict['daug_ph2']['axis']
-            noise_level  = da_dict['daug_ph2']['noise_lvl']
-            f.write("tcsh do_add_noise.tcsh {} {} {}""".format(da_dict['fl_basename'],\
+            case 'add_noise':
+                axis         = da_dict['daug_ph2']['axis']
+                noise_level  = da_dict['daug_ph2']['noise_lvl']
+                f.write("tcsh do_add_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, noise_level))
 
-    f.write('\n \n \n')
+        f.write('\n \n \n')
 
     # phase-3  data augmentation shell script
 
     f.write("# tcsh do_refacing.tcsh ")
+    f.write('\n \n \n')
+    # create the edt data for all the masks 
 
+    
+    f.write("tcsh do_daug_weight.tcsh {}""".format(fl_name))
 
+    f.write('\n \n \n')
     f.close()
 
 
@@ -370,22 +389,39 @@ def main():
     orig_data_list = glob.glob(orig_path_str)
     orig_data_list.sort()
     #print(orig_data_list)
-
-
+    master_fl = "master_script.tcsh"
+    fl        = open(master_fl, "w")
+    #fl.write("#!/bin/tcsh")
+    #fl.write('\n \n \n')
     for fl_name in orig_data_list:
         # condition to check whether to daug or not
         fl_basename = os.path.basename(fl_name)
         print("\n Processing :",fl_basename)
+        name = fl_basename.split('.')[0]
+        print(name)
+        log_fl = "log_"+name +".txt"
+        print(log_fl)
         fl_num = int(re.search(r'\d+', fl_basename).group(0))
         if ((fl_num%1000) ==0):
             print('Status msg : Original copy of dset: no data augmentation')
+            daug = 0 # flag to depict data_augmentation
+            daug_dict = {} # empty dictionary
+            print("fl_name =",fl_name)
+            write_script(daug_dict,fl_name,daug)
+
         else: 
             print('Status msg : do augmentation')
             daug_dict = get_daug_dict(fl_basename)
+
             # write scripts based on the dictionary for each dataset
-            write_script(daug_dict)
-            # list of dict
+            daug = 1 # flag to depict data_augmentation
+            write_script(daug_dict,fl_name,daug)
             list_daug.append(daug_dict)
+            #|& tee logs/log_sub-001001_orig.txt
+        fl.write("tcsh -x {}.tcsh |& tee logs/{}""".format(fl_basename.split('.')[0],log_fl))
+        fl.write('\n \n \n')
+            # list of dict
+            
 
     # Serializing json
     json_object = json.dumps(list_daug, indent=4)
@@ -393,6 +429,6 @@ def main():
     with open("daug.json", "w") as outfile:
         outfile.write(json_object)
 
-
+    fl.close()
 
 main()
