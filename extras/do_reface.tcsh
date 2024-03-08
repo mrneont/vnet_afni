@@ -1,48 +1,26 @@
 #!/bin/tcsh
 
-set here      = ${PWD}
 
-echo ${here}
-set orig   =    ${here}/orig
-echo ${orig}
+# set Data augmentation directory and filename: daug
+set daug  =  $1
 
-cd ${orig}
-set dset_list =  (*.gz) 
+# seperate out the  folder name 
 
-echo ${dset_list}
+# daug = orig folder/orig_data
+set daug_dir = `dirname ${daug}`
+echo "++ The orig folder :   ${daug_dir}"
 
-foreach dset  (${dset_list})
+# seperate  out the filename of the dataset 
+# orig_data
+set dset = `basename ${daug}`
+echo "++ The orig basename :   ${dset}"
 
-	echo ${dset}
+# access the copies of dataset 
+cd ${daug_dir}
 
-	set prefix      = `python -c "print('reface' )"`
-
-	
-	set folder      = `python -c "print('${dset}'.split('.')[0]+'_'+'reface' +'_'+'QC')"`
-
-	set auxfl       =  `python -c "print('${dset}'.split('.')[0] +'_'+'${prefix}'+\
-									'.'+ 'face' +\
-                                    '.'+'${dset}'.split('.')[-2] +\
-                                    '.'+'${dset}'.split('.')[-1])"`
-    echo ${auxfl}
-	echo ${folder}
-
-	set dset_trans  =  `python -c "print('${dset}'.split('.')[0] +'_'+'${prefix}'+\
-                                    '.'+'${dset}'.split('.')[-2] +\
-                                    '.'+'${dset}'.split('.')[-1])"`
-
-
-	@afni_refacer_run                                                     \
-		-input ${dset}                                                 \
-		-mode_reface                                                      \
-		-prefix ${here}/${dset_trans}
-
-	rm  ${here}/${auxfl}
-	rm -r ${here}/${folder}
-
-end 
-#end_time=$(date +%s)
-#elapsed=$(( end_time - start_time ))
-#echo ${elapsed}
+@afni_refacer_run                                                     \
+    -input ${dset}                                                 \
+    -mode_reface                                                      \
+    -prefix ${dset}
 
 

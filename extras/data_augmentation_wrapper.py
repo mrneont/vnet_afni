@@ -345,7 +345,7 @@ def write_script(da_dict,fl_name, daug):
 
     # phase-3  data augmentation shell script
 
-    f.write("# tcsh do_refacing.tcsh ")
+    f.write("tcsh do_reface.tcsh {}""".format(fl_name))
     f.write('\n \n \n')
     # create the edt data for all the masks 
 
