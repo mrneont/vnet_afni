@@ -18,15 +18,15 @@ import re #regular expression
 * flag |  input
 *  -a  | --data_augment_path (data_path for data augmentation folder)
 *  -d  | --data_dir (data path for the dataset folder)
-*  
+*  -c  | -- number of copies of the dataset
 * 
-* + Please note create a log folder to capture the results of
+* + Please note : Create a log folder to capture the results of
 *   master_script.tcsh
 * 
 * sample usage of the code : python data_augmentation_wrapper.py 
 *                           -a '/Users/name/data_augmentation' 
 *                           -d '/Users/name/dataset' 
-*                           
+*                           -c num_copies
 *
 * 
 * List of data augmentation types supported are 
@@ -46,9 +46,9 @@ import re #regular expression
                 * Default shearing range is plus/minus 0.1111
 '''
 # List of data augmentation in different phases 
+list_daug_ph0    = ['reface','empty']
 list_daug_ph1    = ['gibbs','affine']
 list_daug_ph2    = ['gain_inhom','zipper','add_noise']
-list_daug_ph3    = ['refacing']
 list_daug = []
 
 def get_data_augment_args():
@@ -78,6 +78,16 @@ def get_daug_dict(fl_basename):
     daug2_keys  =[]
     daug2_values=[]
     list_param1D=[]
+
+    #do phase0 data augmentation 
+    # phase0 -> refacing is done randomly to 20% of da 
+    phase0_rand_item = random.choices([0,1], weights=(20, 80))
+    phase0_rand      = phase0_rand_item[0]
+    phase0_daug      = list_daug_ph0[phase0_rand]
+    print('phase_0)',phase0_daug)
+    daug0_keys   = ['type']
+    daug0_values = [phase0_daug]
+
     
     #Nested dict for parameters
     
@@ -89,7 +99,7 @@ def get_daug_dict(fl_basename):
     #   75% weightage os given to affine 
     # + phase1_rand_item is either 0 or 1. 
     # + 0 is given 15% weightage and 1 is given 75% weightage 
-    phase1_rand_item = random.choices([0,1], weights=(15, 75))
+    phase1_rand_item = random.choices([0,1], weights=(15, 85))
     phase1_rand      = phase1_rand_item[0]
     phase1_daug      = list_daug_ph1[phase1_rand]
     print('phase_1)',phase1_daug)
@@ -102,9 +112,7 @@ def get_daug_dict(fl_basename):
     phase2_daug = list_daug_ph2[phase2_rand]
     print('phase_2)',phase2_daug)
     
-    #do phase3 data augmentation 
-    phase3_daug = list_daug_ph3[0]
-    print('phase_3)',phase3_daug)
+    
 
 
     
@@ -277,10 +285,11 @@ def get_daug_dict(fl_basename):
 
 
 
-    keys = ['fl_basename', 'daug_ph1', 'daug_ph2', 'daug_ph3']
+    keys = ['fl_basename', 'daug_ph0', 'daug_ph1', 'daug_ph2']
+    daug_ph0_val = dict(zip(daug0_keys, daug0_values))
     daug_ph1_val = dict(zip(daug1_keys, daug1_values))
     daug_ph2_val = dict(zip(daug2_keys, daug2_values))
-    values = [fl_basename, daug_ph1_val, daug_ph2_val, phase3_daug]
+    values = [fl_basename, daug_ph0_val, daug_ph1_val, daug_ph2_val]
     
     daug_dict = dict(zip(keys, values))
     
@@ -298,25 +307,35 @@ def write_script(da_dict,fl_name, daug):
     print('script_fl =', script_fl)
     f = open(script_fl, "w")
     f.write("#!/bin/tcsh")
-    f.write('\n \n \n')
+    f.write('\n')
 
     # notes 
     # + the individual shell script need the 
     #   absolute path to the dataset 
     #print("write_script fl_name =  ",fl_name)
+
+
+    
+
     # phase-1  data augmentation shell script
     if (daug == 1):
+
+        # phase-0  
+        if (da_dict['daug_ph0']['type'] == 'reface'):
+            f.write("tcsh do_reface.tcsh {}""".format(fl_name))
+            f.write('\n')
+
         if (da_dict['daug_ph1']['type'] == 'gibbs'):#(weightage =15%)
             gibbs_radius = da_dict['daug_ph1']['radius']
             print('gibbs_radius =',gibbs_radius)
             f.write("tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
                                                         gibbs_radius))
-            f.write('\n \n \n')
+            f.write('\n')
         else: # all cominations of affine_transform(weightage =85%)
             param1D = da_dict['daug_ph1']['param1D']
             f.write("tcsh do_affine.tcsh {} {}""".format(fl_name,\
                                                         param1D))
-            f.write('\n \n \n')
+            f.write('\n')
         # phase-2  data augmentation shell script
 
         phase2_daug = da_dict['daug_ph2']['type']
@@ -341,24 +360,20 @@ def write_script(da_dict,fl_name, daug):
                 f.write("tcsh do_add_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, noise_level))
 
-        f.write('\n \n \n')
+        f.write('\n')
 
-    # phase-3  data augmentation shell script
-
-    f.write("tcsh do_reface.tcsh {}""".format(fl_name))
-    f.write('\n \n \n')
+    
     # create the edt data for all the masks 
 
     
     f.write("tcsh do_daug_weight.tcsh {}""".format(fl_name))
 
-    f.write('\n \n \n')
+    f.write('\n')
     f.close()
 
 
 def main():
 
-    
     args        = get_data_augment_args()
     #data_augment_path is the data_path for data augmentation folder
     da_path     = args.data_augment_path
@@ -416,10 +431,11 @@ def main():
             # write scripts based on the dictionary for each dataset
             daug = 1 # flag to depict data_augmentation
             write_script(daug_dict,fl_name,daug)
+            print("daug_dict = ",daug_dict)
             list_daug.append(daug_dict)
             #|& tee logs/log_sub-001001_orig.txt
         fl.write("tcsh -x {}.tcsh |& tee logs/{}""".format(fl_basename.split('.')[0],log_fl))
-        fl.write('\n \n \n')
+        fl.write('\n')
             # list of dict
             
 

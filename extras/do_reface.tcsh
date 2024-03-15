@@ -18,9 +18,10 @@ echo "++ The orig basename :   ${dset}"
 # access the copies of dataset 
 cd ${daug_dir}
 
-@afni_refacer_run                                                     \
-    -input ${dset}                                                 \
-    -mode_reface                                                      \
-    -prefix ${dset}
+@afni_refacer_run   \
+    -input ${dset}  \
+    -mode_reface    \
+    -prefix ${dset} \
+    -no_images 
 
 
