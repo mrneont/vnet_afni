@@ -31,10 +31,12 @@ set dset_mask = ${dset:gas/orig/mask/}
 
 # edt_daug = edt folder/edt_data
 set edt_daug = ${daug:gas/orig/edt/}
+
 # edt folder
 set edt_dir  = `dirname ${edt_daug}`
 #echo "++ The edt folder :    ${edt_dir}"
 
+mkdir -p ${edt_dir}
 # edt data
 set dset_wtexp = `basename ${edt_daug}`
 #echo "++ The edt basename :    ${dset_wtexp}"
