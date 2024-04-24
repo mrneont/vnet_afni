@@ -205,10 +205,8 @@ def get_daug_dict(fl_basename):
                         print("augmentation type : doing scale")
                         # scaling applies to all axis
                         #yns range is (0.8,1.2) 
-                        rand_scale   = round(random.uniform(-0.8, 0.8), 1)
-                        # condition to avoid the scaling =0
-                        while (rand_scale == 0):
-                            rand_scale   = round(random.uniform(-0.8, 0.8), 1)
+                        rand_scale   = round(random.uniform(0.8, 1.2), 1)
+                        
                         Scz          = rand_scale
                         Scx          = rand_scale
                         Scy          = rand_scale
