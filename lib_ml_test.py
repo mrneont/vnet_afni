@@ -16,6 +16,20 @@ import lib_ml_losses        as lml
 import lib_nibabel_utils    as lnu
 import run_ml_ss            as rms
 
+#********************************************************************************
+#* The code is to test the model weights. 
+#* The model weights are stored as 'checkpoint.pt' file after the training phase
+#* In this code model weights are loaded from the checkpoint.pt file using torch.load()
+#* 
+#*
+#* Usage: python lib_ml_test.py -d data_path_testdata -o data_path_output  -m 'cpu'
+#* the flag '-m' is either gpu or the cpu depending on the device chosen to test the data
+#*
+#********************************************************************************
+
+
+# List of map_locations(devices) to choose from. 
+list_map_loc = [ 'cpu','gpu',]
 
 
 dicescore = []
@@ -37,15 +51,27 @@ def get_test_args():
     def_OD = '.'
     parser.add_argument('-o', '--outdir')
 
+    def_map_loc = list_map_loc[0]
+    parser.add_argument("-m", "--map_loc", 
+                        dest="map_loc", 
+                        type=str, default=def_map_loc,
+                        help="map_location type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(list_map_loc)) + '\n' +
+                        '(def: {})'.format(str(def_map_loc)))
+
     return parser.parse_args()
 
-def test_net(data_path,outdir):
+def test_net(data_path,outdir,map_loc):
 
+    print("++ Device on which the model weights are mapped =", map_loc)
     # Set up network 
     model = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = 0, 
                          verb=0)
    
-    model.load_state_dict(torch.load('checkpoint.pt'),strict=False)
+    model.load_state_dict(torch.load('checkpoint.pt',
+                                map_location=torch.device(map_loc)),
+                                strict=False)
 
     model.eval()
 
@@ -65,12 +91,13 @@ def test_net(data_path,outdir):
 
     
     dash =  '-' * 60
+    print(dash)
 
     with torch.no_grad():
         
         count = 1
         
-        for (orig_data, mask_data, dpth_data, orig_fname) in test_dataloader:
+        for (orig_data, mask_data, dpth_data, orig_fname,index) in test_dataloader:
             
             # dummy variables in testing
             phase = 'test'
@@ -130,7 +157,9 @@ def main():
     args      = get_test_args()
     data_path = args.data_path
     outdir    = rms.prep_outdir(args.outdir)
-    test_net(data_path,outdir)
+    # map_loc : - Device on which the model weights are mapped
+    map_loc   = args.map_loc
+    test_net(data_path,outdir,map_loc)
 
 
 if __name__ == "__main__":
