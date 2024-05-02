@@ -482,17 +482,19 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][0], 
                                                         fname=fname_pred_ch00_back,
                                                         head=orig_head, half_prec=half_prec)
-
-                        lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
+                        
+                        # The pred_mask is written every 10th epoch
+                        if (epoch%10 == 0):
+                            lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head, half_prec=half_prec)
 
                 
                     # end of bb loop : for bb in range (bsize)
-
+                    
                     # save the checkpoint 
                     if (epoch%10 == 0) and (phase == 'train') :
-                        checkpoint_flname  =  "{}_{}_{}{}".format('checkpoint',
+                        checkpoint_flname  =  "{}/{}_{}_{}{}".format(outdir,'checkpoint',
                                                                 phase, strepoch,'.pt')
                         torch.save(net.state_dict(), checkpoint_flname)
 
