@@ -310,9 +310,11 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 # Try to bring each data into the format: (1 X 1 X D X H X W)
                 orig_data = orig_data.unsqueeze(1) 
                 mask_data = mask_data.unsqueeze(1) 
+                dpth_data = dpth_data.unsqueeze(1) 
                 
-                #print('orig_data size ',orig_data.size())
-                #print('mask_data size ',mask_data.size())
+                #print('train orig_data size ',orig_data.size())
+                #print('train mask_data size ',mask_data.size())
+                #print('train dpth_data size ',dpth_data.size())
                 # [PT] Q: should dpth_data also be unsqueezed here, if it
                 # is being used?
 
@@ -484,7 +486,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                                         head=orig_head, half_prec=half_prec)
                         
                         # The pred_mask is written every 10th epoch
-                        if (epoch%10 == 0):
+                        if (epoch%10 == 0) :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head, half_prec=half_prec)

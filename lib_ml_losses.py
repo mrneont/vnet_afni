@@ -233,7 +233,7 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
         #target       = make_one_hot_scatter(gt, num_classes = num_out_ch)
         target       = make_one_hot_stack(gt, num_classes = num_out_ch)
 
-        dpth = dpth.unsqueeze(0) 
+        #dpth = dpth.unsqueeze(0) 
         #print('dpth size= ',dpth.size())
 
         dpth_abs =  torch.abs(dpth)
@@ -254,7 +254,9 @@ class CalcLoss_WtSorensen_Dice(nn.Module):
 
         #print('wts_exp[0][0] size= ',wts_exp[0][0].size())
         #lnu.write_tensor_to_disk_nifti(wts_exp[0][0], 'wts_exp')
-        
+        #print('size of wts_exp = ',wts_exp.size())
+        #print('size of pred = ',pred.size())
+        #print('size of target = ',target.size())
         wtPT = wts_exp * pred * target
         PT   = pred * target
         #print('size of wts_exp = ',wts_exp.size())
