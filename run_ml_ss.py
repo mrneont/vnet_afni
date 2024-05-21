@@ -159,6 +159,27 @@ def get_args():
                         help='weight normalization' + '\n' +
                         '(def: {})'.format(str(def_wt_norm)))
 
+    def_nth_epoch_out = 10
+    parser.add_argument("-nth_epoch_out", "--nth_epoch_out", 
+                        dest="nth_epoch_out", 
+                        type=int, default=def_nth_epoch_out,
+                        help='checkpoint.pt written into outdir' + '\n' +
+                        '(def: {})'.format(str(def_nth_epoch_out)))
+
+    def_nth_mask_out = 10
+    parser.add_argument("-nth_mask_out", "--nth_mask_out", 
+                        dest="nth_mask_out", 
+                        type=int, default=def_nth_mask_out,
+                        help='pred_mask written into outdir' + '\n' +
+                        '(def: {})'.format(str(def_nth_mask_out)))
+
+    def_tr_shuf = 0
+    parser.add_argument("-tr_shuf", "--tr_shuf", 
+                        dest="tr_shuf", 
+                        type=int, default=def_tr_shuf,
+                        help='shuffle datasets during training' + '\n' +
+                        '(def: {})'.format(str(def_tr_shuf)))
+
     def_restart = 0
     parser.add_argument("-r", "--restart", 
                         dest="restart", 
@@ -329,23 +350,26 @@ if __name__ == '__main__':
 
     # get args (path and parameter settings) , and prepare to pass
     # along to the main training net prog
-    args       = get_args()
-    data_path  = args.data_dir
-    epochs     = args.epochs
-    lr         = args.learning_rate
-    tr_bsize   = args.train_batch_size
-    seed       = args.seed
-    net_arch   = args.net_arch
-    loss_func  = args.loss_func
-    optimizer  = args.optimizer
-    verb       = args.verb
-    half_prec  = args.half_prec
-    mixed_prec = args.mixed_prec
-    wt_norm    = args.weight_norm
-    do_nifti   = args.do_nifti
-    data_norm  = args.data_norm
-    restart    = args.restart  
-    outdir     = prep_outdir(args.outdir, verb=verb)
+    args          = get_args()
+    data_path     = args.data_dir
+    epochs        = args.epochs
+    lr            = args.learning_rate
+    tr_bsize      = args.train_batch_size
+    seed          = args.seed
+    net_arch      = args.net_arch
+    loss_func     = args.loss_func
+    optimizer     = args.optimizer
+    verb          = args.verb
+    half_prec     = args.half_prec
+    mixed_prec    = args.mixed_prec
+    wt_norm       = args.weight_norm
+    nth_epoch_out = args.nth_epoch_out
+    nth_mask_out  = args.nth_mask_out
+    tr_shuf       = args.tr_shuf
+    do_nifti      = args.do_nifti
+    data_norm     = args.data_norm
+    restart       = args.restart  
+    outdir        = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
         print("ERROR: this path is not valid: {}".format(args.outdir))
@@ -371,5 +395,6 @@ if __name__ == '__main__':
                    verb=verb )
 
     net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
-                         optimizer, half_prec, mixed_prec, wt_norm, restart, data_norm, do_nifti, 
+                         optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
+                         nth_mask_out, tr_shuf, restart, data_norm, do_nifti, 
                          outdir, verb )

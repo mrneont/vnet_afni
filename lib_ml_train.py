@@ -50,8 +50,9 @@ list_data_norm = [ 'min_max_scale',
 
 
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
-              optimizer, half_prec, mixed_prec, wt_norm, restart, data_norm, do_nifti, outdir, 
-              verb): 
+                optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
+                nth_mask_out, tr_shuf, restart, data_norm, do_nifti,
+                outdir, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -63,6 +64,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     num_epochs   : number of epochs for network (int)
     lr           : learning rate parameter 
     tr_bsize     : batch size for training 
+    nth_epoch_out: checkpoint.pt written out every nth epoch
+    nth_mask_out : pred_mask written out every nth epoch
+    tr_shuf      : shuffle datasets during training
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
     net_arch     : network architecture name, from available list (str)
@@ -101,22 +105,26 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     USE_DPTH_WTS = lml.dict_CalcLoss[loss_func]
 
     if verb :
-        print("++ {:30s} : {}".format('Device being used', device))
-        print("++ {:30s} : {}".format('Number of epochs', num_epochs))
-        print("++ {:30s} : {}".format('Batch size for training', tr_bsize))
-        print("++ {:30s} : {}".format('Weight norm', wt_norm))
-        print("++ {:30s} : {}".format('Data normalization', data_norm))
-        print("++ {:30s} : {}".format('Loss function', loss_func))
-        print("++ {:30s} : {}".format('Using weight datasets', USE_DPTH_WTS))
-        print("++ {:30s} : {}".format('Restart using checkpoint weights', restart))
-        print("++ {:30s} : {}".format('Network architecture', net_arch))
+        print("++ {:40s} : {}".format('Device being used', device))
+        print("++ {:40s} : {}".format('Number of epochs', num_epochs))
+        print("++ {:40s} : {}".format('Batch size for training', tr_bsize))
+        print("++ {:40s} : {}".format('Weight norm', wt_norm))
+        print("++ {:40s} : {}".format('Data normalization', data_norm))
+        print("++ {:40s} : {}".format('Loss function', loss_func))
+        print("++ {:40s} : {}".format('Using weight datasets', USE_DPTH_WTS))
+        print("++ {:40s} : {}".format('Restart using checkpoint weights', restart))
+        print("++ {:40s} : {}".format('Network architecture', net_arch))
+        print("++ {:40s} : {}".format('checkpoint.pt saved every nth epoch', nth_epoch_out))
+        print("++ {:40s} : {}".format('pred_mask written out every nth epoch', nth_mask_out))
+        print("++ {:40s} : {}".format('shuffle datasets during training', tr_shuf))
+
 
     if half_prec == 1:
-        print("++ {:30s} : {}".format('Precision', 'half'))
+        print("++ {:40s} : {}".format('Precision', 'half'))
     elif mixed_prec == 1:
-        print("++ {:30s} : {}".format('Precision', 'mixed'))
+        print("++ {:40s} : {}".format('Precision', 'mixed'))
     else :
-        print("++ {:30s} : {}".format('Precision', 'full'))
+        print("++ {:40s} : {}".format('Precision', 'full'))
 
 
     # Task : binary segmentation 
@@ -186,10 +194,10 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     Nval           = len(val_set)
    
     dataloaders = {
-        'train': DataLoader(train_set, shuffle = False, batch_size = tr_bsize),
+        'train': DataLoader(train_set, shuffle = tr_shuf, batch_size = tr_bsize),
         'val'  : DataLoader(val_set,   shuffle = False, batch_size = 1)
     }
-
+    print('trainign shuffle tr_shuf = ',tr_shuf)
     # initialize the early_stopping object
     patience         = 5
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
@@ -486,7 +494,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                                         head=orig_head, half_prec=half_prec)
                         
                         # The pred_mask is written every 10th epoch
-                        if (epoch%10 == 0) :
+                        if (epoch % nth_mask_out == 0) :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head, half_prec=half_prec)
@@ -495,7 +503,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                     # end of bb loop : for bb in range (bsize)
                     
                     # save the checkpoint 
-                    if (epoch%10 == 0) and (phase == 'train') :
+                    if (epoch % nth_epoch_out == 0) and (phase == 'train') :
                         checkpoint_flname  =  "{}/{}_{}_{}{}".format(outdir,'checkpoint',
                                                                 phase, strepoch,'.pt')
                         torch.save(net.state_dict(), checkpoint_flname)
