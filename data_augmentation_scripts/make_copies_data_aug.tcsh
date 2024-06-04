@@ -3,7 +3,7 @@
 # notes about the script : 
 # + Script to prepare a folder for  data_augmentation.
 # + The data_augmentation folder is prepared by  creating copies 
-#	 of the original datasets and the masks
+#     of the original datasets and the masks
 # + The number of copies are named serially with leading zeros. 
 #    example: 
 #    If original dataset were 'sub-114_orig.nii.gz'
@@ -35,10 +35,14 @@ set dataset_mask_dir = "mask"
 
 set dataaug_orig_dir = "orig"
 set dataaug_mask_dir = "mask"
+set dataaug_scripts  = "scripts"
+set dataaug_logs     = "logs"
 
 mkdir ${data_aug_dir} 
 mkdir ${data_aug_dir}/${dataaug_orig_dir}
 mkdir ${data_aug_dir}/${dataaug_mask_dir}
+mkdir ${data_aug_dir}/${dataaug_scripts}
+mkdir ${data_aug_dir}/${dataaug_logs}
 
 echo ${data_aug_dir}/${dataaug_mask_dir}
 # set counter for number of copies of the dataset to be made
@@ -57,17 +61,17 @@ cd -
 #echo ${PWD}
 foreach dset_orig ( ${all_dsets})
 
-	echo " ${dset_orig} is being processed"
-	while ( $i < = ${num_cp})
-		#echo ${i}
+    echo " ${dset_orig} is being processed"
+    while ( $i < = ${num_cp})
+        #echo ${i}
 
-		#echo ${num_cp}
-		# set prefix for the copies of the dataset 
-		set prefix         = `python -c "print(str(${i}).rjust(3,'0'))"`
-		echo ${prefix}
+        #echo ${num_cp}
+        # set prefix for the copies of the dataset 
+        set prefix       = `python -c "print(str(${i}).rjust(3,'0'))"`
+        echo ${prefix}
 
-		set dataset_copy = `python -c "print('${dset_orig}'.split('_')[0] +'${prefix}'+\
-    								'_'+'orig'+\
+        set dataset_copy = `python -c "print('${dset_orig}'.split('_')[0] +'${prefix}'+\
+                                    '_'+'orig'+\
                                     '.'+'${dset_orig}'.split('.')[-2] +\
                                     '.'+'${dset_orig}'.split('.')[-1])"`
         echo ${dataset_copy}
@@ -78,16 +82,17 @@ foreach dset_orig ( ${all_dsets})
         echo ${dset_mask}
         echo ${dset_mask_copy}
 
-		cp  ${dataset_dir}/${dataset_orig_dir}/${dset_orig}   \
-		            ${data_aug_dir}/${dataaug_orig_dir}/${dataset_copy}
+        cp  ${dataset_dir}/${dataset_orig_dir}/${dset_orig}   \
+                    ${data_aug_dir}/${dataaug_orig_dir}/${dataset_copy}
 
-		cp  ${dataset_dir}/${dataset_mask_dir}/${dset_mask}   \
-		            ${data_aug_dir}/${dataaug_mask_dir}/${dset_mask_copy}
+        cp  ${dataset_dir}/${dataset_mask_dir}/${dset_mask}   \
+                    ${data_aug_dir}/${dataaug_mask_dir}/${dset_mask_copy}
 
-		@ i = $i + 1 # increment the counter for every copy made
+        @ i = $i + 1 # increment the counter for every copy made
 
-	end 
-	# set the counter 'i' back to zero for the next dataset to be processed
-	set i=0 
+    end 
+    # set the counter 'i' back to zero for the next dataset to be processed
+    set i = 0 
+            
 end 
 
