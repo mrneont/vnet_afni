@@ -120,8 +120,9 @@ def get_daug_dict(fl_basename):
         case 'gibbs' :
             #do_something(gibbs)
             print("augmentation type : doing gibbs")
+            radius   = random.randint(70, 100)
             daug1_keys = ['type', 'radius']
-            daug1_values = [phase1_daug, 100]
+            daug1_values = [phase1_daug, radius]
 
         case 'affine':
             #do_something(affine)
@@ -298,12 +299,15 @@ def get_daug_dict(fl_basename):
 
 def write_script(da_dict,fl_name, daug):
     # set the filename for the shell script based on the dataset
+    dir_name  = os.path.dirname(fl_name)
     file_name = os.path.basename(fl_name)
+    
     new_extension = ".tcsh"
     #print('file_name=',file_name)
     script_fl = file_name.split('.')[0] +new_extension
+    script_fl_path_str = os.path.join(os.path.dirname(dir_name), 'scripts', script_fl)
     print('script_fl =', script_fl)
-    f = open(script_fl, "w")
+    f = open(script_fl_path_str, "w")
     f.write("#!/bin/tcsh")
     f.write('\n')
 
@@ -383,6 +387,11 @@ def main():
     # number of copies of the dataset to be made 
     num_cp      = args.num_cp   
     
+    if(os.path.isdir(da_path) == True):
+        print('\nStatus msg : Data augmentation folder already exists')
+        print('Please change the data_augmentation directory name and retry\n')
+        sys.exit(1) 
+
     cmd  = '''tcsh make_copies_data_aug.tcsh {param1} {param2} {param3}'''.\
                             format(param1= data_path, param2= da_path,\
                             param3= num_cp)
@@ -403,7 +412,8 @@ def main():
     orig_data_list.sort()
     #print(orig_data_list)
     master_fl = "master_script.tcsh"
-    fl        = open(master_fl, "w")
+    master_fl_path_str = os.path.join(da_path,'scripts',master_fl)
+    fl        = open(master_fl_path_str, "w")
     #fl.write("#!/bin/tcsh")
     #fl.write('\n \n \n')
     for fl_name in orig_data_list:
@@ -432,7 +442,7 @@ def main():
             print("daug_dict = ",daug_dict)
             list_daug.append(daug_dict)
             #|& tee logs/log_sub-001001_orig.txt
-        fl.write("tcsh -x {}.tcsh |& tee logs/{}""".format(fl_basename.split('.')[0],log_fl))
+        fl.write("tcsh -x {}.tcsh |& tee ../logs/{}""".format(fl_basename.split('.')[0],log_fl))
         fl.write('\n')
             # list of dict
             

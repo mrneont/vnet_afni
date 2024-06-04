@@ -24,4 +24,6 @@ cd ${daug_dir}
     -prefix ${dset} \
     -no_images 
 
+rm *face*
+rm -r *face*
 
