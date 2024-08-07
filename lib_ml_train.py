@@ -52,7 +52,7 @@ list_data_norm = [ 'min_max_scale',
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
                 nth_mask_out, tr_shuf, restart, data_norm, do_nifti,
-                outdir, verb): 
+                outdir, mask_oplist, chpt_oplist, mask_everyn, chpt_everyn, verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -81,7 +81,6 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     Returns
     =======
     """
-
     # file to track the training and validation loss 
     loss_file_pre = '/'.join([outdir, 'log_loss'])
     summ_file_pre = '/'.join([outdir, 'log_summ'])
@@ -493,27 +492,39 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                                         fname=fname_pred_ch00_back,
                                                         head=orig_head, half_prec=half_prec)
                         
-                        # The pred_mask is written every 10th epoch
-                        if (epoch % nth_mask_out == 0) :
+                        # pred_mask is written into the 'out' folder.
+                        # condition1 : If the flag 'mask_everyn' is set to 1 then the pred_mask is written 
+                        # into the 'out' folder every Nth epoch.
+                        # condition2 : If the flag mask_everyn is set to 0 then the pred_mask is written
+                        # into the 'out' folder for every epoch given in the list 'mask_oplist'
+                        pred_mask_condition1 = (mask_everyn == 1) and (epoch % nth_mask_out == 0)
+                        pred_mask_condition2 = (mask_everyn == 0) and (epoch in mask_oplist)
+                        if (pred_mask_condition1 or pred_mask_condition2):
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head, half_prec=half_prec)
-
-                
-                    # end of bb loop : for bb in range (bsize)
+                        # end of bb loop : for bb in range (bsize)
                     
-                    # save the checkpoint 
-                    if (epoch % nth_epoch_out == 0) and (phase == 'train') :
-                        checkpoint_flname  =  "{}/{}_{}_{}{}".format(outdir,'checkpoint',
-                                                                phase, strepoch,'.pt')
-                        torch.save(net.state_dict(), checkpoint_flname)
-
+                    
 
                 idx+= 1 # number of steps in an epoch
                 # end of the loop for all batches in the epoch
 
             end = time.time()
              # end of FOR loop for PHASE
+            # save the checkpoint 
+            # if condition1 is satisfied checkpoint.pt is written every nth epoch
+            chpt_condition1 = (chpt_everyn == 1) and \
+                                (epoch % nth_epoch_out == 0) and \
+                                                     (phase == 'train')
+            # if condition2 is satisfied checkpoint.pt is saved if the epoch  exists in chpt_oplist
+            chpt_condition2 = (chpt_everyn == 0) and \
+                                 (epoch in chpt_oplist) and \
+                                                      (phase == 'train')   
+            if (chpt_condition1 or chpt_condition2):
+                checkpoint_flname  =  "{}/{}_{}_{}{}".format(outdir,'checkpoint',
+                                                 phase, strepoch,'.pt')
+                torch.save(net.state_dict(), checkpoint_flname)
 
         # computing the loss pertaining to the training data
         train_losses = torch.as_tensor(train_losses)

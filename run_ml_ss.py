@@ -52,6 +52,10 @@ def dir_path(string):
     else:
         raise NotADirectoryError(string)
 
+# Define a custom argument type for a list of integers
+def list_of_ints(arg):
+    return list(map(int, arg.split(",")))
+
 def get_args():
 
     # [PT] Using this formatter_class: ArgumentDefaultsHelpFormatter
@@ -214,6 +218,30 @@ def get_args():
                         "datsets while processing" + '\n' +
                         '(def: {})'.format(str(def_nifti)))
 
+    # Add an mask_output_list for the list of integers
+    parser.add_argument("-mask_oplist","--mask_output_list", 
+                    dest="mask_output_list",
+                    type=list_of_ints)
+
+    #Add an chpt_output_list for the list of integers
+    parser.add_argument("-chpt_oplist","--chpt_output_list", 
+                    dest="chpt_output_list",
+                    type=list_of_ints)
+
+    def_mask_everyn = 0
+    parser.add_argument("-mask_everyn", "--mask_everyn", 
+                dest="mask_everyn", 
+                type=int, default=def_mask_everyn,
+                help='flag to denote if the pred_masks are written every Nth epoch' + '\n' +
+                '(def: {})'.format(str(def_mask_everyn)))  
+
+    def_chpt_everyn = 0
+    parser.add_argument("-chpt_everyn", "--chpt_everyn", 
+                dest="chpt_everyn", 
+                type=int, default=def_chpt_everyn,
+                help='flag to denote if the checkpoint.pt is written every Nth epoch' + '\n' +
+                '(def: {})'.format(str(def_chpt_everyn))) 
+
     return parser.parse_args()
 
 def prep_outdir(din, verb=1):
@@ -369,6 +397,12 @@ if __name__ == '__main__':
     do_nifti      = args.do_nifti
     data_norm     = args.data_norm
     restart       = args.restart  
+    mask_oplist   = args.mask_output_list
+    chpt_oplist   = args.chpt_output_list
+    mask_everyn   = args.mask_everyn
+    chpt_everyn   = args.chpt_everyn
+
+
     outdir        = prep_outdir(args.outdir, verb=verb)
 
     if not(outdir) :
@@ -397,4 +431,4 @@ if __name__ == '__main__':
     net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
                          optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
                          nth_mask_out, tr_shuf, restart, data_norm, do_nifti, 
-                         outdir, verb )
+                         outdir, mask_oplist, chpt_oplist, mask_everyn, chpt_everyn, verb )
