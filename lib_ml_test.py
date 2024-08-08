@@ -4,6 +4,8 @@ import time
 import numpy                as np
 import nibabel              as nib
 import argparse             as argp
+import pandas               as pd
+
 
 import torch
 from   torch            import optim
@@ -27,12 +29,16 @@ import run_ml_ss            as rms
 #*
 #********************************************************************************
 
+# before using the lib_ml_test.py
+# Please create a folder with all the checkpoint.pt files which are required to be tested
+# the checkpoint.pt files are read succesively and the test_data are evaluated for each model
 
 # List of map_locations(devices) to choose from. 
 list_map_loc = [ 'cpu','gpu',]
+checkpt_file_list = []
+origfl_list = []
 
 
-dicescore = []
 
 def dir_path(string):
     if os.path.isdir(string):
@@ -51,6 +57,8 @@ def get_test_args():
     def_OD = '.'
     parser.add_argument('-o', '--outdir')
 
+    parser.add_argument('-ch', "--checkpoint_path",type=dir_path)
+
     def_map_loc = list_map_loc[0]
     parser.add_argument("-m", "--map_loc", 
                         dest="map_loc", 
@@ -62,18 +70,28 @@ def get_test_args():
 
     return parser.parse_args()
 
-def test_net(data_path,outdir,map_loc):
+def test_net(data_path, outdir, checkpoint_path, map_loc):
 
     print("++ Device on which the model weights are mapped =", map_loc)
     # Set up network 
     model = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = 0, 
                          verb=0)
-   
-    model.load_state_dict(torch.load('checkpoint.pt',
-                                map_location=torch.device(map_loc)),
-                                strict=False)
 
-    model.eval()
+    #directory = '/Users/narayanaswamyy2/RR_AFNI_VNET/CNNouts/6aug24_32ver10/checkpoint'
+    for name in os.listdir(checkpoint_path):
+        #print('checkpoint flname = ',name)
+        checkpt_file_list.append(name)
+    print(checkpt_file_list)
+
+    origfl_path =  os.path.join(data_path, 'validation','orig')
+    for flname in os.listdir(origfl_path):
+        #print('origfl flname = ',flname)
+        origfl_list.append(flname)
+
+    df = pd.DataFrame({'Filename': origfl_list})
+    print(df)
+
+    
 
     # datapath
     # DataLoader setup
@@ -93,63 +111,80 @@ def test_net(data_path,outdir,map_loc):
     dash =  '-' * 60
     print(dash)
 
-    with torch.no_grad():
-        
-        count = 1
-        
-        for (orig_data, mask_data, dpth_data, orig_fname,index) in test_dataloader:
-            
-            # dummy variables in testing
-            phase = 'test'
-            strepoch = 1
-            # ---- scale/normalize the input data in some fashion
-            # [YNS] include options for other normalization    
-            orig_data = lmd.z_scoring(orig_data)
+    for name in os.listdir(checkpoint_path):
+        dicescore = []
+        chi = 2
+        print('checkpoint flname:', name)
+        chfl_name = os.path.join(checkpoint_path, name)
+        print('checkpoint flname path:', chfl_name)
+        model.load_state_dict(torch.load(chfl_name,
+                                map_location=torch.device(map_loc)),
+                                strict=False)
 
-            # CONV3D requires input in the format of:
-            # (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
-            # Try to bring each data into the format: (1 X 1 X D X H X W)
-            orig_data = orig_data.unsqueeze(1) 
-            mask_data = mask_data.unsqueeze(1) 
-            print('data size',orig_data.size())
+        model.eval()
+        with torch.no_grad():
+        
+            count = 1
+        
+            for (orig_data, mask_data, dpth_data, orig_fname,index) in test_dataloader:
+            
+                # dummy variables in testing
+                phase = 'test'
+                strepoch = 1
+                # ---- scale/normalize the input data in some fashion
+                # [YNS] include options for other normalization    
+                orig_data = lmd.z_scoring(orig_data)
+
+                # CONV3D requires input in the format of:
+                # (batchsz=1, Channels=1, Depth=256, Height=256, width=256)
+                # Try to bring each data into the format: (1 X 1 X D X H X W)
+                orig_data = orig_data.unsqueeze(1) 
+                mask_data = mask_data.unsqueeze(1) 
+                print('data size',orig_data.size())
 
 
   
-            idxm1 = count - 1
-            orig_head = test_set.orig_head_list[idxm1]
+                idxm1 = count - 1
+                orig_head = test_set.orig_head_list[idxm1]
                 
 
 
-            pred_mask = model.forward(orig_data)
-            print('pred_mask size',pred_mask.size())
+                pred_mask = model.forward(orig_data)
+                print('pred_mask size',pred_mask.size())
 
-            fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
+                fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
                         lnu.make_names_of_dsets(outdir, orig_fname[0], 1, phase)
 
-            lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
+                lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
                                                         fname=fname_orig,
                                                         head=orig_head)
 
-            lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
                                                         fname=fname_targ,
                                                         head=orig_head)
 
 
-            lnu.write_tensor_to_disk_nifti( pred_mask[0][1], 
+                lnu.write_tensor_to_disk_nifti( pred_mask[0][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
             
-            LOSS = loss.forward(pred_mask, mask_data)
+                LOSS = loss.forward(pred_mask, mask_data)
 
-            dicescore.append(LOSS.item())
+                dicescore.append(LOSS.item())
            
 
-            count += 1
-            print('count =',count)
-        print(dash)  
-        print('DICE SCORE for validation data = ',dicescore)
-        print(dash) 
+                count += 1
+                print('count =',count)
+            #df = pd.DataFrame({name: dicescore})
+            df[name] = dicescore
+            print(df)
+            chi += 1
+            #print(dash)  
+            #print('DICE SCORE for validation data = ',dicescore)
+            #print(dash)
+
+    df.to_csv('test_dice'+ '.csv') 
         # pending[YNS] : write the dice scores into a log file in output directory   
 
 
@@ -157,9 +192,10 @@ def main():
     args      = get_test_args()
     data_path = args.data_path
     outdir    = rms.prep_outdir(args.outdir)
+    checkpoint_path = args.checkpoint_path
     # map_loc : - Device on which the model weights are mapped
     map_loc   = args.map_loc
-    test_net(data_path,outdir,map_loc)
+    test_net(data_path,outdir, checkpoint_path, map_loc)
 
 
 if __name__ == "__main__":
