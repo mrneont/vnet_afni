@@ -25,8 +25,9 @@ import run_ml_ss            as rms
 #* 
 #*
 #* Usage: python lib_ml_test.py -d data_path_testdata -o data_path_output  -m 'cpu'
-#* the flag '-m' is either gpu or the cpu depending on the device chosen to test the data
+#* the flag '-m' is either cuda or the cpu depending on the device chosen to test the data
 #*
+#* 'data_path_testdata' should contain folder 'orig' and 'mask'
 #********************************************************************************
 
 # before using the lib_ml_test.py
@@ -34,7 +35,7 @@ import run_ml_ss            as rms
 # the checkpoint.pt files are read succesively and the test_data are evaluated for each model
 
 # List of map_locations(devices) to choose from. 
-list_map_loc = [ 'cpu','gpu',]
+list_map_loc = [ 'cpu','cuda']
 checkpt_file_list = []
 origfl_list = []
 
@@ -77,13 +78,13 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
     model = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = 0, 
                          verb=0)
 
-    #directory = '/Users/narayanaswamyy2/RR_AFNI_VNET/CNNouts/6aug24_32ver10/checkpoint'
+    
     for name in os.listdir(checkpoint_path):
         #print('checkpoint flname = ',name)
         checkpt_file_list.append(name)
     print(checkpt_file_list)
 
-    origfl_path =  os.path.join(data_path, 'validation','orig')
+    origfl_path =  os.path.join(data_path,'orig')
     for flname in os.listdir(origfl_path):
         #print('origfl flname = ',flname)
         origfl_list.append(flname)
@@ -95,7 +96,7 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
 
     # datapath
     # DataLoader setup
-    test_datapath = os.path.join(data_path, 'validation')
+    test_datapath = os.path.join(data_path)
     test_set      = lmd.mridataset(test_datapath, 
                                     use_dpth_wts= 0, 
                                     verb=0)
@@ -110,7 +111,7 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
     
     dash =  '-' * 60
     print(dash)
-
+    strepoch = 1
     for name in os.listdir(checkpoint_path):
         dicescore = []
         chi = 2
@@ -126,11 +127,12 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
         
             count = 1
         
+            
             for (orig_data, mask_data, dpth_data, orig_fname,index) in test_dataloader:
             
                 # dummy variables in testing
                 phase = 'test'
-                strepoch = 1
+                print('strepoch =',strepoch)
                 # ---- scale/normalize the input data in some fashion
                 # [YNS] include options for other normalization    
                 orig_data = lmd.z_scoring(orig_data)
@@ -147,14 +149,13 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
                 idxm1 = count - 1
                 orig_head = test_set.orig_head_list[idxm1]
                 
-
-
                 pred_mask = model.forward(orig_data)
                 print('pred_mask size',pred_mask.size())
-
+                
                 fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
-                        lnu.make_names_of_dsets(outdir, orig_fname[0], 1, phase)
-
+                        lnu.make_names_of_dsets(outdir, orig_fname[0], strepoch, phase)
+                
+                
                 lnu.write_tensor_to_disk_nifti(orig_data[0][0], 
                                                         fname=fname_orig,
                                                         head=orig_head)
@@ -168,10 +169,10 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
-            
+                
                 LOSS = loss.forward(pred_mask, mask_data)
-
-                dicescore.append(LOSS.item())
+                print('LOSS.item()=',LOSS.item())
+                dicescore.append(1-LOSS.item())
            
 
                 count += 1
@@ -180,6 +181,7 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
             df[name] = dicescore
             print(df)
             chi += 1
+            strepoch += 1
             #print(dash)  
             #print('DICE SCORE for validation data = ',dicescore)
             #print(dash)
