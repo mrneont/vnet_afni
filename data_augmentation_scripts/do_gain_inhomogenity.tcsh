@@ -19,20 +19,27 @@ cd ${daug_dir} # access the copies of dataset
 set dset = `basename ${daug}`
 echo ${dset}
 
+
 #window over which the scaling factor varies 
 # the scaling factor varies between values 'win_min' and 'window' 
 
 set win_min = `ccalc 1-${window}/2` 
 
+echo ${win_min}
+
+echo "window"
+echo ${window}
+
+# same voxels on the corresponding axis 
+set nmat      = `3dinfo -nj ${dset}`
 
 
-
-set nmat      = `3dinfo -ni ${dset}`
 
 3dcalc                                         \
     -overwrite                                 \
     -a  ${dset}   \
-    -expr "a * (${win_min} + ${window}* ${axis}/${nmat})" \
+    -expr "a * (${window} * (1-${axis}/${nmat})+ ${win_min})" \
     -prefix  ${dset}
+
 
 

@@ -111,12 +111,9 @@ def get_daug_dict(fl_basename):
     
     phase2_daug = list_daug_ph2[phase2_rand]
     print('phase_2)',phase2_daug)
-    
-    
 
-
-    
     match phase1_daug:
+    
         case 'gibbs' :
             #do_something(gibbs)
             print("augmentation type : doing gibbs")
@@ -253,11 +250,11 @@ def get_daug_dict(fl_basename):
             print("augmentation type : doing gain_inhom")
             #window over which the scaling factor varies 
             #the scaling factor varies between values 'win_min' and 'win_max'
-            # within [0,2]
+            # within [2,2.8]
             list_axis    =['i','j','k']
-            rand_axis    =random.choice(list_axis)
-            win_min = 0
-            win_max = 2
+            rand_axis    =random.choices(list_axis,weights=(10, 80, 10))
+            win_min = 2
+            win_max = 2.8
             #Returns a random float number up to 1 decimal places
             window  = round(random.uniform(win_min, win_max), 1)
             daug2_keys   = ['type', 'axis', 'window']
@@ -375,6 +372,17 @@ def write_script(da_dict,fl_name, daug):
 
 
 def main():
+
+    print('sys.version_info = ',sys.version_info)
+    if sys.version_info<(3,10,0):
+        sys.stderr.write("You need python 3.10 or later to run this script. \
+                        \nThe 'match' statement was introduced in Python 3.10.\
+                        \nSo if you're using an older version, \
+                        you'll need to upgrade to use it.")
+        exit(1)
+
+    random.seed(42)
+    print('Random seed =', random.random())
 
     args        = get_data_augment_args()
     #data_augment_path is the data_path for data augmentation folder
