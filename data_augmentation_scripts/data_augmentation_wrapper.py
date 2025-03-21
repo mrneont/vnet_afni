@@ -47,8 +47,8 @@ import re #regular expression
 '''
 # List of data augmentation in different phases 
 list_daug_ph0    = ['reface','empty']
-list_daug_ph1    = ['gibbs','affine']
-list_daug_ph2    = ['gain_inhom','zipper','add_noise']
+list_daug_ph1    = ['gibbs','affine','empty']
+list_daug_ph2    = ['gain_inhom','zipper','add_noise','contrast_var']
 list_daug = []
 
 def get_data_augment_args():
@@ -99,16 +99,16 @@ def get_daug_dict(fl_basename):
     #   75% weightage os given to affine 
     # + phase1_rand_item is either 0 or 1. 
     # + 0 is given 15% weightage and 1 is given 75% weightage 
-    phase1_rand_item = random.choices([0,1], weights=(15, 85))
+    phase1_rand_item = random.choices([0,1,2], weights=(15, 45,40))
     phase1_rand      = phase1_rand_item[0]
     phase1_daug      = list_daug_ph1[phase1_rand]
     print('phase_1)',phase1_daug)
     
     
     #do phase2 data augmentation 
-    # randomly select a number between 0 and len(list)-1
-    phase2_rand = random.randint(0, len(list_daug_ph2)-1)
-    
+    # ['gain_inhom','zipper','add_noise','contrast_var']
+    phase2_rand_item = random.choices([0,1,2,3], weights=(30, 10, 30, 30))
+    phase2_rand      = phase2_rand_item[0]
     phase2_daug = list_daug_ph2[phase2_rand]
     print('phase_2)',phase2_daug)
 
@@ -277,7 +277,12 @@ def get_daug_dict(fl_basename):
             rand_axis    =random.choice(list_axis)
             daug2_keys   = ['type', 'axis', 'noise_lvl']
             daug2_values = [phase2_daug, rand_axis, rand_noise_lvl]
-            
+        case 'contrast_var':
+            #do_something(add_noise)    
+            print("augmentation type : doing contrast_var")
+            shading = random.randint(0, 1)
+            daug2_keys   = ['type', 'shading']
+            daug2_values = [phase2_daug, shading]
 
 
 
@@ -359,6 +364,12 @@ def write_script(da_dict,fl_name, daug):
                 f.write("tcsh do_add_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, noise_level))
 
+            case 'contrast_var':
+                shading         = da_dict['daug_ph2']['shading']
+                if shading ==1:
+                    f.write("tcsh do_contrast_variation_shading.tcsh {} """.format(fl_name))
+                else:
+                    f.write("tcsh do_contrast_variation_core.tcsh {} """.format(fl_name))
         f.write('\n')
 
     
