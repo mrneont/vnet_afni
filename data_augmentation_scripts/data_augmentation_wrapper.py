@@ -103,6 +103,8 @@ def get_daug_dict(fl_basename):
     phase1_rand      = phase1_rand_item[0]
     phase1_daug      = list_daug_ph1[phase1_rand]
     print('phase_1)',phase1_daug)
+    daug1_keys   = ['type']
+    daug1_values = [phase1_daug]
     
     
     #do phase2 data augmentation 
@@ -335,7 +337,7 @@ def write_script(da_dict,fl_name, daug):
             f.write("tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
                                                         gibbs_radius))
             f.write('\n')
-        else: # all cominations of affine_transform(weightage =85%)
+        elif (da_dict['daug_ph1']['type'] == 'affine'): # affine_transform(weightage =45%)
             param1D = da_dict['daug_ph1']['param1D']
             f.write("tcsh do_affine.tcsh {} {}""".format(fl_name,\
                                                         param1D))
