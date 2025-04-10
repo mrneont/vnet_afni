@@ -243,7 +243,7 @@ def get_daug_dict(fl_basename):
             param1D      =  " ".join(map(str, list_param1D))
             print(param1D)
             daug1_keys   = ['type', 'param1D']
-            daug1_values = [affine_type, param1D]
+            daug1_values = [phase1_daug, param1D]
 
     match phase2_daug:
 
@@ -297,7 +297,7 @@ def get_daug_dict(fl_basename):
     daug_dict = dict(zip(keys, values))
     
     
-    print(daug_dict)
+    #print(daug_dict)
     return daug_dict
 
 
@@ -331,13 +331,17 @@ def write_script(da_dict,fl_name, daug):
             f.write("tcsh do_reface.tcsh {}""".format(fl_name))
             f.write('\n')
 
+        print('\n')
+        print('DAUG1 = ',da_dict['daug_ph1']['type'])
+
         if (da_dict['daug_ph1']['type'] == 'gibbs'):#(weightage =15%)
             gibbs_radius = da_dict['daug_ph1']['radius']
             print('gibbs_radius =',gibbs_radius)
             f.write("tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
                                                         gibbs_radius))
             f.write('\n')
-        elif (da_dict['daug_ph1']['type'] == 'affine'): # affine_transform(weightage =45%)
+
+        if (da_dict['daug_ph1']['type'] == 'affine'): # affine_transform(weightage =45%)
             param1D = da_dict['daug_ph1']['param1D']
             f.write("tcsh do_affine.tcsh {} {}""".format(fl_name,\
                                                         param1D))

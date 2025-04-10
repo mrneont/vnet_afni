@@ -53,9 +53,9 @@ set mask_blur = `python -c "print('temp_'+'${dset}'.split('_')[0] +'_maskblur.ni
 # make sure mask is float type, before blurring
 3dcalc                      \
     -overwrite              \
-    -a ${mask}         \
+    -a ${mask_dir}/${mask}         \
     -expr 'a'               \
-    -prefix ${mask_fl} \
+    -prefix ${mask_dir}/${mask_fl} \
     -datum float -nscale
 
 # same voxels on the corresponding axis 
@@ -65,14 +65,14 @@ set nmat      = `3dinfo -nj ${dset}`
 3dmerge                 \
     -overwrite          \
     -1blur_fwhm 3       \
-    -prefix ${mask_blur} \
-    ${mask_fl}
+    -prefix ${mask_dir}/${mask_blur} \
+    ${mask_dir}/${mask_fl}
 
 
 # apply mask values as a power modulator on voxel values.
 3dcalc                            \
     -overwrite                    \
-    -a ${mask_blur}          \
+    -a ${mask_dir}/${mask_blur}          \
     -b ${dset}               \
     -expr "b**(1-a/${dim_fac})"   \
     -prefix ${dset}      \
@@ -85,6 +85,7 @@ set nmat      = `3dinfo -nj ${dset}`
 
 set window = 2
 set win_min = `ccalc 1-${window}/2` 
+set axis = 'j'
 
 echo ${win_min}
 
@@ -105,5 +106,5 @@ set nmat      = `3dinfo -nj ${dset}`
 
 
 
-\rm  ${mask_fl} ${mask_blur}
+\rm  ${mask_dir}/${mask_fl} ${mask_dir}/${mask_blur}
 
