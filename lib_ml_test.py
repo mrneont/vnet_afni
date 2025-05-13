@@ -4,7 +4,7 @@ import time
 import numpy                as np
 import nibabel              as nib
 import argparse             as argp
-import pandas               as pd
+
 
 
 import torch
@@ -89,10 +89,9 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
         #print('origfl flname = ',flname)
         origfl_list.append(flname)
 
-    df = pd.DataFrame({'Filename': origfl_list})
-    print(df)
-
     
+
+    #perf_file     = '/'.join([outdir, 'log_performance.txt'])
 
     # datapath
     # DataLoader setup
@@ -112,8 +111,16 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
     dash =  '-' * 60
     print(dash)
     strepoch = 1
+    
+    loss_file_pre = '/'.join([outdir, 'log_loss'])
+
     for name in os.listdir(checkpoint_path):
-        dicescore = []
+
+        perf_file = loss_file_pre + '_' + name +'.txt'
+        with io.open(perf_file, 'a') as perf_log:
+                perf_log.write("# {:>20s}  {:>10s}  \n"
+                               "".format('dset','loss'))
+        #dicescore = []
         chi = 2
         print('checkpoint flname:', name)
         chfl_name = os.path.join(checkpoint_path, name)
@@ -171,22 +178,28 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
 
                 
                 LOSS = loss.forward(pred_mask, mask_data)
-                print('LOSS.item()=',LOSS.item())
-                dicescore.append(1-LOSS.item())
-           
+                print('LOSS.item()= ',LOSS.item())
+                score = 1-LOSS.item()
+                #dicescore.append(1-LOSS.item())
+                #print("{}".format(orig_fname))
+                #print(perf_file)
+                #print(type(score))
+                with io.open(perf_file, 'a') as perf_log:
+                    perf_log.write("  {:12s} {:12.4f} \n".format(orig_fname[0],float(score)))
 
                 count += 1
                 print('count =',count)
-            #df = pd.DataFrame({name: dicescore})
-            df[name] = dicescore
-            print(df)
+            
+            
+            #print(df)
             chi += 1
             strepoch += 1
             #print(dash)  
             #print('DICE SCORE for validation data = ',dicescore)
             #print(dash)
 
-    df.to_csv('test_dice'+ '.csv') 
+    #df.to_csv('test_dice'+ '.csv') 
+    perf_log.close()
         # pending[YNS] : write the dice scores into a log file in output directory   
 
 
