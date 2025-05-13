@@ -1,0 +1,14 @@
+name: test_env_torch_v2_2_2                       # conda env create -f test_torch_v2.2.2.yml
+channels:
+  - conda-forge
+dependencies:
+  - python                        # afni python...
+  - matplotlib  #=3.3.4                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch==2.2.2                           # vnet mods
+  - nibabel
+    #  - pip
+    #  - pip:
+    #    - torchsummary

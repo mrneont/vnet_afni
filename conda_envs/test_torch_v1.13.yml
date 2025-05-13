@@ -1,0 +1,14 @@
+name: test_env_torch_1_13                       # conda env create -f test_torch_v1.13.yml
+channels:
+  - conda-forge
+dependencies:
+  - python                        # afni python...
+  - matplotlib  #=3.3.4                        
+  - numpy 
+  - jupyter                           # python interfaces
+  - ipython
+  - pytorch==1.13.0                           # vnet mods
+  - nibabel
+    #  - pip
+    #  - pip:
+    #    - torchsummary
