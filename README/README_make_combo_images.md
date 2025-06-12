@@ -7,7 +7,10 @@ The scripts are present in the 'make_combo_images_scripts' folder
 1) do_make_combo.tcsh
 2) run_make_combo_images.tcsh
 
-do_make_combo.tcsh shell script creates combo images of each predicated mask in two steps. 
+`tcsh run_make_combo_images.tcsh  $1 $2 `   
+`tcsh run_make_combo_images.tcsh  /datapath_result_folder  phase `    
+
+do_make_combo.tcsh shell script creates combo images of each predicted mask in two steps. 
 first the predicated mask is added to the groundtruth, next the result is overlayed on the original. 
 
 run_make_combo_images.tcsh shell script prepares the folders, and swarms the do_make_combo.tcsh shell script corresponding to each predicated mask. 
