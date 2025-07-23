@@ -12,13 +12,13 @@ README_testing_datasets.md is for illustrating the steps involved in testing of 
 
 5. The 'map_location' is the device on which the checkpoint.pt/model weights are loaded/mapped. The default location in 'cpu' and the user has a choice to set 'map_location' to 'gpu' if GPU are avaailable. 
 
-6. When the groundtruth is not available the masks are predicted and are stored in the 'output_dir_path'. The dice score is not calculated nor tabulated in a log file. 
+6. When the groundtruth is not available the masks are predicted and are stored in the 'output_dir_path'. The dice score is not calculated nor tabulated in a log file. When masks are not availabe the the flag '-nm' (no_mask) is set to 1. When the flag 'no_mask' is set to 1 the mask_data is empty and loss(dice score) value is not evaluated.  
 
-7. Testing on Biowulf using sbatch command: [TBD]
+7. Testing on Biowulf using sbatch command: 
     a)  
    
 
-8. Developer's POV  
+8. Developer's notes:   
 
 a) The 100th epoch seems to be working fine for both the 'Sorensen_Dice_mean' and 'WtSorensen_Dice' loss functions.  
 
