@@ -60,6 +60,9 @@ def get_test_args():
 
     parser.add_argument('-ch', "--checkpoint_path",type=dir_path)
 
+    parser.add_argument("-nm", "--no_mask", 
+                        type=int)
+
     def_map_loc = list_map_loc[0]
     parser.add_argument("-m", "--map_loc", 
                         dest="map_loc", 
@@ -71,7 +74,7 @@ def get_test_args():
 
     return parser.parse_args()
 
-def test_net(data_path, outdir, checkpoint_path, map_loc):
+def test_net(data_path, outdir, no_mask, checkpoint_path, map_loc):
 
     print("++ Device on which the model weights are mapped =", map_loc)
     # Set up network 
@@ -97,7 +100,7 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
     # DataLoader setup
     test_datapath = os.path.join(data_path)
     test_set      = lmd.mridataset(test_datapath, 
-                                    use_dpth_wts= 0, 
+                                    use_dpth_wts= 0, no_mask = 1,
                                     verb=0)
     
     Ntest         = len(test_set)
@@ -176,16 +179,16 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
-                
-                LOSS = loss.forward(pred_mask, mask_data)
-                print('LOSS.item()= ',LOSS.item())
-                score = 1-LOSS.item()
+                if (no_mask==0) :
+                    LOSS = loss.forward(pred_mask, mask_data)
+                    print('LOSS.item()= ',LOSS.item())
+                    score = 1-LOSS.item()
                 #dicescore.append(1-LOSS.item())
                 #print("{}".format(orig_fname))
                 #print(perf_file)
                 #print(type(score))
-                with io.open(perf_file, 'a') as perf_log:
-                    perf_log.write("  {:12s} {:12.4f} \n".format(orig_fname[0],float(score)))
+                    with io.open(perf_file, 'a') as perf_log:
+                        perf_log.write("  {:12s} {:12.4f} \n".format(orig_fname[0],float(score)))
 
                 count += 1
                 print('count =',count)
@@ -207,10 +210,11 @@ def main():
     args      = get_test_args()
     data_path = args.data_path
     outdir    = rms.prep_outdir(args.outdir)
+    no_mask   = args.no_mask
     checkpoint_path = args.checkpoint_path
     # map_loc : - Device on which the model weights are mapped
     map_loc   = args.map_loc
-    test_net(data_path,outdir, checkpoint_path, map_loc)
+    test_net(data_path,outdir, no_mask, checkpoint_path, map_loc)
 
 
 if __name__ == "__main__":
