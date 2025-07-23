@@ -15,11 +15,14 @@ README_testing_datasets.md is for illustrating the steps involved in testing of 
 6. When the groundtruth is not available the masks are predicted and are stored in the 'output_dir_path'. The dice score is not calculated nor tabulated in a log file. When masks are not availabe the the flag '-nm' (no_mask) is set to 1. When the flag 'no_mask' is set to 1 the mask_data is empty and loss(dice score) value is not evaluated.  
 
 7. Testing on Biowulf using sbatch command:
+   
    a) The test script is created by activating a valid conda environment.
+   
    b) `python lib_ml_test.py -d 'testing_dataset_path' -o 'output_dir_path' -ch 'checkpoint.pt_folder_path'  -m 'map_location' ` is        added to the test script.
+   
    c)  The test script is submitted to the Biowulf using a sbatch command. 
 
-8. Developer's notes:   
+9. Developer's notes:   
 
 a) The 100th epoch seems to be working fine for both the 'Sorensen_Dice_mean' and 'WtSorensen_Dice' loss functions.  
 
