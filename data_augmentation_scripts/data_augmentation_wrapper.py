@@ -428,7 +428,12 @@ def main():
 
     # path for data augmentation folder
     da_path     = args.data_augment_path
-    
+    # ... and strip any '/' at the right
+    da_path     = da_path.rstrip('/')
+    if len(da_path) == 0 :
+        print("** ERROR: entered path was only '/', which is not allowed")
+        sys.exit(3)
+
     # path for the dataset folder
     data_path   = args.data_dir 
 
@@ -501,18 +506,20 @@ def main():
         fl.write("tcsh -x {}.tcsh |& tee ../logs/{}""".format(fl_basename.split('.')[0],log_fl))
         fl.write('\n')
             # list of dict
+    fl.close()
             
-
-    # Serializing json
+    # Serializing json, which is now output to scripts dir in output dir
     json_object = json.dumps(list_daug, indent=4)
-    # Writing to sample.json
-    with open("daug.json", "w") as outfile:
+    with open(da_path + "/scripts/daug.json", "w") as outfile:
         outfile.write(json_object)
 
-    fl.close()
+    return 0
 
 # ===========================================================================
 
 if __name__ == "__main__" :
 
-    main()
+    tmp = main()
+
+    # exit ok
+    sys.exit(0)
