@@ -20,6 +20,7 @@ import re #regular expression
 DEF = {
         'verb' : 1,
         'num_cp' : 3,
+        'seed_num' : 42,
 }
 
 # ============================================================================
@@ -65,6 +66,51 @@ list_daug_ph1    = ['gibbs','affine','empty']
 list_daug_ph2    = ['gain_inhom','zipper','add_noise','contrast_var']
 list_daug = []
 
+# --------------------------------------------------------------------------
+
+def get_aug_script_dir():
+    """Use built-in Python functions to get the directory where this
+script lives, so we can copy augmentation scripts from it."""
+
+    full_path_scr = os.path.abspath(__file__)
+
+    path_dir_list = full_path_scr.split('/')[:-1]
+
+    if not(len(path_dir_list)) :
+        print("** ERROR: unable to parse full script path:", full_path_scr)
+        sys.exit(4)
+    
+    # reassemble path to this dir
+    path_dir_name = '/'.join(path_dir_list)
+
+    return path_dir_name
+
+def copy_all_aug_script(idir, odir):
+    """Copy all augmentation scripts from input dir 'idir' to output dir
+'odir'."""
+
+    if not(os.path.exists(idir)):
+        print("** ERROR: this input path does not exist:", idir)
+        sys.exit(5)
+    if not(os.path.exists(odir)):
+        print("** ERROR: this output path does not exist:", odir)
+        sys.exit(5)
+
+    cmd = """\\cp {idir}/*.tcsh {odir}/.""".format(idir=idir, odir=odir)
+
+    com  = ab.shell_com(cmd, capture=1)
+    stat = com.run()
+    # print the status of preparing the data_augmentation folder
+    if (stat == 0):
+        print("++ Copied augmentation scripts to odir:")
+        print("   {odir}".format(odir=odir))
+    else :
+        print("** ERROR: failed to copy augmentation scripts to odir:")
+        print("   {odir}".format(odir=odir))
+        sys.exit(6)
+
+    return 0
+
 def get_data_augment_args():
 
     parser = argp.ArgumentParser(prog = 'data_augmentation_wrapper.py',
@@ -80,7 +126,11 @@ def get_data_augment_args():
     parser.add_argument("-c", "--num_cp", nargs=1,
                         default=[DEF['num_cp']])
 
-    # verbosity level
+    # random seed number (integer)
+    parser.add_argument("-seed_num", nargs=1,
+                        default=[DEF['seed_num']])
+
+    # verbosity level (integer)
     parser.add_argument("-verb", nargs=1,
                         default=[DEF['verb']])
     
@@ -419,11 +469,7 @@ def main():
         you'll need to upgrade to use it.\n""")
         sys.exit(1)
 
-    seed_num = 42
-    random.seed(seed_num)
-    print('++ Random seed_num =', seed_num)
-
-    # read in command line arguments
+    # ----- read in command line arguments
     args        = get_data_augment_args()
 
     # path for data augmentation folder
@@ -440,10 +486,26 @@ def main():
     # number of copies of the dataset to be made 
     num_cp      = int(args.num_cp[0])
     
+    # random seed number
+    seed_num    = int(args.seed_num[0])
+
+    # verbosity level
+    verb        = int(args.verb[0])
+
     if(os.path.isdir(da_path) == True):
         print('** ERROR Status msg : Data augmentation folder already exists')
         print('   Please change the data_augmentation directory name and retry')
         sys.exit(1) 
+
+    # put the random seed in place
+    print('++ Random seed_num =', seed_num)
+    random.seed(seed_num)
+
+    # ----- get name of augmentation script directory:
+    dir_aug_scr = get_aug_script_dir()
+    print("++ Found augmentation scripts dir:", dir_aug_scr)
+
+    # ----- start initializing augmentation
 
     print("++ Run make_copies_data_aug.tcsh (num_cp = {})...".format(num_cp))
     cmd  = '''tcsh make_copies_data_aug.tcsh {param1} {param2} {param3}
@@ -471,9 +533,12 @@ def main():
     orig_data_list = glob.glob(orig_path_str)
     orig_data_list.sort()
 
+    # output directory, scripts subdirectory
+    odir_scripts = os.path.join(da_path, 'scripts')
+
     print("++ Create master script for augmentation....")
     master_fl = "master_script.tcsh"
-    master_fl_path_str = os.path.join(da_path, 'scripts', master_fl)
+    master_fl_path_str = os.path.join(odir_scripts, master_fl)
     fl        = open(master_fl_path_str, "w")
     #fl.write("#!/bin/tcsh")
     #fl.write('\n \n \n')
@@ -510,8 +575,13 @@ def main():
             
     # Serializing json, which is now output to scripts dir in output dir
     json_object = json.dumps(list_daug, indent=4)
-    with open(da_path + "/scripts/daug.json", "w") as outfile:
+    with open(odir_scripts + "/daug.json", "w") as outfile:
         outfile.write(json_object)
+
+    # copy the augmentation scripts to the output dir
+    if 1 :
+        print("++ Copy augmentation scripts to:", odir_scripts)
+        copy_all_aug_script(dir_aug_scr, odir_scripts)
 
     return 0
 
