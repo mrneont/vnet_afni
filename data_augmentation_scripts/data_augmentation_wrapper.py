@@ -14,6 +14,15 @@ import numpy     as np
 import glob
 import re #regular expression
 
+# ============================================================================
+
+# default values for program opts
+DEF = {
+        'verb' : 1,
+        'num_cp' : 3,
+}
+
+# ============================================================================
 
 '''
 *****************************************************************************
@@ -68,8 +77,13 @@ def get_data_augment_args():
     parser.add_argument("-d", "--data_dir")
 
     # number of copies of the dataset to be made 
-    parser.add_argument("-c", "--num_cp")
+    parser.add_argument("-c", "--num_cp", nargs=1,
+                        default=[DEF['num_cp']])
 
+    # verbosity level
+    parser.add_argument("-verb", nargs=1,
+                        default=[DEF['verb']])
+    
     return parser.parse_args()
 
 
@@ -396,37 +410,39 @@ def write_script(da_dict,fl_name, daug):
 
 def main():
 
-    print('sys.version_info = ',sys.version_info)
+    print('++ Python version  =', sys.version.split()[0])
     if sys.version_info<(3,10,0):
-        sys.stderr.write("You need python 3.10 or later to run this script. \
-                        \nThe 'match' statement was introduced in Python 3.10.\
-                        \nSo if you're using an older version, \
-                        you'll need to upgrade to use it.")
-        exit(1)
+        sys.stderr.write("""** ERROR:
+        You need Python 3.10 or later to run this script.
+        The 'match' statement was introduced in Python 3.10.
+        So if you're using an older version,
+        you'll need to upgrade to use it.\n""")
+        sys.exit(1)
 
     seed_num = 42
     random.seed(seed_num)
-    print('Random seed_num =', seed_num)
+    print('++ Random seed_num =', seed_num)
 
+    # read in command line arguments
     args        = get_data_augment_args()
-    #data_augment_path is the data_path for data augmentation folder
+
+    # path for data augmentation folder
     da_path     = args.data_augment_path
-    #print(" data augmentation folder is: {}".format(da_path))
     
-    # data_dir is the data path for the dataset folder
+    # path for the dataset folder
     data_path   = args.data_dir 
 
     # number of copies of the dataset to be made 
-    num_cp      = args.num_cp   
+    num_cp      = int(args.num_cp[0])
     
     if(os.path.isdir(da_path) == True):
-        print('\nStatus msg : Data augmentation folder already exists')
-        print('Please change the data_augmentation directory name and retry\n')
+        print('** ERROR Status msg : Data augmentation folder already exists')
+        print('   Please change the data_augmentation directory name and retry')
         sys.exit(1) 
 
-    cmd  = '''tcsh make_copies_data_aug.tcsh {param1} {param2} {param3}'''.\
-                            format(param1= data_path, param2= da_path,\
-                            param3= num_cp)
+    print("++ Run make_copies_data_aug.tcsh (num_cp = {})...".format(num_cp))
+    cmd  = '''tcsh make_copies_data_aug.tcsh {param1} {param2} {param3}
+    '''.format(param1 = data_path, param2 = da_path, param3 = num_cp)
 
     com  = ab.shell_com(cmd, capture=1)
     stat = com.run()
@@ -445,33 +461,35 @@ def main():
     
     # read copies of dataset
     orig_path_str = os.path.join(da_path, 'orig', '*.nii.gz')
+
     # list of copies of dataset
     orig_data_list = glob.glob(orig_path_str)
     orig_data_list.sort()
-    #print(orig_data_list)
+
+    print("++ Create master script for augmentation....")
     master_fl = "master_script.tcsh"
-    master_fl_path_str = os.path.join(da_path,'scripts',master_fl)
+    master_fl_path_str = os.path.join(da_path, 'scripts', master_fl)
     fl        = open(master_fl_path_str, "w")
     #fl.write("#!/bin/tcsh")
     #fl.write('\n \n \n')
     for fl_name in orig_data_list:
         # condition to check whether to daug or not
         fl_basename = os.path.basename(fl_name)
-        print("\n Processing :",fl_basename)
+        print("++ Processing :",fl_basename)
         name = fl_basename.split('.')[0]
-        print(name)
-        log_fl = "log_"+name +".txt"
-        print(log_fl)
+        print("   dset root:", name)
+        log_fl = "log_" + name + ".txt"
+        print("   log file :", log_fl)
         fl_num = int(re.search(r'\d+', fl_basename).group(0))
         if ((fl_num%1000) ==0):
-            print('Status msg : Original copy of dset: no data augmentation')
+            print('++ Status msg : Original copy of dset: no data augmentation')
             daug = 0 # flag to depict data_augmentation
             daug_dict = {} # empty dictionary
             print("fl_name =",fl_name)
             write_script(daug_dict,fl_name,daug)
 
         else: 
-            print('Status msg : do augmentation')
+            print('++ Status msg : do augmentation')
             daug_dict = get_daug_dict(fl_basename)
 
             # write scripts based on the dictionary for each dataset

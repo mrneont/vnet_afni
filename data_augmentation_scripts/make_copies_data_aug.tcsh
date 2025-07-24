@@ -38,34 +38,35 @@ set dataaug_mask_dir = "mask"
 set dataaug_scripts  = "scripts"
 set dataaug_logs     = "logs"
 
-mkdir ${data_aug_dir} 
-mkdir ${data_aug_dir}/${dataaug_orig_dir}
-mkdir ${data_aug_dir}/${dataaug_mask_dir}
-mkdir ${data_aug_dir}/${dataaug_scripts}
-mkdir ${data_aug_dir}/${dataaug_logs}
+# make sure output directory doesn't exist already
+if ( -d "${data_aug_dir}" ) then
+    echo "** ERROR: top level dir '${data_aug_dir}' already exists" 
+    echo "   Please move/remove it and try again"
+    exit 1
+endif
 
-echo ${data_aug_dir}/${dataaug_mask_dir}
-# set counter for number of copies of the dataset to be made
-set i=0
-#echo ${i}
+\mkdir -p ${data_aug_dir} 
+\mkdir -p ${data_aug_dir}/${dataaug_orig_dir}
+\mkdir -p ${data_aug_dir}/${dataaug_mask_dir}
+\mkdir -p ${data_aug_dir}/${dataaug_scripts}
+\mkdir -p ${data_aug_dir}/${dataaug_logs}
+
+echo "++ ${data_aug_dir}/${dataaug_mask_dir}"
 
 # get list of all  dsets
 cd ${dataset_dir}/${dataset_orig_dir}
-    
 set all_dsets = ( *orig.nii* )
-
-echo ${all_dsets}
-
 cd -
 
-#echo ${PWD}
-foreach dset_orig ( ${all_dsets})
+echo "++ Found ${#all_dsets} dsets: ${all_dsets}"
 
-    echo " ${dset_orig} is being processed"
-    while ( $i < = ${num_cp})
-        #echo ${i}
+# loop over all dsets, making copies
+foreach dset_orig ( ${all_dsets} )
+    echo "++ Process dset: ${dset_orig}"
 
-        #echo ${num_cp}
+    # loop over num_cp times and append zero-based count labels for each copy
+    @ nmax = ${num_cp} - 1
+    foreach i ( `seq 0 1 ${nmax}` )
         # set prefix for the copies of the dataset 
         set prefix       = `python -c "print(str(${i}).rjust(3,'0'))"`
         echo ${prefix}
@@ -82,17 +83,25 @@ foreach dset_orig ( ${all_dsets})
         echo ${dset_mask}
         echo ${dset_mask_copy}
 
-        cp  ${dataset_dir}/${dataset_orig_dir}/${dset_orig}   \
-                    ${data_aug_dir}/${dataaug_orig_dir}/${dataset_copy}
+        # copy orig dset
+        \cp  ${dataset_dir}/${dataset_orig_dir}/${dset_orig}   \
+             ${data_aug_dir}/${dataaug_orig_dir}/${dataset_copy}
 
-        cp  ${dataset_dir}/${dataset_mask_dir}/${dset_mask}   \
-                    ${data_aug_dir}/${dataaug_mask_dir}/${dset_mask_copy}
+        if ( $status) then
+            echo "** Failed to copy: ${dset_orig} -> ${dataset_copy}"
+            exit 2
+        endif
 
-        @ i = $i + 1 # increment the counter for every copy made
+        # copy mask dset
+        \cp  ${dataset_dir}/${dataset_mask_dir}/${dset_mask}   \
+             ${data_aug_dir}/${dataaug_mask_dir}/${dset_mask_copy}
 
-    end 
-    # set the counter 'i' back to zero for the next dataset to be processed
-    set i = 0 
-            
+        if ( $status) then
+            echo "** Failed to copy: ${dset_mask} -> ${dset_mask_copy}"
+            exit 2
+        endif
+    end             
 end 
 
+# successful exit
+exit 0
