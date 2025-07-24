@@ -21,7 +21,29 @@ DEF = {
         'verb' : 1,
         'num_cp' : 3,
         'seed_num' : 42,
+        'exec_mode' : 'None',
 }
+
+# list of allowed execution modes
+LIST_exec_mode = ['None', 'swarm', 'shell']
+
+# default swarm script
+scr_swarm = 'master_script.tcsh'
+run_swarm = 'run_swarm.tcsh'
+cmd_swarm = """#!/bin/tcsh
+
+swarm                                                              \\
+    -f  {scr_swarm}                                                \\
+    --module afni                                                  \\
+    --partition=norm,quick                                         \\
+    --threads-per-process=4                                        \\
+    --gb-per-process=3                                             \\
+    --time=00:30:00                                                \\
+    --logdir={cdir_log}                                            \\
+    --job-name=job_{cmd}                                           \\
+    --merge-output                                                 \\
+    --usecsh
+""".format(cmd='vnet_aug', scr_swarm=scr_swarm, cdir_log='../logs')
 
 # ============================================================================
 
@@ -67,6 +89,17 @@ list_daug_ph2    = ['gain_inhom','zipper','add_noise','contrast_var']
 list_daug = []
 
 # --------------------------------------------------------------------------
+
+def is_valid_exec_mode(mode):
+    """Is the given string 'mode' an allowed execution mode?  Exit on
+failure."""
+
+    if not(mode in LIST_exec_mode) :
+        print("** ERROR: this is not a valid execution mode: {}"
+              "".format(mode))
+        sys.exit(7)
+
+    return 0
 
 def get_aug_script_dir():
     """Use built-in Python functions to get the directory where this
@@ -129,6 +162,10 @@ def get_data_augment_args():
     # random seed number (integer)
     parser.add_argument("-seed_num", nargs=1,
                         default=[DEF['seed_num']])
+
+    # execution mode for augmentation script set
+    parser.add_argument("-exec_mode", nargs=1,
+                        default=[DEF['exec_mode']])
 
     # verbosity level (integer)
     parser.add_argument("-verb", nargs=1,
@@ -489,6 +526,11 @@ def main():
     # random seed number
     seed_num    = int(args.seed_num[0])
 
+    # execution mode for set of scripts
+    exec_mode   = str(args.exec_mode[0])
+    # ... and make sure it is allowed
+    tmp = is_valid_exec_mode(exec_mode)
+
     # verbosity level
     verb        = int(args.verb[0])
 
@@ -537,7 +579,7 @@ def main():
     odir_scripts = os.path.join(da_path, 'scripts')
 
     print("++ Create master script for augmentation....")
-    master_fl = "master_script.tcsh"
+    master_fl = scr_swarm
     master_fl_path_str = os.path.join(odir_scripts, master_fl)
     fl        = open(master_fl_path_str, "w")
     #fl.write("#!/bin/tcsh")
@@ -580,8 +622,56 @@ def main():
 
     # copy the augmentation scripts to the output dir
     if 1 :
-        print("++ Copy augmentation scripts to:", odir_scripts)
         copy_all_aug_script(dir_aug_scr, odir_scripts)
+
+    # make a swarm script
+    if 1 :
+        # write the swarm script...
+        full_path_swarm = odir_scripts + "/" + run_swarm
+        fff = open(full_path_swarm, 'w')
+        fff.write(cmd_swarm)
+        fff.close()
+
+    # (maybe) execute augmentation
+    mode_str = "data augmentation in {mode} mode".format(mode=exec_mode)
+    if exec_mode == 'swarm' :
+        print("++ Run {}".format(mode_str))
+        # for now, need to go to scripts dir bc of relative path for logs dir
+        cmd  = '''cd {odir}; tcsh {file}'''.format(odir=odir_scripts,
+                                                   file=full_path_swarm)
+        com  = ab.shell_com(cmd, capture=1)
+        stat = com.run()
+
+        if stat :
+            print("** ERROR: failed {}".format(mode_str))
+            print("   Failed command was:")
+            print("   " + cmd)
+            print("   Failed st err output:")
+            print('-'*50)
+            print('\n'.join(com.se))
+            print('-'*50)
+            sys.exit(1)
+    elif exec_mode == 'shell' :
+        print("++ Run augmentation in {mode} mode".format(mode=exec_mode))
+        # for now, need to go to scripts dir bc of relative path for logs dir
+        cmd  = '''cd {odir}; tcsh {file}'''.format(odir=odir_scripts,
+                                                   file=master_fl_path_str)
+        com  = ab.shell_com(cmd, capture=1)
+        stat = com.run()
+
+        if stat :
+            print("** ERROR: failed {}".format(mode_str))
+            print("   Failed command was:")
+            print("   " + cmd)
+            print("   Failed st err output:")
+            print('-'*50)
+            print('\n'.join(com.se))
+            print('-'*50)
+            sys.exit(1)
+    elif exec_mode == 'None' :
+        print("++ Both master and swarm scripts ready to be run:")
+    else:
+        print("** ERROR: unrecognized exec_mode: ", exec_mode)
 
     return 0
 
