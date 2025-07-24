@@ -50,7 +50,8 @@ The flag '-r' denotes the 'restart'. When the restart flag is set to 1, the mode
 
 10. Developer's POV :
     a) The learning rate can be maintained at 1e-4.
-    b) Generally the training dataset used for finetuning is small, so 'batch_size_training' can be set to 2 instead of 6.
+    b) Generally the training dataset used for finetuning is small, so 'batch_size_training' can be set to 1 instead of 6.
+    Maintaining 'batch_size_training' as 1 allows the model to learn the features in fewer epochs during finetuning. 
    
    
 
