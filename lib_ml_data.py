@@ -32,7 +32,7 @@ class mridataset(data.Dataset):
   It retrieves the corresponding groundtruth/mask
     """
 
-    def __init__(self, root_path, use_dpth_wts=None, verb=0):
+    def __init__(self, root_path, use_dpth_wts=None, no_mask=None, verb=0):
 
         # initialize 
         self.orig_data_list = []
@@ -43,6 +43,7 @@ class mridataset(data.Dataset):
 
         self.root_path      = root_path
         self.use_dpth_wts   = use_dpth_wts
+        self.no_mask        = no_mask
         self.verb           = verb
 
         # ===============================================================
@@ -74,30 +75,32 @@ class mridataset(data.Dataset):
             self.orig_head_list.append(A.header.copy())
             orig_file = orig_dset[Nroot:]
 
-            mask_file = orig_file.replace('orig', 'mask')
-            mask_dset = ''.join([self.root_path, mask_file])
-            self.mask_data_list.append(mask_dset)
+            if (self.no_mask==0) :
+                mask_file = orig_file.replace('orig', 'mask')
+                mask_dset = ''.join([self.root_path, mask_file])
+                self.mask_data_list.append(mask_dset)
 
             if self.use_dpth_wts :
                 dpth_file = orig_file.replace('orig', 'edt')
                 dpth_dset = ''.join([self.root_path, dpth_file])
                 self.dpth_data_list.append(dpth_dset)
 
-        # verify that all the mask and dpth files exist
-        MISSING_DSET = 0
-        for dset in self.mask_data_list :
-            if not(os.path.isfile(dset)):
-                MISSING_DSET = 1
-                print("** ERROR: required mask dataset not found: "
-                      "{}".format(dset))
-        if self.use_dpth_wts :
-            for dset in self.dpth_data_list :
+        if (self.no_mask==0) :
+            # verify that all the mask and dpth files exist
+            MISSING_DSET = 0
+            for dset in self.mask_data_list :
                 if not(os.path.isfile(dset)):
                     MISSING_DSET = 1
-                    print("** ERROR: required dpth dataset not found: "
+                    print("** ERROR: required mask dataset not found: "
                           "{}".format(dset))
-        if MISSING_DSET :
-            sys.exit(5)
+            if self.use_dpth_wts :
+                for dset in self.dpth_data_list :
+                    if not(os.path.isfile(dset)):
+                        MISSING_DSET = 1
+                        print("** ERROR: required dpth dataset not found: "
+                              "{}".format(dset))
+            if MISSING_DSET :
+                sys.exit(5)
 
         if self.verb > 1:
             print("++ Check matching of input dsets:")
@@ -136,8 +139,11 @@ class mridataset(data.Dataset):
         orig_data[orig_data >top99_thresh] = top99_thresh
         down2_thresh = np.percentile(orig_data, 2) 
         orig_data[orig_data < down2_thresh] = down2_thresh
-        mask_image  = nib.load(self.mask_data_list[index])
-        mask_data   = np.asanyarray(mask_image.dataobj).astype('float32')
+        if (self.no_mask==0) :
+            mask_image  = nib.load(self.mask_data_list[index])
+            mask_data   = np.asanyarray(mask_image.dataobj).astype('float32')
+        else:
+            mask_data   = np.ndarray(0) 
 
         if self.use_dpth_wts :
             dpth_image  = nib.load(self.dpth_data_list[index])
