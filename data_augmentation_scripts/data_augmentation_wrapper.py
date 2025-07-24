@@ -1,18 +1,22 @@
+#!/usr/bin/env python
+
 import sys
+
+# on most systems, this should come from regular AFNI install
 sys.path.append('/Users/narayanaswamyy2/abin')
 from afnipy import afni_base as ab
-import os 
-import argparse      as argp
+
+import os
+import argparse  as argp
 import json
 import random
-import numpy as np
-import os
+import numpy     as np
 import glob
 import re #regular expression
 
 
 '''
-************************************************************************************
+*****************************************************************************
 * This is a wrapper code which nests the modular data augmentation scripts
 * Inputs required are as below
 * flag |  input
@@ -36,7 +40,7 @@ import re #regular expression
 * 4) zipper noise
 * 5) various % of noise added to dataset
 * 6) refacing 
-*************************************************************************************
+******************************************************************************
 
  -smallrange   = Set all the parameter ranges to be smaller (about half) than
                  the default ranges, which are rather large for many purposes.
@@ -45,6 +49,7 @@ import re #regular expression
                 * Default scaling range  is plus/minus 20% of grid size
                 * Default shearing range is plus/minus 0.1111
 '''
+
 # List of data augmentation in different phases 
 list_daug_ph0    = ['reface','empty']
 list_daug_ph1    = ['gibbs','affine','empty']
@@ -54,11 +59,12 @@ list_daug = []
 def get_data_augment_args():
 
     parser = argp.ArgumentParser(prog = 'data_augmentation_wrapper.py',
-                                    formatter_class=argp.RawTextHelpFormatter)
+                                 formatter_class=argp.RawTextHelpFormatter)
+
     # data_augment_path is the data_path for data augmentation folder
     parser.add_argument("-a", "--data_augment_path")
-    # data_dir is the data path for the dataset folder
 
+    # data_dir is the data path for the dataset folder
     parser.add_argument("-d", "--data_dir")
 
     # number of copies of the dataset to be made 
@@ -70,23 +76,23 @@ def get_data_augment_args():
 
 def get_daug_dict(fl_basename): 
     
-    global daug1_keys,daug1_values,daug_ph1_val
-    global daug2_keys,daug2_values,daug_ph2_val
+    global daug1_keys, daug1_values, daug_ph1_val
+    global daug2_keys, daug2_values, daug_ph2_val
 
-    daug1_keys  =[]
-    daug1_values=[]
-    daug2_keys  =[]
-    daug2_values=[]
-    list_param1D=[]
+    daug1_keys   = []
+    daug1_values = []
+    daug2_keys   = []
+    daug2_values = []
+    list_param1D = []
 
     #do phase0 data augmentation 
     # phase0 -> refacing is done randomly to 20% of da 
     phase0_rand_item = random.choices([0,1], weights=(20, 80))
     phase0_rand      = phase0_rand_item[0]
     phase0_daug      = list_daug_ph0[phase0_rand]
-    print('phase_0)',phase0_daug)
-    daug0_keys   = ['type']
-    daug0_values = [phase0_daug]
+    print('++ phase_0: ', phase0_daug)
+    daug0_keys       = ['type']
+    daug0_values     = [phase0_daug]
 
     
     #Nested dict for parameters
@@ -102,17 +108,17 @@ def get_daug_dict(fl_basename):
     phase1_rand_item = random.choices([0,1,2], weights=(15, 45,40))
     phase1_rand      = phase1_rand_item[0]
     phase1_daug      = list_daug_ph1[phase1_rand]
-    print('phase_1)',phase1_daug)
-    daug1_keys   = ['type']
-    daug1_values = [phase1_daug]
+    print('++ phase_1 :', phase1_daug)
+    daug1_keys       = ['type']
+    daug1_values     = [phase1_daug]
     
     
     #do phase2 data augmentation 
     # ['gain_inhom','zipper','add_noise','contrast_var']
     phase2_rand_item = random.choices([0,1,2,3], weights=(30, 10, 30, 30))
     phase2_rand      = phase2_rand_item[0]
-    phase2_daug = list_daug_ph2[phase2_rand]
-    print('phase_2)',phase2_daug)
+    phase2_daug      = list_daug_ph2[phase2_rand]
+    print('++ phase_2: ', phase2_daug)
 
     match phase1_daug:
     
@@ -398,8 +404,9 @@ def main():
                         you'll need to upgrade to use it.")
         exit(1)
 
-    random.seed(42)
-    print('Random seed =', random.random())
+    seed_num = 42
+    random.seed(seed_num)
+    print('Random seed_num =', seed_num)
 
     args        = get_data_augment_args()
     #data_augment_path is the data_path for data augmentation folder
@@ -425,9 +432,15 @@ def main():
     stat = com.run()
     # print the status of preparing the data_augmentation folder
     if (stat == 0):
-        print("Status msg :Data augmentation folder succesfully created")
+        print("++ Status msg : Data augmentation folder succesfully created")
     else :
-        print("Status msg :Data augmentation folder not created: exiting")
+        print("** ERROR: Status msg : Data augmentation folder not created")
+        print("   Failed command was:")
+        print("   " + cmd)
+        print("   Failed st err output:")
+        print('-'*50)
+        print('\n'.join(com.se))
+        print('-'*50)
         sys.exit(1)
     
     # read copies of dataset
@@ -480,4 +493,8 @@ def main():
 
     fl.close()
 
-main()
+# ===========================================================================
+
+if __name__ == "__main__" :
+
+    main()
