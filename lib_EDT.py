@@ -18,7 +18,7 @@ BIG = 10**10    # -> assumes max matrix dimension is < 10**5
 #   Sampled Functions. Theory of Computing 8:415-428.
 #   https://cs.brown.edu/people/pfelzens/papers/dt-final.pdf
 #
-# Another useful/illustrative resource abotu this is by Philip Rideout:
+# Another useful/illustrative resource about this is by Philip Rideout:
 #
 #   https://prideout.net/blog/distance_fields/
 #
@@ -31,7 +31,7 @@ BIG = 10**10    # -> assumes max matrix dimension is < 10**5
 #
 # Here, the zero-valued "background" is also just treated like an ROI,
 # with one difference.  At a FOV boundary, the zero-valued
-# ROI/backgroud is treated as open, so that the EDT value at each
+# ROI/background is treated as open, so that the EDT value at each
 # "zero" voxel is always to one of the shapes within the FOV.  For
 # nonzero ROIs, one can treat the FOV boundary *either* as an ROI edge
 # (EDT value there will be 1 edge length) *or* as being open.

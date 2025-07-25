@@ -12,8 +12,8 @@ from torch.nn.utils import weight_norm
 +   The Vnet(volumetric neural net) processes 3D data by performing volumetric convolutions.
 
 +   VNet_orig() function is implementation of Fig 2 from the above mentioned paper. The function VNet_orig
-    incorporates the various stages that operate at different resolutions both on the left side(enocder) 
-    and the right side(decoder) of the network. 
+    incorporates the various stages that operate at different resolutions both on the left side (encoder) 
+    and the right side (decoder) of the network. 
  
 +   Vnet Architecture explained : It has the Encoder on the left hand side(LHS) and decoder on the 
     right hand side 
