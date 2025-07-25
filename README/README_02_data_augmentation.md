@@ -1,10 +1,14 @@
 What is this README for?
-------------------------------
+------------------------------------------------------------------------------
 
-Data augmentation is a suite of programs to create pseudo artifacts in copies of the original MRI data. The copies of the data created during data augmentation are used to train the Vnet model. 
+Data augmentation is a suite of programs to create pseudo artifacts in
+copies of the original MRI data. The copies of the data created during
+data augmentation are used to train the Vnet model.
+
 
 List of data augmentation types supported are
-------------------------------
+------------------------------------------------------------------------------
+
 * phase-0
   * refacing is done randomly to 20% of data
 * phase-1    
@@ -16,23 +20,34 @@ List of data augmentation types supported are
   * various % of noise added to dataset
   * contrast_variation inside core + top to bottom
 
+
 Steps for creating data augmentation folder from the given dataset 
------------------------------------------------------------
-1) Download/ git checkout  the ‘data_augmentation_scripts’ folder  from git repo.
-2) Fetch memory on biowulf using command  ‘sinteractive --mem=20g’
-3) Activate the conda env ‘conda activate vnet_tech_2024_01_02_gpu’
-4) Run ‘module afni’ command to load afni. 
-5) export PYTHONPATH=/usr/local/apps/afni/current-py3/linux_rocky_8 [  *clarify*  ]
-6) Run ‘data_augmentation_wrapper.py’ library file to create the augmented dataset.
+------------------------------------------------------------------------------
+1) Download+git checkout the 'data_augmentation_scripts' folder from git repo.
+2) Start interactive session on biowulf:  'sinteractive --mem=20g'
+3) Activate the conda env: 'conda activate vnet_tech_2024_01_02_gpu'
+4) Load AFNI programs: 'module afni'
+5) export PYTHONPATH=/usr/local/apps/afni/current-py3/linux_rocky_8 [ *clarify* ]
+6) Use the 'data_augmentation_wrapper.py' program to create an augmented
+   copy of the input orig+mask datasets
    
-   Path_to_original_dataset_augment is prepared which contains orig, maks, logs and  scripts folder
+   input directory  : path_to_original_training_data
+   + contains these dirs: orig, mask
+
+   output directory : path_to_augmented_training_data
+   + contains these dirs: orig, mask, logs, scripts
+   + if swarm/shell execution run, then also these dirs: edt
+
+   Command to run:
+   python data_augmentation_wrapper.py                       \
+       -input_dir           path_to_original_training_data   \
+       -output_dir          path_to_augmented_training_data  \
+       -num_cp              3                                \
+       -exec_mode           swarm
    
-   `python data_augmentation_wrapper.py  -d /path_to_original_dataset  -a /path_to_original_dataset_augment  -c  #_no_of_copies`
-   
-7) Copy all the data_augmentation scripts from ‘data_augmentation_scripts’ folder to Path_to_original_dataset_augment/scripts folder.
-8) Path_to_original_dataset_augment/scripts folder also contains the shell scripts to run the data augmentation for each dataset in orig folder. The ‘run_swarm.tcsh’ shell
-   script runs all the data augmentation scripts in parallel. This can be checked using the command ‘sjobs’
-10) 
+  ... which starts a swarm job to run all the data augmentation
+  scripts in parallel. This can be checked using the command 'sjobs'
+
 
 
 
