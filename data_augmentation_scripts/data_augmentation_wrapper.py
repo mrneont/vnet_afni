@@ -18,7 +18,7 @@ import textwrap              # for help text formatting
 # ============================================================================
 # program version and brief notes on updates
 
-version = '1.1' # adding in more help fiels
+version = '1.1' # adding in more help files
 
 # ============================================================================
 # default options and definitions
@@ -716,7 +716,7 @@ def main():
 
     # copy the augmentation scripts to the output dir
     if 1 :
-        copy_all_aug_script(dir_aug_scr, odir_scripts)
+        tmp = copy_all_aug_script(dir_aug_scr, odir_scripts)
 
     # make a swarm script
     if 1 :
