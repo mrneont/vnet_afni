@@ -196,7 +196,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
         'train': DataLoader(train_set, shuffle = tr_shuf, batch_size = tr_bsize),
         'val'  : DataLoader(val_set,   shuffle = False, batch_size = 1)
     }
-    print('trainign shuffle tr_shuf = ',tr_shuf)
+    print('training shuffle tr_shuf = ',tr_shuf)
     # initialize the early_stopping object
     patience         = 5
     early_stopping   = ptt.EarlyStopping(patience=patience, verbose=True)
