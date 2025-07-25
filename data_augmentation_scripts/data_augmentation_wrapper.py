@@ -19,6 +19,7 @@ import textwrap              # for help text formatting
 # program version and brief notes on updates
 
 version = '1.1' # adding in more help files
+version = '1.2' # match/case -> if/elif
 
 # ============================================================================
 # default options and definitions
@@ -268,7 +269,6 @@ short help descriptions for each.
     return parser.parse_args()
 
 
-
 def get_daug_dict(fl_basename): 
     
     global daug1_keys, daug1_values, daug_ph1_val
@@ -290,10 +290,9 @@ def get_daug_dict(fl_basename):
     daug0_values     = [phase0_daug]
 
     
-    #Nested dict for parameters
+    # ----- Nested dict for parameters
     
-    #do phase1 data augmentation 
-    
+    # do phase1 data augmentation 
     # + phase1 augmentation is randomly picked from 'list_daug_ph1'
     # + the two types of augmentations in phase 1 are gibbs and affine
     # + 15% weightage is given to gibbs and 
@@ -307,187 +306,170 @@ def get_daug_dict(fl_basename):
     daug1_keys       = ['type']
     daug1_values     = [phase1_daug]
     
-    
-    #do phase2 data augmentation 
+    # do phase2 data augmentation 
     # ['gain_inhom','zipper','add_noise','contrast_var']
     phase2_rand_item = random.choices([0,1,2,3], weights=(30, 10, 30, 30))
     phase2_rand      = phase2_rand_item[0]
     phase2_daug      = list_daug_ph2[phase2_rand]
     print('++ phase_2: ', phase2_daug)
 
-    match phase1_daug:
-    
-        case 'gibbs' :
-            #do_something(gibbs)
-            print("augmentation type : doing gibbs")
-            radius   = random.randint(70, 100)
-            daug1_keys = ['type', 'radius']
-            daug1_values = [phase1_daug, radius]
+    # ----- Phase 1
 
-        case 'affine':
-            #do_something(affine)
-            # Default shift range  is plus/minus 32% of grid size
-            # Default scaling range  is plus/minus 20% of grid size
-            # Default shearing range is plus/minus 0.1111
-            # Default angle range    is plus/minus 30 degrees
-            # yns: option to pick without replacement 
+    if phase1_daug == 'gibbs' :
+        print("augmentation type : doing gibbs")
+        radius   = random.randint(70, 100)
+        daug1_keys = ['type', 'radius']
+        daug1_values = [phase1_daug, radius]
+
+    elif phase1_daug == 'affine' :
+        # Default shift range    is plus/minus 32% of grid size
+        # Default scaling range  is plus/minus 20% of grid size
+        # Default shearing range is plus/minus 0.1111
+        # Default angle range    is plus/minus 30 degrees
+        # yns: option to pick without replacement 
+        affine_rand = random.choices(['rotation','scale','shear','shift'], k=2)
+        # condition to avoid random selection of same two augmentation types
+        while (affine_rand[0] == affine_rand[1]):
             affine_rand = random.choices(['rotation','scale','shear','shift'], k=2)
-            # condition to avoid random selection of same two augmentation types
-            while (affine_rand[0] == affine_rand[1]):
-                affine_rand = random.choices(['rotation','scale','shear','shift'], k=2)
 
-            affine_type = affine_rand[0]+'_'+ affine_rand[1]
-            # DEFINITION OF AFFINE TRANSFORMATION PARAMETERS
-            #pt : # x-shift  y-shift  z-shift   \
-            #       z-angle  x-angle  y-angle \
-            #       x-scale  y-scale  z-scale  \
-            #      y/x-shear  z/x-shear  z/y-shear 
-            # param_map = [#1  #2  #3  #4 #5 #6  #7  #8  #9  #10  #11  #12]
-            
-            # param_map = [Shx Shy Shz Rz Rx Ry Scx Scy Scz  Sheyx Shezx Shezy]
-           
+        affine_type = affine_rand[0]+'_'+ affine_rand[1]
+        # DEFINITION OF AFFINE TRANSFORMATION PARAMETERS
+        #     x-shift   y-shift   z-shift 
+        #     z-angle   x-angle   y-angle 
+        #     x-scale   y-scale   z-scale 
+        #     y/x-shear z/x-shear z/y-shear 
+        # param_map = [#1  #2  #3  #4 #5 #6 #7  #8  #9  #10   #11   #12]
+        # param_map = [Shx Shy Shz Rz Rx Ry Scx Scy Scz Sheyx Shezx Shezy]
 
-            # empty list for param1D of 2 types of affine_transforms
-            param1D=[[],[]]
-            # for loop over the     
-            for x in range(len(affine_rand)):
-                #print x= affine data augmentation type 
-                #print('x =',affine_rand[x])
-                list_axis    =['x','y','z']
-                match affine_rand[x]:
+        # empty list for param1D of 2 types of affine_transforms
+        param1D=[[],[]]
+        # for loop over the     
+        for x in range(len(affine_rand)):
+            list_axis = ['x', 'y', 'z']
 
-                    case 'rotation':
-                        #do_something(rotation)
-                        # Default angle range is plus/minus 30 degrees
-                        
-                        rand_axis = random.choice(list_axis)
-                        rand_rot   = random.randint(-30, 30)
-                        # condition to avoid the rotation =0
-                        while (rand_rot == 0):
-                            rand_rot   = random.randint(-30, 30)
-                        if(rand_axis == 'x'):
-                            Rx = rand_rot
-                            Rz = 0
-                            Ry = 0
-                        elif (rand_axis == 'y'):
-                            Ry = rand_rot
-                            Rx = 0
-                            Rz = 0
-                        else : # (rand_axis == 'z'):
-                            Rz = rand_rot
-                            Rx = 0
-                            Ry = 0
-                        print("augmentation type : doing rotation")
-                        param1D[x] = [0, 0, 0, Rz, Rx, Ry, 0, 0, 0, 0, 0, 0]
-                        
-                    case 'shift':
-
-                        print("augmentation type : doing shift")
-                        list_shift   = [-5,-10,-15,-20,-25,-30,5,10,15,20,25,30]
-                        rand_shift   = random.choice(list_shift)
-                        rand_axis    = random.choice(list_axis)
-                        if(rand_axis == 'x'):
-                            Shx = rand_shift
-                            Shy = 0
-                            Shz = 0
-                        elif (rand_axis == 'y'):
-                            Shx = 0
-                            Shy = rand_shift
-                            Shz = 0
-                        else : # (rand_axis == 'z'):
-                            Shx = 0
-                            Shy = 0
-                            Shz = rand_shift
-                        
-                        param1D[x] = [Shx, Shy, Shz, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            if affine_rand[x] == 'rotation' :
+                # Default angle range is plus/minus 30 degrees
+                rand_axis = random.choice(list_axis)
+                rand_rot  = random.randint(-30, 30)
+                # condition to avoid the rotation = 0
+                while (rand_rot == 0):
+                    rand_rot = random.randint(-30, 30)
+                if(rand_axis == 'x'):
+                    Rx = rand_rot
+                    Rz = 0
+                    Ry = 0
+                elif (rand_axis == 'y'):
+                    Ry = rand_rot
+                    Rx = 0
+                    Rz = 0
+                else : # (rand_axis == 'z'):
+                    Rz = rand_rot
+                    Rx = 0
+                    Ry = 0
+                print("augmentation type : doing rotation")
+                param1D[x] = [0, 0, 0, Rz, Rx, Ry, 0, 0, 0, 0, 0, 0]
                     
-                    case 'scale':
-                        #do_something(affine_trans)
-                        print("augmentation type : doing scale")
-                        # scaling applies to all axis
-                        #yns range is (0.8,1.2) 
-                        rand_scale   = round(random.uniform(0.8, 1.2), 1)
-                        
-                        Scz          = rand_scale
-                        Scx          = rand_scale
-                        Scy          = rand_scale
-                        
-                        
-                        param1D[x] = [ 0, 0, 0, 0, 0, 0, Scx, Scy, Scz, 0, 0, 0]
-                        
-                    case 'shear':
-                        #do_something(affine_trans)
-                        print("augmentation type : doing shear")
-                        rand_axis  = random.choice(list_axis)
-                        rand_shear = round(random.uniform(-0.1, 0.1), 2)
-                        # condition to avoid the scaling =0
-                        while (rand_shear == 0):
-                            rand_shear   = round(random.uniform(-0.1, 0.1), 2)
-                        if(rand_axis == 'x'):
-                            Shex = rand_shear
-                            Shey = 0
-                            Shez = 0
-                        elif (rand_axis == 'y'):
-                            Shex = 0
-                            Shey = rand_shear
-                            Shez = 0
-                        else : # (rand_axis == 'z'):
-                            Shex = 0
-                            Shey = 0
-                            Shez = rand_shear
+            elif affine_rand[x] == 'shift' :
+                print("augmentation type : doing shift")
+                list_shift = [-5,-10,-15,-20,-25,-30,5,10,15,20,25,30]
+                rand_shift = random.choice(list_shift)
+                rand_axis  = random.choice(list_axis)
+                if(rand_axis == 'x'):
+                    Shx = rand_shift
+                    Shy = 0
+                    Shz = 0
+                elif (rand_axis == 'y'):
+                    Shx = 0
+                    Shy = rand_shift
+                    Shz = 0
+                else : # (rand_axis == 'z'):
+                    Shx = 0
+                    Shy = 0
+                    Shz = rand_shift
+                
+                param1D[x] = [Shx, Shy, Shz, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                
+            elif affine_rand[x] == 'scale' :
+                print("augmentation type : doing scale")
+                # scaling applies to all axis;
+                # yns range is (0.8,1.2) 
+                rand_scale = round(random.uniform(0.8, 1.2), 1)
+                Scz        = rand_scale
+                Scx        = rand_scale
+                Scy        = rand_scale
+                
+                param1D[x] = [ 0, 0, 0, 0, 0, 0, Scx, Scy, Scz, 0, 0, 0]
+                    
+            elif affine_rand[x] == 'shear' :
+                print("augmentation type : doing shear")
+                rand_axis  = random.choice(list_axis)
+                rand_shear = round(random.uniform(-0.1, 0.1), 2)
+                # condition to avoid the scaling =0
+                while (rand_shear == 0):
+                    rand_shear = round(random.uniform(-0.1, 0.1), 2)
+                if(rand_axis == 'x'):
+                    Shex = rand_shear
+                    Shey = 0
+                    Shez = 0
+                elif (rand_axis == 'y'):
+                    Shex = 0
+                    Shey = rand_shear
+                    Shez = 0
+                else : # (rand_axis == 'z'):
+                    Shex = 0
+                    Shey = 0
+                    Shez = rand_shear
 
-                        param1D[x] = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, Shex, Shez, Shey]
-                        
-                        
-            #adding element wise the param list of the two  affine transformations
-            list_param1D  = [x + y for x, y in zip(param1D[0], param1D[1])]
-            param1D      =  " ".join(map(str, list_param1D))
-            print(param1D)
-            daug1_keys   = ['type', 'param1D']
-            daug1_values = [phase1_daug, param1D]
+                param1D[x] = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, Shex, Shez, Shey]
+                    
+        #adding element wise the param list of the two  affine transformations
+        list_param1D = [x + y for x, y in zip(param1D[0], param1D[1])]
+        param1D      =  " ".join(map(str, list_param1D))
+        daug1_keys   = ['type', 'param1D']
+        daug1_values = [phase1_daug, param1D]
+        print(param1D)
 
-    match phase2_daug:
+    # ----- Phase 2 
 
-        case 'gain_inhom':
-            #do_something(gain_inhom)
-            print("augmentation type : doing gain_inhom")
-            #window over which the scaling factor varies 
-            #the scaling factor varies between values 'win_min' and 'win_max'
-            # within [2,2.8]
-            list_axis    =['i','j','k']
-            rand_axis    =random.choices(list_axis,weights=(10, 80, 10))
-            win_min = 2
-            win_max = 2.8
-            #Returns a random float number up to 1 decimal places
-            window  = round(random.uniform(win_min, win_max), 1)
-            daug2_keys   = ['type', 'axis', 'window']
-            daug2_values = [phase2_daug, rand_axis, window]
-        case 'zipper':
-            #do_something(zipper)
-            print("augmentation type : doing zipper")
-            list_axis    =['i','j','k']
-            rand_axis    =random.choice(list_axis)
-            zip_width    = 5
-            daug2_keys   = ['type', 'axis', 'zip_width']
-            daug2_values = [phase2_daug, rand_axis, zip_width]
-        case 'add_noise':
-            #do_something(add_noise)
-            # noise level of 10% 20% 30%
-            print("augmentation type : doing add_noise")
-            noise_lvl       =[0.1, 0.2, 0.3]
-            rand_noise_lvl  =random.choice(noise_lvl)
-            list_axis    =['i','j','k']
-            rand_axis    =random.choice(list_axis)
-            daug2_keys   = ['type', 'axis', 'noise_lvl']
-            daug2_values = [phase2_daug, rand_axis, rand_noise_lvl]
-        case 'contrast_var':
-            #do_something(add_noise)    
-            print("augmentation type : doing contrast_var")
-            shading = random.randint(0, 1)
-            daug2_keys   = ['type', 'shading']
-            daug2_values = [phase2_daug, shading]
+    if phase2_daug == 'gain_inhom' :
+        print("augmentation type : doing gain_inhom")
+        # window over which the scaling factor varies:
+        # the scaling factor varies between values 'win_min' and 'win_max'
+        # within [2,2.8]
+        list_axis    = ['i','j','k']
+        rand_axis    = random.choices(list_axis,weights=(10, 80, 10))
+        win_min      = 2
+        win_max      = 2.8
+        #Returns a random float number up to 1 decimal places
+        window       = round(random.uniform(win_min, win_max), 1)
+        daug2_keys   = ['type', 'axis', 'window']
+        daug2_values = [phase2_daug, rand_axis, window]
 
+    elif phase2_daug == 'zipper' :
+        print("augmentation type : doing zipper")
+        list_axis    = ['i','j','k']
+        rand_axis    = random.choice(list_axis)
+        zip_width    = 5
+        daug2_keys   = ['type', 'axis', 'zip_width']
+        daug2_values = [phase2_daug, rand_axis, zip_width]
 
+    elif phase2_daug == 'add_noise' :
+        # noise level of 10% 20% 30%
+        print("augmentation type : doing add_noise")
+        noise_lvl      = [0.1, 0.2, 0.3]
+        rand_noise_lvl = random.choice(noise_lvl)
+        list_axis      = ['i','j','k']
+        rand_axis      = random.choice(list_axis)
+        daug2_keys     = ['type', 'axis', 'noise_lvl']
+        daug2_values   = [phase2_daug, rand_axis, rand_noise_lvl]
+
+    elif phase2_daug == 'contrast_var' :
+        print("augmentation type : doing contrast_var")
+        shading      = random.randint(0, 1)
+        daug2_keys   = ['type', 'shading']
+        daug2_values = [phase2_daug, shading]
+
+    # ----- end of Phase 2
 
     keys = ['fl_basename', 'daug_ph0', 'daug_ph1', 'daug_ph2']
     daug_ph0_val = dict(zip(daug0_keys, daug0_values))
@@ -496,9 +478,7 @@ def get_daug_dict(fl_basename):
     values = [fl_basename, daug_ph0_val, daug_ph1_val, daug_ph2_val]
     
     daug_dict = dict(zip(keys, values))
-    
-    
-    #print(daug_dict)
+
     return daug_dict
 
 
@@ -590,15 +570,7 @@ def write_script(da_dict,fl_name, daug):
 
 
 def main():
-
     print('++ Python version  =', sys.version.split()[0])
-    if sys.version_info<(3,10,0):
-        sys.stderr.write("""** ERROR:
-        You need Python 3.10 or later to run this script.
-        The 'match' statement was introduced in Python 3.10.
-        So if you're using an older version,
-        you'll need to upgrade to use it.\n""")
-        sys.exit(1)
 
     # ----- read in command line arguments
     args        = get_data_augment_args()
