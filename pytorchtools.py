@@ -24,7 +24,10 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        try:   # `np.Inf` was removed in the NumPy 2.0 release, for `np.inf`
+            self.val_loss_min = np.inf
+        except:
+            self.val_loss_min = np.Inf
         self.delta = delta
         self.path = path
         self.trace_func = trace_func
