@@ -12,9 +12,16 @@ import json
 import random
 import numpy     as np
 import glob
-import re #regular expression
+import re                    # regular expression
+import textwrap              # for help text formatting
 
 # ============================================================================
+# program version and brief notes on updates
+
+version = '1.1' # adding in more help fiels
+
+# ============================================================================
+# default options and definitions
 
 # default values for program opts
 DEF = {
@@ -22,10 +29,13 @@ DEF = {
         'num_cp' : 3,
         'seed_num' : 42,
         'exec_mode' : 'None',
+        'input_dir' : '',
+        'output_dir' : '',
 }
 
 # list of allowed execution modes
 LIST_exec_mode = ['None', 'swarm', 'shell']
+STR_exec_mode  = ', '.join(LIST_exec_mode)
 
 # default swarm script
 scr_swarm = 'master_script.tcsh'
@@ -46,41 +56,71 @@ swarm                                                              \\
 """.format(cmd='vnet_aug', scr_swarm=scr_swarm, cdir_log='../logs')
 
 # ============================================================================
+# help text and items
 
-'''
-*****************************************************************************
-* This is a wrapper code which nests the modular data augmentation scripts
-* Inputs required are as below
-* flag |  input
-*  -a  | --data_augment_path (data_path for data augmentation folder)
-*  -d  | --data_dir (data path for the dataset folder)
-*  -c  | -- number of copies of the dataset
-* 
-* + Please note : Create a log folder to capture the results of
-*   master_script.tcsh
-* 
-* sample usage of the code : python data_augmentation_wrapper.py 
-*                           -a '/Users/name/data_augmentation' 
-*                           -d '/Users/name/dataset' 
-*                           -c num_copies
-*
-* 
-* List of data augmentation types supported are 
-* 1) gibbs artifact
-* 2) affine_transformations 
-* 3) gain_inhomogenity
-* 4) zipper noise
-* 5) various % of noise added to dataset
-* 6) refacing 
-******************************************************************************
+dent = '\n' + 5*' '
 
- -smallrange   = Set all the parameter ranges to be smaller (about half) than
-                 the default ranges, which are rather large for many purposes.
-                * Default angle range    is plus/minus 30 degrees
-                * Default shift range    is plus/minus 32% of grid size
-                * Default scaling range  is plus/minus 20% of grid size
-                * Default shearing range is plus/minus 0.1111
-'''
+help_dict = {
+    'ddashline' : '='*76,
+    'ver'       : version,
+}
+
+help_str_top = '''
+Overview ~1~
+
+This is a wrapper program which nests the modular data augmentation
+scripts.
+
+The current list of data augmentation types supported are:
+1) gibbs artifact
+2) affine_transformations 
+3) gain_inhomogenity
+4) zipper noise
+5) various % of noise added to dataset
+6) refacing 
+
+{ddashline}
+
+Options ~1~
+
+'''.format(**help_dict)
+
+help_str_epi = '''
+{ddashline}
+
+Notes on usage ~1~
+
+*****
+
+{ddashline}
+
+Examples ~1~
+
+*****
+
+Functionality to be added ~1~
+
+This option:
+ -smallrange = Set all the parameter ranges to be smaller (about half) than
+               the default ranges, which are rather large for many purposes.
+               * Default angle range    is plus/minus 30 degrees
+               * Default shift range    is plus/minus 32% of grid size
+               * Default scaling range  is plus/minus 20% of grid size
+               * Default shearing range is plus/minus 0.1111
+
+{ddashline}
+
+written by  : Y Swamy (SSCC, NIMH, NIH, USA)
+              RC Reynolds (SSCC, NIMH, NIH, USA)
+              PA Taylor (SSCC, NIMH, NIH, USA)
+
+current ver :
+
+{ddashline}
+'''.format(**help_dict)
+
+# ============================================================================
+# ============================================================================
 
 # List of data augmentation in different phases 
 list_daug_ph0    = ['reface','empty']
@@ -145,32 +185,86 @@ def copy_all_aug_script(idir, odir):
     return 0
 
 def get_data_augment_args():
+    """Set of options to be used on the command line, with defaults and
+short help descriptions for each.
+    """
 
-    parser = argp.ArgumentParser(prog = 'data_augmentation_wrapper.py',
-                                 formatter_class=argp.RawTextHelpFormatter)
+    # overall help formatting, and add chunks of text to option list
+    parser = argp.ArgumentParser(prog=str(sys.argv[0]).split('/')[-1],
+                        add_help=False,
+                        formatter_class=argp.RawDescriptionHelpFormatter,
+                        description=textwrap.dedent(help_str_top),
+                        epilog=textwrap.dedent(help_str_epi) )
 
     # data_augment_path is the data_path for data augmentation folder
-    parser.add_argument("-a", "--data_augment_path")
+    parser.add_argument("-input_dir", nargs=1,
+                        default=[DEF['input_dir']],
+                        help='(req) path for input dir, likely a directory '
+                        'that ends with "/training", which includes "mask" '
+                        'and "orig" subdirectories '
+                        '(def: {})'.format(DEF['input_dir']))
 
     # data_dir is the data path for the dataset folder
-    parser.add_argument("-d", "--data_dir")
+    parser.add_argument("-output_dir", nargs=1,
+                        default=[DEF['output_dir']],
+                        help='(req) path for output dir, likely a directory '
+                        'that ends with "/training", which will be populated '
+                        'with these subdirectories: "mask", "orig", "scripts", '
+                        '"logs", and, if executing, "edt" '
+                        '(def: {})'.format(DEF['output_dir']))
 
     # number of copies of the dataset to be made 
-    parser.add_argument("-c", "--num_cp", nargs=1,
-                        default=[DEF['num_cp']])
+    parser.add_argument("-num_cp", nargs=1,
+                        default=[DEF['num_cp']],
+                        help='number of total copies of a dset to have int '
+                        'the augmented set, including the original '
+                        '(def: {})'.format(DEF['num_cp']))
 
     # random seed number (integer)
     parser.add_argument("-seed_num", nargs=1,
-                        default=[DEF['seed_num']])
+                        default=[DEF['seed_num']],
+                        help='seed number for randomization of augmentation '
+                        'steps '
+                        '(def: {})'.format(DEF['seed_num']))
 
     # execution mode for augmentation script set
     parser.add_argument("-exec_mode", nargs=1,
-                        default=[DEF['exec_mode']])
+                        default=[DEF['exec_mode']],
+                        help='execution mode for data augmentation scripts, '
+                        'from among: {} '
+                        '(def: {})'.format(STR_exec_mode, DEF['exec_mode']))
 
     # verbosity level (integer)
     parser.add_argument("-verb", nargs=1,
-                        default=[DEF['verb']])
-    
+                        default=[DEF['verb']],
+                        help='verbosity level '
+                        '(def: {})'.format(DEF['verb']))
+
+    parser.add_argument('-help', action="store_true", 
+                        default=False,
+                        help='display help in terminal') 
+
+    parser.add_argument('-hview', action="store_true", 
+                        default=False,
+                        help='display help in a text editor') 
+
+    args = parser.parse_args()
+
+    # display program version (later, when an AFNI program, do_view differs)
+    do_help  = args.help
+    do_hview = args.hview
+    if len(sys.argv) == 1 or do_help or do_hview :
+        parser.print_help()
+        sys.exit(0)
+
+    # required args
+    if len(args.input_dir) == 0 :
+        print("** ERROR: need to provide an '-input_dir ..'")
+        sys.exit(8)
+    if len(args.output_dir) == 0 :
+        print("** ERROR: need to provide an '-output_dir ..'")
+        sys.exit(8)
+
     return parser.parse_args()
 
 
@@ -510,7 +604,7 @@ def main():
     args        = get_data_augment_args()
 
     # path for data augmentation folder
-    da_path     = args.data_augment_path
+    da_path     = str(args.output_dir[0])
     # ... and strip any '/' at the right
     da_path     = da_path.rstrip('/')
     if len(da_path) == 0 :
@@ -518,7 +612,7 @@ def main():
         sys.exit(3)
 
     # path for the dataset folder
-    data_path   = args.data_dir 
+    data_path   = str(args.input_dir[0])
 
     # number of copies of the dataset to be made 
     num_cp      = int(args.num_cp[0])
