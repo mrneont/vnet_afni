@@ -49,10 +49,13 @@ list_data_norm = [ 'min_max_scale',
 # --------------------------------------------------------------------------
 
 
-def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
-                optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
-                nth_mask_out, tr_shuf, restart, data_norm, do_nifti,
-                outdir, mask_oplist, chpt_oplist, mask_everyn, chpt_everyn, verb): 
+def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
+              loss_func,
+              optimizer, half_prec, mixed_prec, wt_norm, 
+              tr_shuf, restart, data_norm, do_nifti,
+              outdir, 
+              epoch_mask_list, epoch_chpt_list, 
+              verb): 
     """
     Main training function. Sends training to either GPU or CPU.
 
@@ -64,18 +67,22 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     num_epochs   : number of epochs for network (int)
     lr           : learning rate parameter 
     tr_bsize     : batch size for training 
-    nth_epoch_out: checkpoint.pt written out every nth epoch
-    nth_mask_out : pred_mask written out every nth epoch
-    tr_shuf      : shuffle datasets during training
     seed         : for random number generation in torch (int, or None);
                    if None, no seed is set
     net_arch     : network architecture name, from available list (str)
     loss_func    : loss function name, from available list (str)
     optimizer    : optimizer name, from available list (str)
-    restart      : Restart using checkpoint weights
+    half_prec    : ***
+    mixed_prec   : ***
+    wt_norm      : ***
+    tr_shuf      : shuffle datasets during training
+    restart      : Restart using checkpoint (this var is path to checkpoint)
+    data_norm    : ***
     do_nifti     : binary switch about whether to write out nifti dsets 
                    during the network run
     outdir       : directory for various outputs
+    epoch_mask_list : list of epoch indices when pred_mask written out
+    epoch_chpt_list : list of epoch indices when checkpoint written out
     verb         : verbosity for stdout
 
     Returns
@@ -93,8 +100,10 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
     # check the device available 
     if torch.cuda.is_available():
         device = torch.device('cuda')
+        print("++ Running on device: cuda")
     else:
         device = torch.device('cpu')
+        print("++ Running on device: cpu")
 
         if seed != None :
             torch.manual_seed(seed)
@@ -113,8 +122,6 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
         print("++ {:40s} : {}".format('Using weight datasets', USE_DPTH_WTS))
         print("++ {:40s} : {}".format('Restart using checkpoint weights', restart))
         print("++ {:40s} : {}".format('Network architecture', net_arch))
-        print("++ {:40s} : {}".format('checkpoint.pt saved every nth epoch', nth_epoch_out))
-        print("++ {:40s} : {}".format('pred_mask written out every nth epoch', nth_mask_out))
         print("++ {:40s} : {}".format('shuffle datasets during training', tr_shuf))
 
 
@@ -143,11 +150,12 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
               "".format(net_arch))
         sys.exit(1)
 
-    if (restart ==1) :# loading model from checkpoint.pt file
-
-        net.load_state_dict(torch.load('checkpoint.pt'),strict=False)
-
-
+    # load model from given checkpoint file? (restart is file path)
+    if len(restart) :
+        if not(os.path.isfile(restart)) :
+            print("** ERROR: specified restart file does not exist:", restart)
+            sys.exit(3)
+        net.load_state_dict(torch.load(restart),strict=False)
 
     if (device == torch.device('cpu')) and (half_prec == 1):
         print("** The Half Precision operations are not supported in CPU ")
@@ -474,6 +482,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
 
 
                         # this only needs to be written out in first iteration
+                        ### Q : do we always want this written out if
+                        ### do_nifti is True? should we just let the
+                        ### epoch_mask_list tell us when to write out?
                         if epoch == 0 :
                             # write orig_data in the form of nifti file
                         
@@ -493,16 +504,11 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                                                         head=orig_head, half_prec=half_prec)
                         
                         # pred_mask is written into the 'out' folder.
-                        # condition1 : If the flag 'mask_everyn' is set to 1 then the pred_mask is written 
-                        # into the 'out' folder every Nth epoch.
-                        # condition2 : If the flag mask_everyn is set to 0 then the pred_mask is written
-                        # into the 'out' folder for every epoch given in the list 'mask_oplist'
-                        pred_mask_condition1 = (mask_everyn == 1) and (epoch % nth_mask_out == 0)
-                        pred_mask_condition2 = (mask_everyn == 0) and (epoch in mask_oplist)
-                        if (pred_mask_condition1 or pred_mask_condition2):
+                        if epoch in epoch_mask_list :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
-                                                    head=orig_head, half_prec=half_prec)
+                                                    head=orig_head, 
+                                                    half_prec=half_prec)
                         # end of bb loop : for bb in range (bsize)
                     
                     
@@ -511,19 +517,14 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, loss_func,
                 # end of the loop for all batches in the epoch
 
             end = time.time()
-             # end of FOR loop for PHASE
+            # end of FOR loop for PHASE
+
             # save the checkpoint 
-            # if condition1 is satisfied checkpoint.pt is written every nth epoch
-            chpt_condition1 = (chpt_everyn == 1) and \
-                                (epoch % nth_epoch_out == 0) and \
-                                                     (phase == 'train')
-            # if condition2 is satisfied checkpoint.pt is saved if the epoch  exists in chpt_oplist
-            chpt_condition2 = (chpt_everyn == 0) and \
-                                 (epoch in chpt_oplist) and \
-                                                      (phase == 'train')   
-            if (chpt_condition1 or chpt_condition2):
-                checkpoint_flname  =  "{}/{}_{}_{}{}".format(outdir,'checkpoint',
+            if epoch in epoch_chpt_list and phase == 'train':
+                checkpoint_flname = "{}/{}_{}_{}{}".format(outdir,'checkpoint',
                                                  phase, strepoch,'.pt')
+                if verb :
+                    print("++ Save checkpoint:", checkpoint_flname)
                 torch.save(net.state_dict(), checkpoint_flname)
 
         # computing the loss pertaining to the training data

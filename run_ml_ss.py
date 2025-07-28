@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import sys
 import datetime
@@ -9,8 +11,42 @@ import lib_ml_losses as lml
 # 
 __version__ = '1.0.00'; verdate = 'Jun 2, 2021'
 # [PT] version number of code running
-#
+__version__ = '1.0.01'; verdate = 'Jul 25, 2025'
+# update help parsing
+__version__ = '1.0.02'; verdate = 'Jul 28, 2025'
+# more option usage changes, merge some opts
+
 # -----------------------------------------------------------------------
+# default opts
+
+# Q: should do_write_nifti just be controlled by save_mask_*? why use
+# a separate switch
+DEF = {
+        'input_dir'  : '',
+        'output_dir' : '',
+        'num_epochs' : 5,
+        'learning_rate' : 0.0001,
+        'seed' : 42,
+        'verb' : 1,
+        'train_batch_size' : 1,
+        'architecture' : lmt.list_net_arch[0],
+        'norm_mode' : lmt.list_data_norm[0],
+        'do_weight_norm' : 0,
+        'loss_func' : lml.DEF_CalcLoss,
+        'optimizer' : lmt.list_optimizer[0],
+        'do_write_nifti' : 0,    
+        'do_train_shuffle' : 0,  # Q: should this be on by default?
+        'restart_from_checkpoint' : '',
+        'save_checkpoint_rate' : 0,
+        'save_checkpoint_list' : [],
+        'save_mask_rate' : 0,
+        'save_mask_list' : [],
+}
+
+
+
+# -----------------------------------------------------------------------
+
 
 # for expanding help information
 epilog_data_struc = ''' 
@@ -46,91 +82,86 @@ Typical fractions of the total N subjects for each directory could be:
 
 '''
 
-def dir_path(string):
-    if os.path.isdir(string):
-        return string
-    else:
-        raise NotADirectoryError(string)
-
 # Define a custom argument type for a list of integers
 def list_of_ints(arg):
     return list(map(int, arg.split(",")))
 
 def get_args():
+    """Use Python's arg-parser to get input values from the command line.  
+
+NB: as soon as the 'nargs=..' kwarg is used for an option, then the
+value saved within the argparser object is a list.  This is true even
+if using 'nargs=1'.
+
+    """
 
     # [PT] Using this formatter_class: ArgumentDefaultsHelpFormatter
     #      ... crushes newlines in the text.
     intro  = 'Train the VNet on MRI data and target masks'
-    parser = argp.ArgumentParser(prog = 'run_ml_ss.py',
+    parser = argp.ArgumentParser(prog=str(sys.argv[0]).split('/')[-1],
+                                 add_help=False,
                                  description = intro,
                                  epilog = epilog_data_struc,
                                  formatter_class=argp.RawTextHelpFormatter) 
 
-    parser.add_argument('-V', '--version', action='version', 
+    parser.add_argument('-ver', action='version', 
                         version='%(prog)s {}'.format(__version__))
 
-    parser.add_argument('-d', "--data_dir", 
-                        type=dir_path, 
-                        help="Path to the data directory (structure below)")
+    parser.add_argument("-input_dir", 
+                        type=str,
+                        dest='data_dir',
+                        default=DEF['input_dir'],
+                        help='(req) name of input dir (see below)' + '\n' +
+                        '(def: {})'.format(DEF['input_dir']))
 
-    def_E = 5 
-    parser.add_argument('-e', '--epochs', 
-                        metavar='E', 
-                        dest='epochs',
-                        type=int, default=def_E,
-                        help='Number of epochs' + '\n' +
-                        "(def: {})".format(str(def_E)))
-
-    def_LRATE = 0.0001
-    parser.add_argument("-l", "--learning_rate", 
-                        metavar='LRATE', 
-                        dest="learning_rate", 
-                        type=float, default=def_LRATE, 
-                        help='Learning rate' + '\n' +
-                        '(def: {})'.format(str(def_LRATE)))
-
-    def_S = None
-    parser.add_argument('-s', '--seed', 
-                        metavar='S', 
-                        dest='seed',
-                        type=int, default=def_S,
-                        help='Set seed for random value gen' + '\n' +
-                        '(def: {})'.format(str(def_S)))
-
-    def_OD = '.'
-    parser.add_argument('-o', '--outdir', 
+    parser.add_argument('-output_dir',
                         metavar='OD', 
                         dest='outdir',
-                        type=str, default=def_OD,
-                        help='Set name of output directory' + '\n' +
-                        '(def: {})'.format(str(def_OD)))
+                        type=str, default=DEF['output_dir'],
+                        help='(req) name of output directory' + '\n' +
+                        '(def: {})'.format(DEF['output_dir']))
 
-    def_verb = 1
-    parser.add_argument("-v", "--verb", 
+    parser.add_argument('-num_epochs',
+                        metavar='NUM_EPOCHS', 
+                        dest='epochs',
+                        type=int, default=DEF['num_epochs'],
+                        help='Number of epochs, or iterations' + '\n' +
+                        "(def: {})".format(DEF['num_epochs']))
+
+    parser.add_argument("-learning_rate",
+                        metavar='LRATE', 
+                        dest="learning_rate", 
+                        type=float, default=DEF['learning_rate'],
+                        help='Learning rate' + '\n' +
+                        '(def: {})'.format(DEF['learning_rate']))
+
+    parser.add_argument("-seed",
+                        dest='seed',
+                        type=int, default=DEF['seed'],
+                        help='seed value (int) for randomized steps' + '\n' +
+                        '(def: {})'.format(DEF['seed']))
+
+    parser.add_argument("-verb",
                         metavar='VERB', 
                         dest='verb', 
-                        type=int, default=def_verb, 
+                        type=int, default=DEF['verb'],
                         help='verbosity for code running' + '\n' +
-                        '(def: {})'.format(str(def_verb)))
+                        '(def: {})'.format(DEF['verb']))
 
-    def_train_batch_size = 1
-    parser.add_argument("-trb", "--train_batch_size", 
-                        metavar='TRAIN_BATCH_SIZE', 
+    parser.add_argument("-train_batch_size", 
+                        metavar='TBS', 
                         dest='train_batch_size', 
-                        type=int, default=def_train_batch_size, 
+                        type=int, default=DEF['train_batch_size'], 
                         help='batch size for training' + '\n' +
-                        '(def: {})'.format(str(def_train_batch_size)))
+                        '(def: {})'.format(DEF['train_batch_size']))
 
-
-    def_net_arch = lmt.list_net_arch[0]
-    parser.add_argument("-a", "--architecture", 
+    parser.add_argument("-architecture", 
                         dest="net_arch", 
-                        type=str, default=def_net_arch,
+                        type=str, default=DEF['architecture'],
                         help="network architecture type; valid arguments\n" +
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
-                        '(def: {})'.format(str(def_net_arch)))
-
+                        '(def: {})'.format(DEF['architecture']))
 
     def_half_prec = 0
     parser.add_argument("-hp", "--half_prec", 
@@ -146,101 +177,104 @@ def get_args():
                         help='mixed precision' + '\n' +
                         '(def: {})'.format(str(def_mixed_prec)))
 
-    def_data_norm = lmt.list_data_norm[0]
-    parser.add_argument("-dn", "--data_norm", 
+    parser.add_argument("-norm_mode", 
                         dest="data_norm", 
-                        type=str, default=def_data_norm,
+                        type=str, default=DEF['norm_mode'],
                         help="data normalization type; valid arguments\n" +
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lmt.list_data_norm)) + '\n' +
-                        '(def: {})'.format(str(def_data_norm)))
+                        '(def: {})'.format(DEF['norm_mode']))
 
-
-    def_wt_norm = 0
-    parser.add_argument("-w", "--weight_norm", 
+    parser.add_argument("-do_weight_norm", 
                         dest="weight_norm", 
-                        type=int, default=def_wt_norm,
-                        help='weight normalization' + '\n' +
-                        '(def: {})'.format(str(def_wt_norm)))
+                        type=int, default=DEF['do_weight_norm'],
+                        help='do weight normalization' + '\n' +
+                        '(def: {})'.format(DEF['do_weight_norm']))
 
-    def_nth_epoch_out = 10
-    parser.add_argument("-nth_epoch_out", "--nth_epoch_out", 
-                        dest="nth_epoch_out", 
-                        type=int, default=def_nth_epoch_out,
-                        help='checkpoint.pt written into outdir' + '\n' +
-                        '(def: {})'.format(str(def_nth_epoch_out)))
-
-    def_nth_mask_out = 10
-    parser.add_argument("-nth_mask_out", "--nth_mask_out", 
-                        dest="nth_mask_out", 
-                        type=int, default=def_nth_mask_out,
-                        help='pred_mask written into outdir' + '\n' +
-                        '(def: {})'.format(str(def_nth_mask_out)))
-
-    def_tr_shuf = 0
-    parser.add_argument("-tr_shuf", "--tr_shuf", 
+    # this should likely be on?
+    parser.add_argument("-do_train_shuffle", 
                         dest="tr_shuf", 
-                        type=int, default=def_tr_shuf,
+                        type=int, default=DEF['do_train_shuffle'],
                         help='shuffle datasets during training' + '\n' +
-                        '(def: {})'.format(str(def_tr_shuf)))
+                        '(def: {})'.format(DEF['do_train_shuffle']))
 
-    def_restart = 0
-    parser.add_argument("-r", "--restart", 
+    parser.add_argument("-restart_from_checkpoint", 
                         dest="restart", 
-                        type=int, default=def_restart,
-                        help='restart using checkpoint weights' + '\n' +
-                        '(def: {})'.format(str(def_restart)))  
+                        type=str, default=DEF['restart_from_checkpoint'],
+                        help='restart using specified checkpoint' + '\n' +
+                        '(def: {})'.format(DEF['restart_from_checkpoint']))
 
-    def_loss_func = lml.DEF_CalcLoss
-    parser.add_argument("-L", "--Loss", 
+    parser.add_argument("-loss_func", 
                         dest="loss_func", 
-                        type=str, default=def_loss_func,
+                        type=str, default=DEF['loss_func'],
                         help="loss function type; valid arguments\n" +
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lml.list_CalcLoss)) + '\n' +
-                        '(def: {})'.format(str(def_loss_func)))
+                        '(def: {})'.format(DEF['loss_func']))
 
-    def_optimizer = lmt.list_optimizer[0]
-    parser.add_argument("-O", "--optimizer", 
+    parser.add_argument("-optimizer", 
                         dest="optimizer", 
-                        type=str, default=def_optimizer,
+                        type=str, default=DEF['optimizer'],
                         help="optimizer type; valid arguments\n" +
                         "include:" + '\n  ' +
                         "{}".format('\n  '.join(lmt.list_optimizer)) + '\n' +
-                        '(def: {})'.format(str(def_optimizer)))
+                        '(def: {})'.format(DEF['optimizer']))
 
-    def_nifti = "don't write out dsets"
-    parser.add_argument("-W", "--write_nifti", 
+    parser.add_argument("-do_write_nifti", 
                         dest='do_nifti',
-                        action='store_true',
-                        #const=def_nifti,
+                        type=int, default=DEF['do_write_nifti'],
                         help='flag to turn on the writing of NIFTI' + '\n' +
-                        "datsets while processing" + '\n' +
-                        '(def: {})'.format(str(def_nifti)))
+                        "datasets while processing" + '\n' +
+                        '(def: {})'.format(DEF['do_write_nifti']))
 
-    # Add an mask_output_list for the list of integers
-    parser.add_argument("-mask_oplist","--mask_output_list", 
-                    dest="mask_output_list",
-                    type=list_of_ints)
+    parser.add_argument("-save_checkpoint_rate", 
+                        metavar='CRATE', 
+                        dest="save_chpt_rate", 
+                        type=int, default=DEF['save_checkpoint_rate'],
+                        help='write a checkpoint*.pt every CRATE epochs' + 
+                        '\n' +
+                        '(def: {})'.format(DEF['save_checkpoint_rate']))
 
-    #Add an chpt_output_list for the list of integers
-    parser.add_argument("-chpt_oplist","--chpt_output_list", 
-                    dest="chpt_output_list",
-                    type=list_of_ints)
+    parser.add_argument("-save_checkpoint_list", nargs='+',
+                        metavar='CLIST', 
+                        dest="save_chpt_list",
+                        type=int, default=DEF['save_checkpoint_list'],
+                        help='write a checkpoint*.pt at each listed epoch' +
+                        '\n' +
+                        '(def: {})'.format(DEF['save_checkpoint_list']))
 
-    def_mask_everyn = 0
-    parser.add_argument("-mask_everyn", "--mask_everyn", 
-                dest="mask_everyn", 
-                type=int, default=def_mask_everyn,
-                help='flag to denote if the pred_masks are written every Nth epoch' + '\n' +
-                '(def: {})'.format(str(def_mask_everyn)))  
+    parser.add_argument("-save_mask_rate", 
+                        metavar='MRATE', 
+                        dest="save_mask_rate", 
+                        type=int, default=DEF['save_mask_rate'],
+                        help='write mask results every MRATE epochs' + 
+                        '\n' +
+                        '(def: {})'.format(DEF['save_mask_rate']))
 
-    def_chpt_everyn = 0
-    parser.add_argument("-chpt_everyn", "--chpt_everyn", 
-                dest="chpt_everyn", 
-                type=int, default=def_chpt_everyn,
-                help='flag to denote if the checkpoint.pt is written every Nth epoch' + '\n' +
-                '(def: {})'.format(str(def_chpt_everyn))) 
+    parser.add_argument("-save_mask_list", nargs='+',
+                        metavar='MLIST', 
+                        dest="save_mask_list",
+                        type=int, default=DEF['save_mask_list'],
+                        help='write mask results at each listed epoch' +
+                        '\n' +
+                        '(def: {})'.format(DEF['save_mask_list']))
+
+    parser.add_argument('-help', action="store_true", 
+                        default=False,
+                        help='display help in terminal') 
+
+    parser.add_argument('-hview', action="store_true", 
+                        default=False,
+                        help='display help in a text editor') 
+
+    args = parser.parse_args()
+
+    # display program version (later, when an AFNI program, do_view differs)
+    do_help  = args.help
+    do_hview = args.hview
+    if len(sys.argv) == 1 or do_help or do_hview :
+        parser.print_help()
+        sys.exit(0)
 
     return parser.parse_args()
 
@@ -270,10 +304,7 @@ def prep_outdir(din, verb=1):
         return ""
 
     # remove any '/' at end, or just copy
-    if din[-1] == '/' :
-        dout = din[:-1]
-    else:
-        dout = din
+    dout = din.rstrip('/')
 
     # report if dir exists already; just reporting at the moment
     does_exist = os.path.isdir(dout)
@@ -355,6 +386,92 @@ def check_opt_allowed(X, the_list, desc_bad=None):
 
     return is_ok
 
+def create_valid_epoch_list(N, list_idx, rate_idx, add_final_idx=False):
+    """When there are N epochs (so, epoch indices is in [0, N-1]), use
+either a user-provided list of indices list_idx or a rate of indices
+rate_idx, to generate a list of epoch indices at which something will
+happen.
+
+Note: the user can only provide either a list_idx or a rate_idx, not both.
+
+If the list_idx contains invalid indices, which are here defined as
+i<=-N or i>=N, then we exit with error.
+
+We just quietly ignore any repeated index in list_idx.
+
+If rate_idx<0 or rate_idx>N, then we exit with error.
+
+If add_final_idx is True, then in all cases where N>=1, the final
+epoch index N-1 will be included. If add_final_idx is False, then that
+will not necessarily be added. Probably add_final_idx should be True
+when creating a checkpoint list, and False for a mask list (because
+there might be a lot of masks...).
+
+Parameters
+----------
+N : int
+    number of epochs, so indices are in range [0, N-1]
+list_idx : list of int
+    list of integer indices for writing
+rate_idx : int
+    rate at which specify epochs to do something at (must be >0)
+add_final_idx : bool
+    switch to ensure that index N-1 is always present in the output list.
+
+Returns
+-------
+all_idx : list of idx
+    list of all indices
+
+    """
+
+    all_idx = []
+
+    # don't think this should happen, but here we go
+    if not(N):
+        print("+* WARN: Number of epochs is 0")
+        return []
+    
+    if rate_idx < 0 :
+        print("** ERROR: cannot have negative rate_idx :", rate_idx)
+        sys.exit(7)
+    elif rate_idx >= N :
+        print("** ERROR: rate_idx={} is greater than num_epoch={}"
+              "".format(rate_idx, N))
+        sys.exit(7)
+
+    # can't have 2 methods of creating list used
+    if len(list_idx) and rate_idx :
+        print("** ERROR: user provided both a list_idx and rate_idx.")
+        print("   That is not allowed---only provide one of those.")
+        sys.exit(7)
+
+    elif len(list_idx) :
+        # in theory, the user-provided list could be out of order
+        for lll in list_idx :
+            if lll >= 0 and lll < N :
+                if not(lll in all_idx ) :
+                    all_idx.append(lll)
+            elif lll > -N and lll < 0 :
+                mmm = N + lll
+                if not(mmm in all_idx ) :
+                    all_idx.append(mmm)
+            else:
+                print("** ERROR: index '{}' out of range".format(lll))
+                print("   -N < i < N, where N = {}".format(N))
+                sys.exit(8)
+
+    elif rate_idx :
+        all_idx = [x for x in range(rate_idx-1, N, rate_idx)]
+
+    # in all cases, we include the final epoch in the list, which is N-1
+    if not(N-1 in all_idx) and add_final_idx :
+        all_idx.append(N-1)
+
+    return all_idx
+
+
+
 def get_args_state(args):
     '''
     Get a nice string for outputting the state of the variables
@@ -371,42 +488,43 @@ def get_args_state(args):
 
 if __name__ == '__main__':
 
-    # [PT] a trick so that putting in *no* args prompts the help to be
-    # shown
-    if len(sys.argv) == 1 :
-        sys.argv.append('-h')
-
     # get args (path and parameter settings) , and prepare to pass
     # along to the main training net prog
     args          = get_args()
     data_path     = args.data_dir
-    epochs        = args.epochs
-    lr            = args.learning_rate
+    num_epochs    = int(args.epochs)
+    lr            = float(args.learning_rate)
     tr_bsize      = args.train_batch_size
-    seed          = args.seed
+    seed          = int(args.seed)
     net_arch      = args.net_arch
     loss_func     = args.loss_func
     optimizer     = args.optimizer
-    verb          = args.verb
+    verb          = int(args.verb)
     half_prec     = args.half_prec
     mixed_prec    = args.mixed_prec
-    wt_norm       = args.weight_norm
-    nth_epoch_out = args.nth_epoch_out
-    nth_mask_out  = args.nth_mask_out
+    wt_norm       = int(args.weight_norm)
+    ##nth_epoch_out = args.nth_epoch_out
+    ##nth_mask_out  = args.nth_mask_out
     tr_shuf       = args.tr_shuf
     do_nifti      = args.do_nifti
     data_norm     = args.data_norm
     restart       = args.restart  
-    mask_oplist   = args.mask_output_list
-    chpt_oplist   = args.chpt_output_list
-    mask_everyn   = args.mask_everyn
-    chpt_everyn   = args.chpt_everyn
 
+    # these will be parsed/checked/used below
+    save_chpt_rate = int(args.save_chpt_rate)
+    save_chpt_list = args.save_chpt_list
+    save_mask_rate = int(args.save_mask_rate)
+    save_mask_list = args.save_mask_list
 
+    if not(os.path.isdir(data_path)) :
+        print("** ERROR: '-input_dir ..' is not valid: {}".format(data_path))
+        sys.exit(5)
+
+    
+    # NOTE: Need to give these non-None defaults
     outdir        = prep_outdir(args.outdir, verb=verb)
-
     if not(outdir) :
-        print("ERROR: this path is not valid: {}".format(args.outdir))
+        print("** ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
 
     if  not(check_opt_allowed( net_arch, lmt.list_net_arch, 
@@ -423,12 +541,46 @@ if __name__ == '__main__':
                                'is not in the List:' ))  :
         sys.exit(5)
 
+    # ----- check more things
+
+    if len(restart) :
+        if not(os.path.isfile(restart)) :
+            print("** ERROR: specified restart file does not exist:", restart)
+            sys.exit(3)
+
+    # create list of epoch indices at which to write a checkpoint 
+    epoch_chpt_list = create_valid_epoch_list(num_epochs, 
+                                              save_chpt_list,
+                                              save_chpt_rate,
+                                              add_final_idx = True)
+    # create list of epoch indices at which to write predicted masks 
+    epoch_mask_list = create_valid_epoch_list(num_epochs, 
+                                              save_mask_list,
+                                              save_mask_rate,
+                                              add_final_idx = False)
+
+    if verb :
+        print("++ Calculating {} epochs, indices: 0 to {}".format(num_epochs,
+                                                                  num_epochs-1))
+        print("++ The (0-based) list of epoch indices to write a checkpoint:")
+        print("   " + ', '.join([str(x) for x in epoch_chpt_list]))
+        print("++ The (0-based) list of epoch indices to write prediced masks:")
+        print("   " + ', '.join([str(x) for x in epoch_mask_list]))
+
+    if len(epoch_mask_list) and not(do_nifti) :
+        print("+* WARN: you asked for masks at epoch intervals, ")
+        print("   but -do_write_nifti is 0, so won't do it, oddly.")
+
     # save command used
     str_args = get_args_state(args)
     writeout_args( sys.argv, outdir, ver=__version__, state=str_args,
                    verb=verb )
 
-    net = lmt.train_net( data_path, epochs, lr, tr_bsize, seed, net_arch, loss_func,
-                         optimizer, half_prec, mixed_prec, wt_norm, nth_epoch_out, 
-                         nth_mask_out, tr_shuf, restart, data_norm, do_nifti, 
-                         outdir, mask_oplist, chpt_oplist, mask_everyn, chpt_everyn, verb )
+    # inserting new ussage of mask_oplist and chpt_oplist replacements
+    net = lmt.train_net( data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
+                         loss_func,
+                         optimizer, half_prec, mixed_prec, wt_norm, 
+                         tr_shuf, restart, data_norm, do_nifti, 
+                         outdir,
+                         epoch_mask_list, epoch_chpt_list, 
+                         verb )
