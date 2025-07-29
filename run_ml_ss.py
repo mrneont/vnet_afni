@@ -15,6 +15,8 @@ __version__ = '1.0.01'; verdate = 'Jul 25, 2025'
 # update help parsing
 __version__ = '1.0.02'; verdate = 'Jul 28, 2025'
 # more option usage changes, merge some opts
+__version__ = '1.0.03'; verdate = 'Jul 29, 2025'
+# change half_prec and mixed_prec opts -> single '-precision' opt 
 
 # -----------------------------------------------------------------------
 # default opts
@@ -34,6 +36,7 @@ DEF = {
         'do_weight_norm' : 0,
         'loss_func' : lml.DEF_CalcLoss,
         'optimizer' : lmt.list_optimizer[0],
+        'precision' : lmt.list_precision[0],
         'do_write_nifti' : 0,    
         'do_train_shuffle' : 0,  # Q: should this be on by default?
         'restart_from_checkpoint' : '',
@@ -163,19 +166,13 @@ if using 'nargs=1'.
                         "{}".format('\n  '.join(lmt.list_net_arch)) + '\n' +
                         '(def: {})'.format(DEF['architecture']))
 
-    def_half_prec = 0
-    parser.add_argument("-hp", "--half_prec", 
-                        dest="half_prec", 
-                        type=int, default=def_half_prec,
-                        help='half precision' + '\n' +
-                        '(def: {})'.format(str(def_half_prec)))
-
-    def_mixed_prec = 0
-    parser.add_argument("-mp", "--mixed_prec", 
-                        dest="mixed_prec", 
-                        type=int, default=def_mixed_prec,
-                        help='mixed precision' + '\n' +
-                        '(def: {})'.format(str(def_mixed_prec)))
+    parser.add_argument("-precision", 
+                        dest="precision", 
+                        type=str, default=DEF['precision'],
+                        help="data type precision type; valid arguments\n" +
+                        "include:" + '\n  ' +
+                        "{}".format('\n  '.join(lmt.list_precision)) + '\n' +
+                        '(def: {})'.format(DEF['precision']))
 
     parser.add_argument("-norm_mode", 
                         dest="data_norm", 
@@ -500,11 +497,8 @@ if __name__ == '__main__':
     loss_func     = args.loss_func
     optimizer     = args.optimizer
     verb          = int(args.verb)
-    half_prec     = args.half_prec
-    mixed_prec    = args.mixed_prec
+    precision     = args.precision
     wt_norm       = int(args.weight_norm)
-    ##nth_epoch_out = args.nth_epoch_out
-    ##nth_mask_out  = args.nth_mask_out
     tr_shuf       = args.tr_shuf
     do_nifti      = args.do_nifti
     data_norm     = args.data_norm
@@ -516,13 +510,13 @@ if __name__ == '__main__':
     save_mask_rate = int(args.save_mask_rate)
     save_mask_list = args.save_mask_list
 
+    # check input dir
     if not(os.path.isdir(data_path)) :
         print("** ERROR: '-input_dir ..' is not valid: {}".format(data_path))
         sys.exit(5)
 
-    
-    # NOTE: Need to give these non-None defaults
-    outdir        = prep_outdir(args.outdir, verb=verb)
+    # check+format output dir
+    outdir = prep_outdir(args.outdir, verb=verb)
     if not(outdir) :
         print("** ERROR: this path is not valid: {}".format(args.outdir))
         sys.exit(5)
@@ -538,6 +532,9 @@ if __name__ == '__main__':
                                'is not in the List:' )) or \
         not(check_opt_allowed( data_norm, lmt.list_data_norm,
                                desc_bad='This data normalization ' + 
+                               'is not in the List:' ))  or \
+        not(check_opt_allowed( precision, lmt.list_precision,
+                               desc_bad='This precision ' + 
                                'is not in the List:' ))  :
         sys.exit(5)
 
@@ -578,9 +575,10 @@ if __name__ == '__main__':
 
     # inserting new ussage of mask_oplist and chpt_oplist replacements
     net = lmt.train_net( data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
-                         loss_func,
-                         optimizer, half_prec, mixed_prec, wt_norm, 
+                         loss_func, optimizer, precision, wt_norm, 
                          tr_shuf, restart, data_norm, do_nifti, 
-                         outdir,
-                         epoch_mask_list, epoch_chpt_list, 
+                         outdir, epoch_mask_list, epoch_chpt_list, 
                          verb )
+
+    # done successfully
+    sys.exit(0)

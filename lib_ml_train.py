@@ -24,6 +24,11 @@ import torch.backends.cudnn as cudnn
 from   lib_adam_fp16    import Adam16
 
 from torch.cuda.amp import autocast, GradScaler
+### NB: couple warnings with autocast when running:
+# lib_ml_train.py:221: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+# python3.13/site-packages/torch/amp/grad_scaler.py:136: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+### ... so likely the autocast should be inside a 'device == cuda'-type check?
+
 # --------------------------------------------------------------------------
 
 # List of 'list of various choices'. The choices could be appended
@@ -46,15 +51,18 @@ list_data_norm = [ 'min_max_scale',
                    'z_scoring',
 ]
 
+list_precision = [ 'full',       # default
+                   'half',
+                   'mixed',
+]
+
 # --------------------------------------------------------------------------
 
 
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
-              loss_func,
-              optimizer, half_prec, mixed_prec, wt_norm, 
+              loss_func, optimizer, precision, wt_norm, 
               tr_shuf, restart, data_norm, do_nifti,
-              outdir, 
-              epoch_mask_list, epoch_chpt_list, 
+              outdir, epoch_mask_list, epoch_chpt_list, 
               verb): 
     """
     Main training function. Sends training to either GPU or CPU.
@@ -72,8 +80,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     net_arch     : network architecture name, from available list (str)
     loss_func    : loss function name, from available list (str)
     optimizer    : optimizer name, from available list (str)
-    half_prec    : ***
-    mixed_prec   : ***
+    precision    : ***
     wt_norm      : ***
     tr_shuf      : shuffle datasets during training
     restart      : Restart using checkpoint (this var is path to checkpoint)
@@ -95,7 +102,6 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     dash          = '-' * 20
     epochend      = '=' * 80
     step          = 0   
-    #mixed_prec    = 0      
 
     # check the device available 
     if torch.cuda.is_available():
@@ -122,15 +128,8 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
         print("++ {:40s} : {}".format('Using weight datasets', USE_DPTH_WTS))
         print("++ {:40s} : {}".format('Restart using checkpoint weights', restart))
         print("++ {:40s} : {}".format('Network architecture', net_arch))
-        print("++ {:40s} : {}".format('shuffle datasets during training', tr_shuf))
-
-
-    if half_prec == 1:
-        print("++ {:40s} : {}".format('Precision', 'half'))
-    elif mixed_prec == 1:
-        print("++ {:40s} : {}".format('Precision', 'mixed'))
-    else :
-        print("++ {:40s} : {}".format('Precision', 'full'))
+        print("++ {:40s} : {}".format('Shuffle training datasets', tr_shuf))
+        print("++ {:40s} : {}".format('Precision', precision))
 
 
     # Task : binary segmentation 
@@ -157,18 +156,15 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
             sys.exit(3)
         net.load_state_dict(torch.load(restart),strict=False)
 
-    if (device == torch.device('cpu')) and (half_prec == 1):
+    if (device == torch.device('cpu')) and (precision == 'half'):
         print("** The Half Precision operations are not supported in CPU ")
         sys.exit(2)
     
     # move model to device
     net.to(device)
     
-    if device == torch.device('cuda'):
-        if half_prec == 1:
-            
-            net = network_to_half(net)
-          
+    if device == torch.device('cuda') and precision == 'half' :
+        net = network_to_half(net)
 
     # print the model summary
     if verb > 1:
@@ -177,9 +173,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
 
     # load optimizer
     if optimizer == 'Adam':
-        if (half_prec == 1) or (mixed_prec == 1):
+        if precision in ['half', 'mixed'] : 
             optimizer = optim.Adam(net.parameters(), lr=lr, eps=1e-4)
-        else : #(full_prec == 1)
+        else : # precision == 'full'
             optimizer = optim.Adam(net.parameters(), lr=lr)
     
     else:
@@ -222,7 +218,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     
     start = time.time()
 
-    if mixed_prec == 1 :
+    if precision == 'mixed' :
         scaler = GradScaler()
 
     for epoch in range(num_epochs): # start of FOR loop for EPOCHS
@@ -303,7 +299,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                     sys.exit(6)
 
                 # ---- possible GPU niceties
-                if (device == torch.device('cuda') and (half_prec == 1)): 
+                if (device == torch.device('cuda')) and precision == 'half' :
                     # device == "cuda"
                     orig_data = orig_data.to(device).half()
                     mask_data = mask_data.to(device).half()
@@ -364,8 +360,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
 
                     # predict the mask using MRI orig_data
                     # The data to the neural net is of type 'torch.FloatTensor'
-                    if (mixed_prec == 1):
-                        
+                    if precision == 'mixed' :                        
                         with autocast():
                             mask_pred = net.forward(orig_data) 
                     #print('pred_mask size',mask_pred.size())
@@ -374,6 +369,11 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                     # Invoke loss function forward() method to run it.
                     # compare the predicted mask and the target data 
                     # + mask_data and mask_data is of type torch.FloatTensor  
+
+                            ### Q: is this indentation correct?
+                            ### (inside "with ..."?); now guessing it
+                            ### is, but will verify, from above
+                            ### indentation of comments
                             if USE_DPTH_WTS :
                                 LOSS = loss.forward(mask_pred, mask_data, dpth_data)
                             else:
@@ -410,9 +410,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                 # backward propagation (where gradients are computed)
                 # and optimization only if in training phase
                 if phase == 'train':
-
-                    if mixed_prec == 1:
-                        
+                    if precision == 'mixed' :
                         scaler.scale(LOSS).backward()
                         scaler.step(optimizer)
                     else: 
@@ -422,8 +420,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                     train_losses.append(LOSS.item())
 
                     # Updates the scale for next iteration.
-                    if mixed_prec == 1:
-                        
+                    if precision == 'mixed' :
                         scaler.update()
                     # + plot the gradient flow to check poosible
                     #   gradient vanishing / exploding problems.
@@ -456,14 +453,11 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                     print("   {:30s} : {:.4f}".format(this_str, LOSS))
 
                 # [PT] Q: why can't we output dsets if half_prec is True?
-                if (do_nifti and not(half_prec)) :
+                if do_nifti and not(precision == 'half') :
 
                     ### loop over each dataset in the batchsize(bsize)
                     for bb in range (bsize):
-
-
-                        index = index_tup[bb]
-                    
+                        index      = index_tup[bb]
                         orig_fname = orig_fname_tup[bb] 
                         
                         if phase == 'train' :
@@ -479,36 +473,38 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                         fname_orig, fname_targ, fname_pred_ch00_back, fname_pred_ch01_fore = \
                             lnu.make_names_of_dsets(outdir, orig_fname, strepoch, phase)
 
-
-
                         # this only needs to be written out in first iteration
                         ### Q : do we always want this written out if
                         ### do_nifti is True? should we just let the
                         ### epoch_mask_list tell us when to write out?
+                        is_hp = (precision == 'half')
                         if epoch == 0 :
                             # write orig_data in the form of nifti file
-                        
+                            
                             lnu.write_tensor_to_disk_nifti(orig_data[bb][0], 
                                                         fname=fname_orig,
-                                                        head=orig_head, half_prec=half_prec)
+                                                        head=orig_head, 
+                                                        half_prec=is_hp)
 
                             lnu.write_tensor_to_disk_nifti( mask_data[bb][0], 
                                                         fname=fname_targ,
-                                                        head=orig_head, half_prec=half_prec)
+                                                        head=orig_head, 
+                                                        half_prec=is_hp)
 
                         # [PT] I don't think this needs to be written out
                         # generally, at present.  Just at higher verbosity seems fine?
                         if verb > 3 :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][0], 
                                                         fname=fname_pred_ch00_back,
-                                                        head=orig_head, half_prec=half_prec)
+                                                        head=orig_head, 
+                                                        half_prec=is_hp)
                         
                         # pred_mask is written into the 'out' folder.
                         if epoch in epoch_mask_list :
                             lnu.write_tensor_to_disk_nifti( mask_pred[bb][1], 
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head, 
-                                                    half_prec=half_prec)
+                                                    half_prec=is_hp)
                         # end of bb loop : for bb in range (bsize)
                     
                     
@@ -566,40 +562,3 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
 
     return net
 
-
-
-
-"""
-                if (do_nifti and not(half_prec)) :
-                    pref_targ = "{}_{}_{}_{:04d}".format( 'target', 
-                                                          strepoch, 
-                                                          phase, 
-                                                          idx )
-                    fname_targ = "{}/{}.nii.gz".format( outdir,
-                                                        pref_targ )
-                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
-                                                    fname=fname_targ,
-                                                    head=orig_head)
-
-                    pref_pred_ch00_back = "{}-{}_{}_{}-{:04d}".format('ch00-back_ep',
-                                                              strepoch, 
-                                                              phase,
-                                                              'sub', 
-                                                              idx )
-                    fname_pred_ch00_back = "{}/{}.nii.gz".format( outdir,
-                                                            pref_pred_ch00_back )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][0], 
-                                                    fname=fname_pred_ch00_back,
-                                                    head=orig_head )
-
-                    pref_pred_ch01_fore   = "{}-{}_{}_{}-{:04d}".format('ch01-fore_ep', 
-                                                          strepoch, 
-                                                          phase,
-                                                          'sub', 
-                                                          idx )
-                    fname_pred_ch01_fore  = "{}/{}.nii.gz".format( outdir,
-                                                        pref_pred_ch01_fore )
-                    lnu.write_tensor_to_disk_nifti( mask_pred[0][1], 
-                                                    fname=fname_pred_ch01_fore,
-                                                    head=orig_head )
-"""
