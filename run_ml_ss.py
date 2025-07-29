@@ -32,13 +32,13 @@ DEF = {
         'verb' : 1,
         'train_batch_size' : 1,
         'architecture' : lmt.list_net_arch[0],
-        'norm_mode' : lmt.list_data_norm[0],
+        'scale_mode' : lmt.list_scale_mode[0],
         'do_weight_norm' : 0,
         'loss_func' : lml.DEF_CalcLoss,
         'optimizer' : lmt.list_optimizer[0],
         'precision' : lmt.list_precision[0],
         'do_write_nifti' : 0,    
-        'do_train_shuffle' : 0,  # Q: should this be on by default?
+        'do_train_shuffle' : 1,  
         'restart_from_checkpoint' : '',
         'save_checkpoint_rate' : 0,
         'save_checkpoint_list' : [],
@@ -174,21 +174,22 @@ if using 'nargs=1'.
                         "{}".format('\n  '.join(lmt.list_precision)) + '\n' +
                         '(def: {})'.format(DEF['precision']))
 
-    parser.add_argument("-norm_mode", 
-                        dest="data_norm", 
-                        type=str, default=DEF['norm_mode'],
+    parser.add_argument("-scale_mode", 
+                        dest="scale_mode", 
+                        type=str, default=DEF['scale_mode'],
                         help="data normalization type; valid arguments\n" +
                         "include:" + '\n  ' +
-                        "{}".format('\n  '.join(lmt.list_data_norm)) + '\n' +
-                        '(def: {})'.format(DEF['norm_mode']))
+                        "{}".format('\n  '.join(lmt.list_scale_mode)) + '\n' +
+                        '(def: {})'.format(DEF['scale_mode']))
 
+    # does not seem so useful
     parser.add_argument("-do_weight_norm", 
                         dest="weight_norm", 
                         type=int, default=DEF['do_weight_norm'],
                         help='do weight normalization' + '\n' +
                         '(def: {})'.format(DEF['do_weight_norm']))
 
-    # this should likely be on?
+    # very useful to have on always, for stability
     parser.add_argument("-do_train_shuffle", 
                         dest="tr_shuf", 
                         type=int, default=DEF['do_train_shuffle'],
@@ -501,7 +502,7 @@ if __name__ == '__main__':
     wt_norm       = int(args.weight_norm)
     tr_shuf       = args.tr_shuf
     do_nifti      = args.do_nifti
-    data_norm     = args.data_norm
+    scale_mode    = args.scale_mode
     restart       = args.restart  
 
     # these will be parsed/checked/used below
@@ -530,7 +531,7 @@ if __name__ == '__main__':
         not(check_opt_allowed( loss_func, lml.list_CalcLoss,
                                desc_bad='This loss function ' + 
                                'is not in the List:' )) or \
-        not(check_opt_allowed( data_norm, lmt.list_data_norm,
+        not(check_opt_allowed( scale_mode, lmt.list_scale_mode,
                                desc_bad='This data normalization ' + 
                                'is not in the List:' ))  or \
         not(check_opt_allowed( precision, lmt.list_precision,
@@ -576,7 +577,7 @@ if __name__ == '__main__':
     # inserting new ussage of mask_oplist and chpt_oplist replacements
     net = lmt.train_net( data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
                          loss_func, optimizer, precision, wt_norm, 
-                         tr_shuf, restart, data_norm, do_nifti, 
+                         tr_shuf, restart, scale_mode, do_nifti, 
                          outdir, epoch_mask_list, epoch_chpt_list, 
                          verb )
 

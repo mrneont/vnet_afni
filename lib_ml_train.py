@@ -47,8 +47,8 @@ list_optimizer = [ 'Adam',
 ]
 
 # List of all possible data normalizations to choose from. 
-list_data_norm = [ 'min_max_scale',
-                   'z_scoring',
+list_scale_mode = [ 'z_scoring',      # default
+                    'min_max_scale',
 ]
 
 list_precision = [ 'full',       # default
@@ -61,7 +61,7 @@ list_precision = [ 'full',       # default
 
 def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch, 
               loss_func, optimizer, precision, wt_norm, 
-              tr_shuf, restart, data_norm, do_nifti,
+              tr_shuf, restart, scale_mode, do_nifti,
               outdir, epoch_mask_list, epoch_chpt_list, 
               verb): 
     """
@@ -81,10 +81,10 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     loss_func    : loss function name, from available list (str)
     optimizer    : optimizer name, from available list (str)
     precision    : ***
-    wt_norm      : ***
+    wt_norm      : normalization of ***
     tr_shuf      : shuffle datasets during training
     restart      : Restart using checkpoint (this var is path to checkpoint)
-    data_norm    : ***
+    scale_mode   : initial brightness scaling of orig dset
     do_nifti     : binary switch about whether to write out nifti dsets 
                    during the network run
     outdir       : directory for various outputs
@@ -123,7 +123,7 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
         print("++ {:40s} : {}".format('Number of epochs', num_epochs))
         print("++ {:40s} : {}".format('Batch size for training', tr_bsize))
         print("++ {:40s} : {}".format('Weight norm', wt_norm))
-        print("++ {:40s} : {}".format('Data normalization', data_norm))
+        print("++ {:40s} : {}".format('Initial scaling mode', scale_mode))
         print("++ {:40s} : {}".format('Loss function', loss_func))
         print("++ {:40s} : {}".format('Using weight datasets', USE_DPTH_WTS))
         print("++ {:40s} : {}".format('Restart using checkpoint weights', restart))
@@ -285,17 +285,17 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
 
                 
                 # ---- scale/normalize the input data in some fashion
-                if data_norm == 'z_scoring':
+                if scale_mode == 'z_scoring':
                     orig_data = lmd.z_scoring(orig_data)
 
-                elif data_norm == 'min_max_scale': 
+                elif scale_mode == 'min_max_scale': 
                     orig_data = lmd.min_max_scale(orig_data)
 
                     #[YNS] add the other data normalizations 
                     
                 else:
-                    print("This should never happen! "
-                          "'data normalization' is: {}".format(data_norm))
+                    print("** ERROR: This should never happen! "
+                          "'data normalization' is: {}".format(scale_mode))
                     sys.exit(6)
 
                 # ---- possible GPU niceties
