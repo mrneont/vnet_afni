@@ -20,8 +20,8 @@
 # tcsh do_pred_plus_target_cmd.tcsh /Users/narayanaswamyy2/AFNI_VNET/FQC_DA_c14ed246 
 
 #echo "Script to combine the pred_mask and the target(groundtruth)"
-set parent_dir    = $1  # cmd line arguement 
-set dset_pred_mask = $2
+#set parent_dir    = $1  # cmd line arguement 
+set dset_pred_mask = $1
 
 
 set dir_target = "target"
@@ -57,21 +57,21 @@ echo ${prefix}
     # output prefix for montage image
 set opref = IMG_${prefix}
 
-echo "${parent_dir}/${dir_target}/${dset_target}"
+echo "../${dir_target}/${dset_target}"
 
 	# combo is overlap mapped to 1(green)
 	# a is vnet_pred_mask mapped to 3(red)
 	# b is FS/target mask mapped to 2(blue)
-3dcalc -prefix ${parent_dir}/${dir_pred_plus_target}/${dset_out}\
+3dcalc -prefix ../${dir_pred_plus_target}/${dset_out}\
     -expr 'bool(ispositive(a-0.5)+b)*(4-(ispositive(a-0.5)+2*b))' \
-    -a ${parent_dir}/${dir_pred_mask}/${dset_pred_mask} \
-    -b ${parent_dir}/${dir_target}/${dset_target} \
+    -a ../${dir_pred_mask}/${dset_pred_mask} \
+    -b ../${dir_target}/${dset_target} \
     -overwrite 
 
      # make three PNGs
 @chauffeur_afni                                  \
-        -ulay  ${parent_dir}/${dir_orig}/${dset_orig}                          \
-        -olay  ${parent_dir}/${dir_pred_plus_target}/${dset_out}                          \
+        -ulay  ../${dir_orig}/${dset_orig}                          \
+        -olay  ../${dir_pred_plus_target}/${dset_out}                          \
         -box_focus_slices AMASK_FOCUS_OLAY           \
         -ulay_range 0% 98%                           \
         -func_range 3t                                  \
@@ -79,7 +79,7 @@ echo "${parent_dir}/${dir_target}/${dset_target}"
         -pbar_posonly                                \
         -opacity     4                               \
         -blowup      2                               \
-        -prefix      ${parent_dir}/${dir_combo}/${opref}                        \
+        -prefix      ../${dir_combo}/${opref}                        \
         -montx 6 -monty 1                            \
         -set_xhairs OFF                              \
         -label_mode 1 -label_size 4                  \
@@ -93,8 +93,8 @@ echo "${parent_dir}/${dir_target}/${dset_target}"
         -gap_col 150 150 150                         \
         -nx 1                                        \
         -ny 3                                        \
-        -prefix  ${parent_dir}/${dir_combo}/${opref}.jpg                  \
-        ${parent_dir}/${dir_combo}/${opref}*{sag,axi,cor}*png
+        -prefix  ../${dir_combo}/${opref}.jpg                  \
+        ../${dir_combo}/${opref}*{sag,axi,cor}*png
 
 if ( $status ) then
     echo "** ERROR: exit, badness for: ${dset_out}"
@@ -103,7 +103,7 @@ endif
 
 
     # clean up, remove separate PNGs
-\rm ${parent_dir}/${dir_combo}/${opref}*{sag,axi,cor}*png
+\rm ../${dir_combo}/${opref}*{sag,axi,cor}*png
 
 
 end	
