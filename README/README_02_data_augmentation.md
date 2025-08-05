@@ -25,7 +25,7 @@ Steps for creating data augmentation folder from the given dataset
 ------------------------------------------------------------------------------
 1) Download+git checkout the 'data_augmentation_scripts' folder from git repo.
 2) Start interactive session on biowulf:  'sinteractive --mem=20g'
-3) Activate the conda env: 'conda activate vnet_tech_2024_01_02_gpu'
+3) Activate the conda env: 'conda activate vnet_tech_2024_01_02'
 4) Load AFNI programs: 'module afni'
 5) export PYTHONPATH=/usr/local/apps/afni/current-py3/linux_rocky_8 [ *clarify* ]
 6) Use the 'data_augmentation_wrapper.py' program to create an augmented
