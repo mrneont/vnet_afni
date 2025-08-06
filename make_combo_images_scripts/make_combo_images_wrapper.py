@@ -187,8 +187,8 @@ def main():
     print("++ Found make_combo_images scripts dir:", dir_combo_scr)
 
     print("++ Run make_combo_image_folders.tcsh  ...")
-    cmd  = '''tcsh make_combo_image_folders.tcsh {param1} {param2} 
-    '''.format(param1 = pred_mask_path, param2 = dir_combo_scr)
+    cmd  = '''tcsh make_combo_image_folders.tcsh {param1}  
+    '''.format(param1 = pred_mask_path)
     print("++  make_combo_image_folders.tcsh finished ...")
     com  = ab.shell_com(cmd, capture=1)
     stat = com.run()

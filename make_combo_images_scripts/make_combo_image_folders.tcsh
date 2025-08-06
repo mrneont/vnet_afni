@@ -12,9 +12,8 @@
 # set pred_mask_dir : pred_mask_output_folder
 set pred_mask_output_dir      =  $1
 
-# 
-set dir_parent = $2
-echo ${pred_mask_output_dir}
+#echo ${pred_mask_output_dir}
+
 # The combo images pertaining to ${pred_mask_output_dir}
 # is present in the ${make_combo_images_dir}
 
@@ -56,21 +55,19 @@ mkdir -p ../${make_combo_images_dir}/${dir_target}
 mkdir -p ../${make_combo_images_dir}/${dir_pred_mask} 
 mkdir -p ../${make_combo_images_dir}/${dir_pred_plus_target}
 mkdir -p ../${make_combo_images_dir}/${dir_combo}
-#mkdir -p ${dir_parent}/${make_combo_images_dir}/${dir_swarm}
 mkdir -p ../${make_combo_images_dir}/${dir_logs}
 mkdir -p ../${make_combo_images_dir}/${dir_scripts}
 
 
 
 
-echo -p ../${make_combo_images_dir}
-echo -p ../${make_combo_images_dir}/${dir_orig} 
-echo -p ../${make_combo_images_dir}/${dir_target} 
-echo -p ../${make_combo_images_dir}/${dir_pred_mask} 
-echo -p ../${make_combo_images_dir}/${dir_pred_plus_target}
-echo -p ../${make_combo_images_dir}/${dir_combo}
-#mkdir -p ${dir_parent}/${make_combo_images_dir}/${dir_swarm}
-echo -p ../${make_combo_images_dir}/${dir_logs}
+#echo  ../${make_combo_images_dir}
+#echo  ../${make_combo_images_dir}/${dir_orig} 
+#echo  ../${make_combo_images_dir}/${dir_target} 
+#echo  ../${make_combo_images_dir}/${dir_pred_mask} 
+#echo  ../${make_combo_images_dir}/${dir_pred_plus_target}
+#echo  ../${make_combo_images_dir}/${dir_combo}
+#echo  ../${make_combo_images_dir}/${dir_logs}
 
 
 set pred_mask_key = "ch01_ep-100_train"
