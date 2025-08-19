@@ -18,6 +18,7 @@ import lib_ml_losses        as lml
 import lib_nibabel_utils    as lnu
 import run_ml_ss            as rms
 
+
 #********************************************************************************
 #* The code is to test the model weights. 
 #* The model weights are stored as 'checkpoint.pt' file after the training phase
@@ -35,7 +36,7 @@ import run_ml_ss            as rms
 # the checkpoint.pt files are read succesively and the test_data are evaluated for each model
 
 # List of map_locations(devices) to choose from. 
-list_map_loc = [ 'cpu','cuda']
+list_device = [ 'cpu','cuda']
 checkpt_file_list = []
 origfl_list = []
 
@@ -53,27 +54,30 @@ def get_test_args():
     parser = argp.ArgumentParser(prog = 'lib_ml_test.py',
                                 formatter_class=argp.RawTextHelpFormatter)
 
-    parser.add_argument('-d', "--data_path",type=dir_path)
+    parser.add_argument('-data_path', "--data_path",type=dir_path)
 
     def_OD = '.'
-    parser.add_argument('-o', '--outdir')
+    parser.add_argument('-outdir', '--outdir')
 
-    parser.add_argument('-ch', "--checkpoint_path",type=dir_path)
+    parser.add_argument('-checkpoint', "--checkpoint_path",type=dir_path)
 
-    def_map_loc = list_map_loc[0]
-    parser.add_argument("-m", "--map_loc", 
-                        dest="map_loc", 
-                        type=str, default=def_map_loc,
-                        help="map_location type; valid arguments\n" +
+    parser.add_argument("-no_mask", "--no_mask", 
+                        type=int)
+
+    def_device = list_device[0]
+    parser.add_argument("-device", "--device", 
+                        dest="device", 
+                        type=str, default=def_device,
+                        help="device type; valid arguments\n" +
                         "include:" + '\n  ' +
-                        "{}".format('\n  '.join(list_map_loc)) + '\n' +
-                        '(def: {})'.format(str(def_map_loc)))
+                        "{}".format('\n  '.join(list_device)) + '\n' +
+                        '(def: {})'.format(str(def_device)))
 
     return parser.parse_args()
 
-def test_net(data_path, outdir, checkpoint_path, map_loc):
+def test_net(data_path, outdir, no_mask, checkpoint_path, device):
 
-    print("++ Device on which the model weights are mapped =", map_loc)
+    print("++ Device on which the model weights are mapped =", device)
     # Set up network 
     model = lmm.VNet_orig(in_channels=1, num_class=2, wt_norm = 0, 
                          verb=0)
@@ -97,7 +101,7 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
     # DataLoader setup
     test_datapath = os.path.join(data_path)
     test_set      = lmd.mridataset(test_datapath, 
-                                    use_dpth_wts= 0, 
+                                    use_dpth_wts= 0, no_mask = 1,
                                     verb=0)
     
     Ntest         = len(test_set)
@@ -125,8 +129,9 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
         print('checkpoint flname:', name)
         chfl_name = os.path.join(checkpoint_path, name)
         print('checkpoint flname path:', chfl_name)
+        print('device mapped to:',device)
         model.load_state_dict(torch.load(chfl_name,
-                                map_location=torch.device(map_loc)),
+                                map_location=torch.device(device)),
                                 strict=False)
 
         model.eval()
@@ -176,16 +181,16 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
-                
-                LOSS = loss.forward(pred_mask, mask_data)
-                print('LOSS.item()= ',LOSS.item())
-                score = 1-LOSS.item()
+                if (no_mask==0) :
+                    LOSS = loss.forward(pred_mask, mask_data)
+                    print('LOSS.item()= ',LOSS.item())
+                    score = 1-LOSS.item()
                 #dicescore.append(1-LOSS.item())
                 #print("{}".format(orig_fname))
                 #print(perf_file)
                 #print(type(score))
-                with io.open(perf_file, 'a') as perf_log:
-                    perf_log.write("  {:12s} {:12.4f} \n".format(orig_fname[0],float(score)))
+                    with io.open(perf_file, 'a') as perf_log:
+                        perf_log.write("  {:12s} {:12.4f} \n".format(orig_fname[0],float(score)))
 
                 count += 1
                 print('count =',count)
@@ -204,13 +209,15 @@ def test_net(data_path, outdir, checkpoint_path, map_loc):
 
 
 def main():
+
     args      = get_test_args()
     data_path = args.data_path
     outdir    = rms.prep_outdir(args.outdir)
+    no_mask   = args.no_mask
     checkpoint_path = args.checkpoint_path
     # map_loc : - Device on which the model weights are mapped
-    map_loc   = args.map_loc
-    test_net(data_path,outdir, checkpoint_path, map_loc)
+    device   = args.device
+    test_net(data_path,outdir, no_mask, checkpoint_path, device)
 
 
 if __name__ == "__main__":
