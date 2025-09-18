@@ -187,12 +187,14 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
+                                    no_mask= 0,
                                     verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
     val_set        = lmd.mridataset(val_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
+                                    no_mask= 0,
                                     verb=verb)
     Nval           = len(val_set)
    
@@ -323,9 +325,9 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
                 mask_data = mask_data.unsqueeze(1) 
                 dpth_data = dpth_data.unsqueeze(1) 
                 
-                #print('train orig_data size ',orig_data.size())
-                #print('train mask_data size ',mask_data.size())
-                #print('train dpth_data size ',dpth_data.size())
+                print('train orig_data size ',orig_data.size())
+                print('train mask_data size ',mask_data.size())
+                print('train dpth_data size ',dpth_data.size())
                 # [PT] Q: should dpth_data also be unsqueezed here, if it
                 # is being used?
 
