@@ -32,7 +32,7 @@ class mridataset(data.Dataset):
   It retrieves the corresponding groundtruth/mask
     """
 
-    def __init__(self, root_path, use_dpth_wts=None, no_mask=None, verb=0):
+    def __init__(self, root_path, use_dpth_wts=None, mask_available=None, verb=0):
 
         # initialize 
         self.orig_data_list = []
@@ -40,10 +40,9 @@ class mridataset(data.Dataset):
         self.dpth_data_list = []        # only populated if use_dpth_wts
 
         self.orig_head_list = []        # store all the headers
-
         self.root_path      = root_path
         self.use_dpth_wts   = use_dpth_wts
-        self.no_mask        = no_mask
+        self.mask_available = mask_available
         self.verb           = verb
 
         # ===============================================================
@@ -75,7 +74,7 @@ class mridataset(data.Dataset):
             self.orig_head_list.append(A.header.copy())
             orig_file = orig_dset[Nroot:]
 
-            if (self.no_mask==0) :
+            if (self.mask_available==1) :
                 mask_file = orig_file.replace('orig', 'mask')
                 mask_dset = ''.join([self.root_path, mask_file])
                 self.mask_data_list.append(mask_dset)
@@ -85,7 +84,7 @@ class mridataset(data.Dataset):
                 dpth_dset = ''.join([self.root_path, dpth_file])
                 self.dpth_data_list.append(dpth_dset)
 
-        if (self.no_mask==0) :
+        if (self.mask_available==1) :
             # verify that all the mask and dpth files exist
             MISSING_DSET = 0
             for dset in self.mask_data_list :
@@ -139,7 +138,7 @@ class mridataset(data.Dataset):
         orig_data[orig_data >top99_thresh] = top99_thresh
         down2_thresh = np.percentile(orig_data, 2) 
         orig_data[orig_data < down2_thresh] = down2_thresh
-        if (self.no_mask==0) :
+        if (self.mask_available==1) :
             mask_image  = nib.load(self.mask_data_list[index])
             mask_data   = np.asanyarray(mask_image.dataobj).astype('float32')
         else:
@@ -154,7 +153,6 @@ class mridataset(data.Dataset):
         if type(index) != tuple :
             index = tuple([index])
 
-        
         return orig_data, mask_data, dpth_data, orig_fname, index
 
     def __len__(self):

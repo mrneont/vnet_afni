@@ -61,8 +61,8 @@ def get_test_args():
 
     parser.add_argument('-checkpoint', "--checkpoint_path",type=dir_path)
 
-    parser.add_argument("-no_mask", "--no_mask", 
-                        type=int)
+    parser.add_argument("-mask_available", "--mask_available", 
+                        type=int,default=0)
 
     def_device = list_device[0]
     parser.add_argument("-device", "--device", 
@@ -75,7 +75,7 @@ def get_test_args():
 
     return parser.parse_args()
 
-def test_net(data_path, outdir, no_mask, checkpoint_path, device):
+def test_net(data_path, outdir, mask_available, checkpoint_path, device):
 
     print("++ Device on which the model weights are mapped =", device)
     # Set up network 
@@ -93,15 +93,13 @@ def test_net(data_path, outdir, no_mask, checkpoint_path, device):
         #print('origfl flname = ',flname)
         origfl_list.append(flname)
 
-    
-
     #perf_file     = '/'.join([outdir, 'log_performance.txt'])
 
     # datapath
     # DataLoader setup
     test_datapath = os.path.join(data_path)
     test_set      = lmd.mridataset(test_datapath, 
-                                    use_dpth_wts= 0, no_mask = 1,
+                                    use_dpth_wts= 0, mask_available=mask_available,
                                     verb=0)
     
     Ntest         = len(test_set)
@@ -155,6 +153,7 @@ def test_net(data_path, outdir, no_mask, checkpoint_path, device):
                 orig_data = orig_data.unsqueeze(1) 
                 mask_data = mask_data.unsqueeze(1) 
                 print('data size',orig_data.size())
+                print('mask_data size',mask_data.size())
 
 
   
@@ -172,7 +171,8 @@ def test_net(data_path, outdir, no_mask, checkpoint_path, device):
                                                         fname=fname_orig,
                                                         head=orig_head)
 
-                lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
+                if (mask_available==1) :
+                    lnu.write_tensor_to_disk_nifti( mask_data[0][0], 
                                                         fname=fname_targ,
                                                         head=orig_head)
 
@@ -181,7 +181,7 @@ def test_net(data_path, outdir, no_mask, checkpoint_path, device):
                                                     fname=fname_pred_ch01_fore,
                                                     head=orig_head )
 
-                if (no_mask==0) :
+                if (mask_available==1) :
                     LOSS = loss.forward(pred_mask, mask_data)
                     print('LOSS.item()= ',LOSS.item())
                     score = 1-LOSS.item()
@@ -213,11 +213,11 @@ def main():
     args      = get_test_args()
     data_path = args.data_path
     outdir    = rms.prep_outdir(args.outdir)
-    no_mask   = args.no_mask
+    mask_available  = args.mask_available
     checkpoint_path = args.checkpoint_path
     # map_loc : - Device on which the model weights are mapped
     device   = args.device
-    test_net(data_path,outdir, no_mask, checkpoint_path, device)
+    test_net(data_path,outdir, mask_available, checkpoint_path, device)
 
 
 if __name__ == "__main__":

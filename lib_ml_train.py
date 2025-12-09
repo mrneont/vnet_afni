@@ -187,14 +187,14 @@ def train_net(data_path, num_epochs, lr, tr_bsize, seed, net_arch,
     train_datapath = os.path.join(data_path, 'training')
     train_set      = lmd.mridataset(train_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
-                                    no_mask= 0,
+                                    mask_available= 0,
                                     verb=verb)
     Ntrain         = len(train_set)
     
     val_datapath   = os.path.join(data_path, 'validation')
     val_set        = lmd.mridataset(val_datapath, 
                                     use_dpth_wts=USE_DPTH_WTS, 
-                                    no_mask= 0,
+                                    mask_available= 0,
                                     verb=verb)
     Nval           = len(val_set)
    
