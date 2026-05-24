@@ -1,0 +1,269 @@
+#!/usr/bin/env python
+
+import os
+
+import torch
+import numpy                          as np
+import nibabel                        as nib
+
+from afnipy import afni_base          as ab
+from afnipy import afni_util          as au
+
+from .      import lib_ml_models      as lmm
+from .      import lib_nibabel_utils  as lnu
+
+# ============================================================================
+
+class VnetTestObj:
+    """Object for running a Vnet model on a test dataset.
+
+Parameters
+----------
+***
+
+
+    """
+
+    def __init__(self, inset, prefix='mask_new.nii.gz', mask='',
+                 checkpoint=None, device='cpu', 
+                 do_overwrite=False, verb=1):
+
+        # ----- set up attributes
+
+        # main input variables
+        self.status           = 0                  # not used
+
+        # main input variables
+        self.inset            = inset
+        self.prefix           = prefix
+
+        self.checkpoint       = checkpoint
+        self.device           = device
+        self.mask             = mask
+        
+        # data loaded in
+        self.data_orig        = None              # from inset arr
+        self.hdr_orig         = None              # nifti header of inset
+        self.data_mask        = None              # from mask arr
+
+        # data calculated
+        self.data_pred_mask   = None              # the mask Vnet predicts
+
+        # general variables
+        self.verb             = verb
+        self.do_overwrite     = do_overwrite
+
+        # ----- take action(s)
+
+        tmp = self.basic_setup()
+        if tmp : return
+
+        tmp = self.load_data()
+        if tmp : return
+
+        tmp = self.load_model()
+        if tmp : return
+
+        tmp = self.run_model()
+        if tmp : return
+
+        tmp = self.write_output()
+        if tmp : return
+
+    # ----- methods
+
+    def run_model(self):
+        """Run the vnet: calc data_pred_mask"""
+
+        print("++ Run vnet", flush=True)
+
+        with torch.no_grad():
+            orig_data = self.data_orig.unsqueeze(1) 
+            
+            # main calculation: estimate the mask with vnet
+            self.data_pred_mask = self.model.forward(orig_data)
+
+            print("HEY: data_pred_mask dims:", self.data_pred_mask.size())
+
+            ### **** used for dice comparison/QC if a mask was entered
+            ##if self.have_mask :
+            ##    mask_data = self.data_mask.unsqueeze(1) 
+
+        return 0
+
+    def write_output(self):
+        """Save pred_mask to disk"""
+
+        ab.IP("Writing out pred_mask to file: {}".format(self.prefix))
+
+        lnu.write_tensor_to_disk_nifti( self.data_pred_mask[0][1], 
+                                        fname = self.prefix,
+                                        head  = self.hdr_orig )
+        return 0
+
+    def load_data(self):
+        """Load datasets/volumes into arrays.  The specific loading function
+        for each dset contains more description, but in general dsets
+        get stored as torch tensors, with dimensionality setup for
+        running in the model.
+        """
+
+        BAD_RETURN = -1
+
+        # load main input dset
+        is_fail = self.load_inset()
+        if is_fail :
+            return BAD_RETURN
+
+        # load mask (which might not be present)
+        is_fail = self.load_mask()
+        if is_fail :
+            return BAD_RETURN
+
+        return 0
+
+    def load_mask(self):
+        """Read in mask data (if present), using nibabel.
+
+        The 3D dset is stored as a torch tensor array.  In order to be
+        used as an input to the model, it is also unsqueezed to insert
+        an extra dim in the [0]th index, so 3D data of dim [A, B, C] ->
+        [1, A, B, C].
+        """
+
+        BAD_RETURN = -1
+
+        if self.have_mask :
+            mask_image = nib.load(self.mask)
+            mask_data  = np.asanyarray(mask_image.dataobj).astype('float32')
+
+            self.data_mask = torch.from_numpy(mask_data).unsqueeze(0)
+
+        return 0
+
+    def load_inset(self):
+        """Read in inset anatomical dset, using nibabel, and do things like
+        percentile-based thresholding and Z-scoring of it.  The header
+        is also stored separately, to help with writing out data.
+
+        The 3D dset is stored as a torch tensor array.  In order to be
+        used as an input to the model, it is also unsqueezed to insert
+        an extra dim in the [0]th index, so 3D data of dim [A, B, C] ->
+        [1, A, B, C].
+
+        """
+
+        BAD_RETURN = -1
+
+        # read in and convert data arr to float
+        orig_image = nib.load(self.inset)
+        orig_data  = np.asanyarray(orig_image.dataobj).astype('float32')
+
+        # simple proc 1: percentile-based thresholding of data
+        top99_thresh = np.percentile(orig_data, 99) 
+        orig_data[orig_data >top99_thresh] = top99_thresh
+        down2_thresh = np.percentile(orig_data, 2) 
+        orig_data[orig_data < down2_thresh] = down2_thresh
+
+        # simple proc 2: z-score conversion
+        is_fail, orig_data = z_scoring(orig_data)
+        if is_fail :
+            return BAD_RETURN 
+
+        self.data_orig = torch.from_numpy(orig_data).unsqueeze(0)   
+
+        # ... and also store the dset header
+        self.hdr_orig = orig_image.header.copy()
+
+        return 0
+
+    def load_model(self):
+        """Make announcements, verify that datasets exist"""
+
+        ab.IP("Using device: {}".format(self.device))
+
+        self.model = lmm.VNet_orig(in_channels = 1, 
+                                   num_class   = 2,
+                                   wt_norm     = 0, 
+                                   verb        = self.verb)
+
+        tload = torch.load(self.checkpoint,
+                           map_location = torch.device(self.device))
+
+        self.model.load_state_dict(tload, strict=False)
+
+        return 0                           
+
+    def basic_setup(self):
+        """Verify that datasets and other input choices exist"""
+
+        # check basic requirements
+
+        # (req)
+        if not(self.inset) :
+            ab.EP("Need to provide an inset")
+        else:
+            nfail = au.check_all_dsets_exist([self.inset], label='inset', 
+                                             verb=self.verb)
+            if nfail :
+                ab.EP("Failed to load inset")
+
+        # (req) checkpoint --- ** at some point have a default choice
+        if self.checkpoint :
+            is_ok = os.path.isfile(self.checkpoint)
+            if not(is_ok) :
+                ab.EP("Failed to load checkpoint")
+
+        # (req)
+        if not(self.prefix) : 
+            ab.EP("Need to provide a prefix")
+
+        # (opt) mask
+        if self.mask :
+            nfail = au.check_all_dsets_exist([self.mask], label='mask',
+                                             verb=self.verb)
+            if nfail :
+                ab.EP("Failed to load mask")
+
+            # mask grid must match inset
+            is_fail = au.check_all_dsets_same_grid([self.inset, self.mask],
+                                                   label='inset and mask')
+
+        if os.path.isfile(self.prefix) and not(self.do_overwrite) :
+            msg = "Output dset exists: '{}'\n".format(self.prefix)
+            msg+= "Either active overwriting, or move/remove dset"
+            ab.EP(msg)
+
+    # ----- decorators
+
+    @property
+    def have_mask(self):
+        """was a mask input? return 0 for no and 1 for yes"""
+        if self.mask : return 1
+        else:          return 0
+
+# ----------------------------------------------------------------------------
+
+def z_scoring(img):
+   
+    BAD_RETURN = (-1, np.ndarray(0))
+
+    data_mean  = img.mean()
+    data_std   = img.std()
+
+    if data_std :
+        Z_normalized = (img - data_mean) / data_std
+    else:
+        ab.EP1("std dev of img dset was zero?")
+        return BAD_RETURN
+
+    return 0, Z_normalized
+
+
+# ============================================================================
+
+if __name__ == "__main__" :
+
+    # an example use case
+    print("++ No example")
+
