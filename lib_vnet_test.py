@@ -19,12 +19,35 @@ class VnetTestObj:
 
 Parameters
 ----------
-***
+inset : str
+    name of input (anatomical) dset
+prefix : str
+    file name for the estimated/calculated pred_mask 
+comp_mask : str
+    an option mask to input for comparison; like, a target mask or something;
+    at present, this is actually pretty much handled by the AFNI program
+    wrapping this library
+checkpoint : str
+    name of a checkpoint file to use, i.e., the trained model to apply
+device : str
+    a keyword for the device to use, primarily either CPU or GPU (=cuda);
+    there are only a few specific values this can take, see
+    lib_vnet_defs.LIST_all_device
+do_overwrite : bool
+    should the outputs here be able to overwrite pre-existing dsets?
+verb : int
+    verbosity level
 
+Returns
+-------
+VnetTestObj : obj
+    this object with all its bells and whistles; but importantly,
+    during the runtime this object will output a mask file, of name
+    'prefix'
 
     """
 
-    def __init__(self, inset, prefix='mask_new.nii.gz', mask='',
+    def __init__(self, inset, prefix='mask_new.nii.gz', comp_mask='',
                  checkpoint=None, device='cpu', 
                  do_overwrite=False, verb=1):
 
@@ -39,7 +62,7 @@ Parameters
 
         self.checkpoint       = checkpoint
         self.device           = device
-        self.mask             = mask
+        self.comp_mask        = comp_mask
         
         # data loaded in
         self.data_orig        = None              # from inset arr
@@ -83,11 +106,11 @@ Parameters
             # main calculation: estimate the mask with vnet
             self.data_pred_mask = self.model.forward(orig_data)
 
-            print("HEY: data_pred_mask dims:", self.data_pred_mask.size())
-
-            ### **** used for dice comparison/QC if a mask was entered
-            ##if self.have_mask :
-            ##    mask_data = self.data_mask.unsqueeze(1) 
+            #print("HEY: data_pred_mask dims:", self.data_pred_mask.size())
+            
+            # *** maybe load in a comp_mask here, but probably not any
+            # *** more? it would have to go through all the same steps
+            # *** as the T1 dset
 
         return 0
 
@@ -116,14 +139,14 @@ Parameters
             return BAD_RETURN
 
         # load mask (which might not be present)
-        is_fail = self.load_mask()
+        is_fail = self.load_comp_mask()
         if is_fail :
             return BAD_RETURN
 
         return 0
 
-    def load_mask(self):
-        """Read in mask data (if present), using nibabel.
+    def load_comp_mask(self):
+        """Read in comparison mask data (if present), using nibabel.
 
         The 3D dset is stored as a torch tensor array.  In order to be
         used as an input to the model, it is also unsqueezed to insert
@@ -133,11 +156,11 @@ Parameters
 
         BAD_RETURN = -1
 
-        if self.have_mask :
-            mask_image = nib.load(self.mask)
+        if self.have_comp_mask :
+            mask_image = nib.load(self.comp_mask)
             mask_data  = np.asanyarray(mask_image.dataobj).astype('float32')
 
-            self.data_mask = torch.from_numpy(mask_data).unsqueeze(0)
+            self.data_comp_mask = torch.from_numpy(mask_data).unsqueeze(0)
 
         return 0
 
@@ -219,15 +242,16 @@ Parameters
             ab.EP("Need to provide a prefix")
 
         # (opt) mask
-        if self.mask :
-            nfail = au.check_all_dsets_exist([self.mask], label='mask',
+        if self.comp_mask :
+            nfail = au.check_all_dsets_exist([self.comp_mask],
+                                             label='comp_mask',
                                              verb=self.verb)
             if nfail :
-                ab.EP("Failed to load mask")
+                ab.EP("Failed to load comp_mask")
 
-            # mask grid must match inset
-            is_fail = au.check_all_dsets_same_grid([self.inset, self.mask],
-                                                   label='inset and mask')
+            # comp_mask grid must match inset
+            is_fail = au.check_all_dsets_same_grid([self.inset, self.comp_mask],
+                                                   label='inset and comp_mask')
 
         if os.path.isfile(self.prefix) and not(self.do_overwrite) :
             msg = "Output dset exists: '{}'\n".format(self.prefix)
@@ -237,10 +261,10 @@ Parameters
     # ----- decorators
 
     @property
-    def have_mask(self):
-        """was a mask input? return 0 for no and 1 for yes"""
-        if self.mask : return 1
-        else:          return 0
+    def have_comp_mask(self):
+        """was a comparison mask input? return 0 for no and 1 for yes"""
+        if self.comp_mask : return 1
+        else:               return 0
 
 # ----------------------------------------------------------------------------
 
