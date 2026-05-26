@@ -23,10 +23,6 @@ inset : str
     name of input (anatomical) dset
 prefix : str
     file name for the estimated/calculated pred_mask 
-comp_mask : str
-    an option mask to input for comparison; like, a target mask or something;
-    at present, this is actually pretty much handled by the AFNI program
-    wrapping this library
 checkpoint : str
     name of a checkpoint file to use, i.e., the trained model to apply
 device : str
@@ -47,7 +43,7 @@ VnetTestObj : obj
 
     """
 
-    def __init__(self, inset, prefix='mask_new.nii.gz', comp_mask='',
+    def __init__(self, inset, prefix='mask_new.nii.gz', 
                  checkpoint=None, device='cpu', 
                  do_overwrite=False, verb=1):
 
@@ -62,7 +58,6 @@ VnetTestObj : obj
 
         self.checkpoint       = checkpoint
         self.device           = device
-        self.comp_mask        = comp_mask
         
         # data loaded in
         self.data_orig        = None              # from inset arr
@@ -108,10 +103,6 @@ VnetTestObj : obj
 
             #print("HEY: data_pred_mask dims:", self.data_pred_mask.size())
             
-            # *** maybe load in a comp_mask here, but probably not any
-            # *** more? it would have to go through all the same steps
-            # *** as the T1 dset
-
         return 0
 
     def write_output(self):
@@ -138,13 +129,9 @@ VnetTestObj : obj
         if is_fail :
             return BAD_RETURN
 
-        # load mask (which might not be present)
-        is_fail = self.load_comp_mask()
-        if is_fail :
-            return BAD_RETURN
-
         return 0
 
+    '''  ## NOT using right now
     def load_comp_mask(self):
         """Read in comparison mask data (if present), using nibabel.
 
@@ -163,6 +150,7 @@ VnetTestObj : obj
             self.data_comp_mask = torch.from_numpy(mask_data).unsqueeze(0)
 
         return 0
+'''    
 
     def load_inset(self):
         """Read in inset anatomical dset, using nibabel, and do things like
@@ -222,6 +210,8 @@ VnetTestObj : obj
 
         # check basic requirements
 
+        ab.IP("Prepare vnet")
+
         # (req)
         if not(self.inset) :
             ab.EP("Need to provide an inset")
@@ -241,18 +231,6 @@ VnetTestObj : obj
         if not(self.prefix) : 
             ab.EP("Need to provide a prefix")
 
-        # (opt) mask
-        if self.comp_mask :
-            nfail = au.check_all_dsets_exist([self.comp_mask],
-                                             label='comp_mask',
-                                             verb=self.verb)
-            if nfail :
-                ab.EP("Failed to load comp_mask")
-
-            # comp_mask grid must match inset
-            is_fail = au.check_all_dsets_same_grid([self.inset, self.comp_mask],
-                                                   label='inset and comp_mask')
-
         if os.path.isfile(self.prefix) and not(self.do_overwrite) :
             msg = "Output dset exists: '{}'\n".format(self.prefix)
             msg+= "Either active overwriting, or move/remove dset"
@@ -260,11 +238,11 @@ VnetTestObj : obj
 
     # ----- decorators
 
-    @property
-    def have_comp_mask(self):
-        """was a comparison mask input? return 0 for no and 1 for yes"""
-        if self.comp_mask : return 1
-        else:               return 0
+    ##@property
+    ##def have_comp_mask(self):
+    ##    """was a comparison mask input? return 0 for no and 1 for yes"""
+    ##    if self.comp_mask : return 1
+    ##    else:               return 0
 
 # ----------------------------------------------------------------------------
 
