@@ -123,10 +123,6 @@ VnetTestObj : obj
                               do_rm_exts   = True, 
                               verb         = self.verb )
 
-        #lnu.write_tensor_to_disk_nifti( self.data_pred_mask[0][1], 
-        #                                fname = self.prefix,
-        #                                head  = self.hdr_orig )
-
         return 0
 
     def load_data(self):
@@ -188,12 +184,6 @@ VnetTestObj : obj
             ab.EP1("Could not read in NIFTI: {}".format(self.inset))
             return BAD_RETURN 
 
-        '''
-        # read in and convert data arr to float
-        orig_image = nib.load(self.inset)
-        orig_data  = np.asanyarray(orig_image.dataobj).astype('float32')
-        '''
-
         # simple proc 1: percentile-based thresholding of data
         top99_thresh = np.percentile(orig_data, 99) 
         orig_data[orig_data >top99_thresh] = top99_thresh
@@ -206,11 +196,6 @@ VnetTestObj : obj
             return BAD_RETURN 
 
         self.data_orig = torch.from_numpy(orig_data).unsqueeze(0)   
-
-        '''
-        # ... and also store the dset header
-        self.hdr_orig = orig_image.header.copy()
-        '''
 
         return 0
 
