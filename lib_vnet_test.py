@@ -3,14 +3,18 @@
 import os
 
 import torch
-import numpy                          as np
-import nibabel                        as nib
+import numpy                     as np
+import nibabel                   as nib
 
-from afnipy import afni_base          as ab
-from afnipy import afni_util          as au
+from afnipy import afni_base     as ab
+from afnipy import afni_util     as au
 
-from .      import lib_ml_models      as lmm
-from .      import lib_nibabel_utils  as lnu
+from communifti import lib_nibabel_read_nifti  as lnrn
+from communifti import lib_nibabel_write_nifti as lnwn
+
+from . import lib_ml_models      as lmm
+from . import lib_nibabel_utils  as lnu
+ 
 
 # ============================================================================
 
@@ -110,9 +114,19 @@ VnetTestObj : obj
 
         ab.IP("Writing out pred_mask to file: {}".format(self.prefix))
 
-        lnu.write_tensor_to_disk_nifti( self.data_pred_mask[0][1], 
-                                        fname = self.prefix,
-                                        head  = self.hdr_orig )
+        # convert torch.Tensor to np.array
+        arr   = (self.data_pred_mask[0][1]).cpu().detach().numpy()
+
+        lnwn.BabelNiftiWrite( arr, self.hdr_orig, self.prefix,
+                              map_rules    = "afni_rules",
+                              do_overwrite = self.do_overwrite,
+                              do_rm_exts   = True, 
+                              verb         = self.verb )
+
+        #lnu.write_tensor_to_disk_nifti( self.data_pred_mask[0][1], 
+        #                                fname = self.prefix,
+        #                                head  = self.hdr_orig )
+
         return 0
 
     def load_data(self):
@@ -166,9 +180,19 @@ VnetTestObj : obj
 
         BAD_RETURN = -1
 
+        # read NIFTI to tmp data array (needs proc) and header obj
+        is_fail, orig_data, self.hdr_orig = \
+            lnrn.read_nifti_to_nibabel(self.inset, set_dtype=np.float32, 
+                                       verb=self.verb)
+        if is_fail :
+            ab.EP1("Could not read in NIFTI: {}".format(self.inset))
+            return BAD_RETURN 
+
+        '''
         # read in and convert data arr to float
         orig_image = nib.load(self.inset)
         orig_data  = np.asanyarray(orig_image.dataobj).astype('float32')
+        '''
 
         # simple proc 1: percentile-based thresholding of data
         top99_thresh = np.percentile(orig_data, 99) 
@@ -183,8 +207,10 @@ VnetTestObj : obj
 
         self.data_orig = torch.from_numpy(orig_data).unsqueeze(0)   
 
+        '''
         # ... and also store the dset header
         self.hdr_orig = orig_image.header.copy()
+        '''
 
         return 0
 
