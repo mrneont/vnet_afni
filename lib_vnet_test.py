@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 
 import os
+import platform
+
+# this needs to be done before torch import
+# **** see if this is actually helpful???  ****
+os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'   # 128 KB
 
 import torch
 import numpy                     as np
@@ -14,7 +19,7 @@ from communifti import lib_nibabel_write_nifti as lnwn
 
 from . import lib_ml_models      as lmm
 from . import lib_nibabel_utils  as lnu
- 
+
 
 # ============================================================================
 
@@ -97,16 +102,35 @@ VnetTestObj : obj
     def run_model(self):
         """Run the vnet: calc data_pred_mask"""
 
-        print("++ Run vnet", flush=True)
+        # some things that won't work here:
+        # + not useful bc no nn.Linear (in Conv3d)
+        #   torch.quantization.quantize_dynamic(self.model, 
+        #                                      {torch.nn.Linear},
+        #                                      dtype=torch.qint8)
+        # + 
+        #   memory_format=torch.channels_last
 
-        with torch.no_grad():
-            orig_data = self.data_orig.unsqueeze(1) 
-            
+        print("++ Run vnet", flush=True)
+        
+        # get correct shape for tensor
+        orig_data = self.data_orig.unsqueeze(1).to(self.device)
+
+        self.model.to(self.device)
+        device_model = next(self.model.parameters()).device
+
+        print("HEY: data_orig shape:", orig_data.shape)
+        print("HEY DEVICE DATA :", orig_data.device, flush=True)
+        print("HEY DEVICE MODEL:", device_model, flush=True)
+
+        # useful for inference
+        self.model.eval()
+
+        # this mode is like torch.no_grad(), saves more memory, and is
+        # fine since we will not use grads later
+        with torch.inference_mode():
             # main calculation: estimate the mask with vnet
             self.data_pred_mask = self.model.forward(orig_data)
 
-            #print("HEY: data_pred_mask dims:", self.data_pred_mask.size())
-            
         return 0
 
     def write_output(self):
@@ -203,6 +227,11 @@ VnetTestObj : obj
         """Make announcements, verify that datasets exist"""
 
         ab.IP("Using device: {}".format(self.device))
+
+        # some of this containment of threads is useful, esp. on macOS
+        # *** add opt to control this from command line
+        if platform.system() == 'Darwin':
+            torch.set_num_threads(4)
 
         self.model = lmm.VNet_orig(in_channels = 1, 
                                    num_class   = 2,
