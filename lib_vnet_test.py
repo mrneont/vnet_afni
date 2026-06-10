@@ -276,6 +276,8 @@ VnetTestObj : obj
             msg+= "Either active overwriting, or move/remove dset"
             ab.EP(msg)
 
+        return 0
+
     # ----- decorators
 
     ##@property
