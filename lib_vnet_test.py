@@ -20,6 +20,14 @@ from communifti import lib_nibabel_write_nifti as lnwn
 from . import lib_ml_models      as lmm
 from . import lib_nibabel_utils  as lnu
 
+# ============================================================================
+# NOTES
+
+### memory format
+# channels_last_3d is the 3D equivalent of channels_last.  It tells
+# PyTorch to store feature maps as (N, D, H, W, C) internally, which
+# maps conveniently on macOS ARM (esp. with MPS kernels).  See docs:
+# https://docs.pytorch.org/tutorials/intermediate/memory_format_tutorial.html
 
 # ============================================================================
 
@@ -111,10 +119,7 @@ VnetTestObj : obj
         ab.IP("Run vnet on device: {}".format(self.device))
 
         if self.sysname == "Darwin" :
-            # memory format: channels_last_3d is the 3D equivalent of
-            # channels_last.  It tells PyTorch to store feature maps as
-            # (N, D, H, W, C) internally, which maps conveniently on macOS
-            # ARM (esp. with MPS kernels).
+            # particularly efficient mem format on macOS-mps (see NOTES)
             mem_fmt = torch.channels_last_3d
 
             orig_data = (self.data_orig
