@@ -169,7 +169,7 @@ VnetTestObj : obj
     def write_output(self):
         """Save pred_mask to disk"""
 
-        ab.IP("Writing out pred_mask to file: {}".format(self.prefix))
+        ab.IP("Writing out pred_mask to file:\n{}".format(self.prefix))
 
         # convert torch.Tensor to np.array
         arr = (self.data_pred_mask[0][1]
