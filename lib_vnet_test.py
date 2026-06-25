@@ -42,6 +42,9 @@ prefix : str
     file name for the estimated/calculated pred_mask 
 checkpoint : str
     name of a checkpoint file to use, i.e., the trained model to apply
+num_cpu : int
+    integer to specify number of CPUs to use, via OMP_NUM_THREADS;
+    negative value means to stay with system default
 device : str
     keyword for the device: 'cpu', 'mps', 'cuda', or 'auto'.
     'auto' selects MPS on Apple Silicon, otherwise CPU.
@@ -63,7 +66,7 @@ VnetTestObj : obj
     """
 
     def __init__(self, inset, prefix='mask_new.nii.gz',
-                 checkpoint=None, device='auto',
+                 checkpoint=None, device='auto', num_cpu=-1,
                  do_overwrite=False, do_compile=False, verb=1):
 
         # ----- set up attributes
@@ -74,6 +77,7 @@ VnetTestObj : obj
 
         self.checkpoint       = checkpoint
         self.device           = device         # checked (maybe changed) below
+        self.num_cpu          = num_cpu        # number of CPUs, if >0
         self.sysname          = None           # platform system
 
         self.data_orig        = None
@@ -92,6 +96,9 @@ VnetTestObj : obj
         # ----- take action(s)
 
         tmp = self.basic_setup()
+        if tmp : return
+
+        tmp = self.set_cpus()
         if tmp : return
 
         tmp = self.load_data()
@@ -239,26 +246,48 @@ VnetTestObj : obj
         self.data_orig = torch.from_numpy(orig_data).unsqueeze(0)
         return 0
 
-    def load_model(self):
-        """Make announcements, verify that datasets exist; 
-        optionally compile the model."""
+    def set_cpus(self):
+        """Set how many CPUs to use. There are different ways to specify; can
+        also do nothing and just let system decide.
+        """
 
-        ab.IP("Using device: {}".format(self.device))
+        if self.num_cpu > 0 :
+            # user-specified route
+
+            torch.set_num_threads(self.num_cpu)
+            torch.set_num_interop_threads(self.num_cpu)
+
+            if self.verb:
+                ab.IP("User opt: using {} CPU thread(s)".format(self.num_cpu))
+
+            return 0
 
         if self.sysname == 'Darwin':
+            # if on macOS: estimate based on number of performance cores
+
             # M-series chips have 4–12 performance cores; use them all.
             # torch.get_num_threads() respects PYTORCH_CPU_ALLOC_CONF if set,
             # so only override when the user has not already done so.
             n_perf_cores = _count_arm_perf_cores()
             torch.set_num_threads(n_perf_cores)
+
             if self.verb:
                 ab.IP("macOS: using {} CPU thread(s)".format(n_perf_cores))
-        #else:
-        #    n_cores = 4  ### *** CHOOSE BETTER WAY TO SET
-        #    torch.set_num_threads(n_cores)
-        #    torch.set_num_interop_threads(n_cores)
-        #    if self.verb:
-        #        ab.IP("Using {} CPU thread(s)".format(n_cores))
+
+            return 0
+
+        # default
+        num_threads = torch.get_num_threads()
+        if self.verb:
+            ab.IP("Default: using {} CPU thread(s)".format(num_threads))
+
+        return 0
+
+    def load_model(self):
+        """Make announcements, verify that datasets exist; 
+        optionally compile the model."""
+
+        ab.IP("Using device: {}".format(self.device))
 
         self.model = lmm.VNet_orig(in_channels = 1, 
                                    num_class   = 2,
