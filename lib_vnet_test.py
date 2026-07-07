@@ -294,7 +294,10 @@ VnetTestObj : obj
                                    wt_norm     = 0, 
                                    verb        = self.verb)
 
+        # use weights_only=True simply to avoid warning; should not
+        # affect results; is becoming default soon, anyways
         tload = torch.load(self.checkpoint,
+                           weights_only=True,
                            map_location = torch.device(self.device))
 
         self.model.load_state_dict(tload, strict=False)
