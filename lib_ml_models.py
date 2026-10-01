@@ -8,8 +8,6 @@ import torch.nn as nn
 import numpy as np
 from torch.nn.utils import weight_norm
 
-import gc
-
 # ==========================================================================
 '''
 +   This code is the pytorch implementation of the Vnet neural network architecture proposed in the 
@@ -255,7 +253,15 @@ class VNet_orig(nn.Module):
     """
 
     def __init__(self, in_channels, num_class, wt_norm, verb):
+        # [pt: 2026-10-01] The in_channels parameter is actually
+        # ignored; below, in defining self.down1, nn.Conv3d's first
+        # argument is a hardcoded 1, instead of in_channels; below in
+        # the forward method, there is also a hardcoded usage of 1
+        # channel, instead of in_channels. In future updates, this may
+        # matter more
         super(VNet_orig, self).__init__()
+
+        self.verb = verb
 
         #                -- ENCODER --
         #  input layer : down1 = (Conv3d, ReLu)
@@ -316,33 +322,45 @@ class VNet_orig(nn.Module):
         """Forward pass.
         """
 
-        print("++ encode stage: init", flush=True)
+        if self.verb :
+            print("++ encode stage: init", flush=True)
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
 
         # start freeing unnecessary bits when done with them
-        del x    #;    gc.collect()
+        del x
 
         down2 = self.down2(down1)
         down3 = self.down3(down2)
         down4 = self.down4(down3)
         down5 = self.down5(down4) 
        
-        print("++ decode stage: 1/5",  flush=True)
-        up1 = self.up1(down5, down4);  del down5, down4  #;  gc.collect()
+        if self.verb :
+            print("++ decode stage: 1/5",  flush=True)
+        up1 = self.up1(down5, down4)  
+        del down5, down4
 
-        print("++ decode stage: 2/5",  flush=True)
-        up2 = self.up2(up1,   down3);  del up1,   down3  #;  gc.collect()
+        if self.verb :
+            print("++ decode stage: 2/5",  flush=True)
+        up2 = self.up2(up1, down3)
+        del up1, down3
 
-        print("++ decode stage: 3/5",  flush=True)
-        up3 = self.up3(up2,   down2);  del down2, up2    #;    gc.collect()
+        if self.verb :
+            print("++ decode stage: 3/5",  flush=True)
+        up3 = self.up3(up2, down2)
+        del up2, down2
 
-        print("++ decode stage: 4/5",  flush=True)
-        up4 = self.up4(up3,   down1);  del up3,   down1  #;  gc.collect()
+        if self.verb :
+            print("++ decode stage: 4/5",  flush=True)
+        up4 = self.up4(up3, down1)
+        del up3, down1
 
-        print("++ decode stage: 5/5",  flush=True)
-        up5 = self.up5(up4);           del up4           #;  gc.collect()
+        if self.verb : 
+            print("++ decode stage: 5/5",  flush=True)
+        up5 = self.up5(up4)
+        del up4
 
-        print("++ decode stage: done", flush=True)
+        if self.verb :
+            print("++ decode stage: done", flush=True)
 
 
         if 0 :
