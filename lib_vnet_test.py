@@ -8,7 +8,6 @@ os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'   # 128 KB
 
 import torch
 import numpy                     as np
-import nibabel                   as nib
 
 from afnipy import afni_base      as ab
 from afnipy import afni_util      as au
@@ -18,7 +17,6 @@ from communifti import lib_nibabel_read_nifti  as lnrn
 from communifti import lib_nibabel_write_nifti as lnwn
 
 from . import lib_ml_models      as lmm
-from . import lib_nibabel_utils  as lnu
 
 # ============================================================================
 # NOTES
@@ -248,40 +246,12 @@ VnetTestObj : obj
 
     def set_cpus(self):
         """Set how many CPUs to use. There are different ways to specify; can
-        also do nothing and just let system decide.
-        """
+        also do nothing and just let system decide. This is managed in
+        the torch-related library in AFNI."""
 
-        if self.num_cpu > 0 :
-            # user-specified route
+        is_fail = ltu.set_torch_cpus(num_cpu=self.num_cpu, verb=self.verb)
 
-            torch.set_num_threads(self.num_cpu)
-            torch.set_num_interop_threads(self.num_cpu)
-
-            if self.verb:
-                ab.IP("User opt: using {} CPU thread(s)".format(self.num_cpu))
-
-            return 0
-
-        if self.sysname == 'Darwin':
-            # if on macOS: estimate based on number of performance cores
-
-            # M-series chips have 4–12 performance cores; use them all.
-            # torch.get_num_threads() respects PYTORCH_CPU_ALLOC_CONF if set,
-            # so only override when the user has not already done so.
-            n_perf_cores = _count_arm_perf_cores()
-            torch.set_num_threads(n_perf_cores)
-
-            if self.verb:
-                ab.IP("macOS: using {} CPU thread(s)".format(n_perf_cores))
-
-            return 0
-
-        # default
-        num_threads = torch.get_num_threads()
-        if self.verb:
-            ab.IP("Default: using {} CPU thread(s)".format(num_threads))
-
-        return 0
+        return is_fail
 
     def load_model(self):
         """Make announcements, verify that datasets exist; 
@@ -364,23 +334,6 @@ VnetTestObj : obj
     ## none at present
 
 # ----------------------------------------------------------------------------
-
-def _count_arm_perf_cores() -> int:
-    """Return the number of performance cores on Apple Silicon.
-
-    Uses sysctl if available (macOS); falls back to logical CPU count.
-    On M1 that's 4 P-cores; on M1 Pro/Max/Ultra it's 8–16.
-    """
-    try:
-        import subprocess
-        out = subprocess.check_output(
-            ['sysctl', '-n', 'hw.perflevel0.logicalcpu'],
-            stderr=subprocess.DEVNULL
-        )
-        return max(1, int(out.strip()))
-    except Exception:
-        return max(1, os.cpu_count() or 4)
-
 
 def z_scoring(img):
 
