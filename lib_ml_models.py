@@ -1,8 +1,12 @@
+import os
+# this needs to be done before torch import
+# *** decide about keeping this
+os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'   # 128 KB
+
 import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn.utils import weight_norm
-
 
 # ==========================================================================
 '''
@@ -249,7 +253,15 @@ class VNet_orig(nn.Module):
     """
 
     def __init__(self, in_channels, num_class, wt_norm, verb):
+        # [pt: 2026-10-01] The in_channels parameter is actually
+        # ignored; below, in defining self.down1, nn.Conv3d's first
+        # argument is a hardcoded 1, instead of in_channels; below in
+        # the forward method, there is also a hardcoded usage of 1
+        # channel, instead of in_channels. In future updates, this may
+        # matter more
         super(VNet_orig, self).__init__()
+
+        self.verb = verb
 
         #                -- ENCODER --
         #  input layer : down1 = (Conv3d, ReLu)
@@ -307,17 +319,49 @@ class VNet_orig(nn.Module):
         '''
          
     def forward(self, x):
+        """Forward pass.
+        """
+
+        if self.verb :
+            print("++ encode stage: init", flush=True)
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
+
+        # start freeing unnecessary bits when done with them
+        del x
+
         down2 = self.down2(down1)
         down3 = self.down3(down2)
         down4 = self.down4(down3)
         down5 = self.down5(down4) 
        
-        up1 = self.up1(down5, down4)
+        if self.verb :
+            print("++ decode stage: 1/5",  flush=True)
+        up1 = self.up1(down5, down4)  
+        del down5, down4
+
+        if self.verb :
+            print("++ decode stage: 2/5",  flush=True)
         up2 = self.up2(up1, down3)
+        del up1, down3
+
+        if self.verb :
+            print("++ decode stage: 3/5",  flush=True)
         up3 = self.up3(up2, down2)
+        del up2, down2
+
+        if self.verb :
+            print("++ decode stage: 4/5",  flush=True)
         up4 = self.up4(up3, down1)
+        del up3, down1
+
+        if self.verb : 
+            print("++ decode stage: 5/5",  flush=True)
         up5 = self.up5(up4)
+        del up4
+
+        if self.verb :
+            print("++ decode stage: done", flush=True)
+
 
         if 0 :
             print('\n')
