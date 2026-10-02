@@ -14,13 +14,12 @@ from    afnipy import afni_base          as ab
 from    afnipy import afni_util          as au
 from    afnipy import lib_torch_util     as ltu
 
-from    afnipy import lib_arch_vnet_defs as DEF
-
-from vnet_afni import lib_ml_models     as lmm
-from vnet_afni import lib_ml_cerebrum   as lmc
+from vnet_afni import lib_arch_vnet_defs as DEF
+from vnet_afni import lib_ml_models      as lmm
+from vnet_afni import lib_ml_cerebrum    as lmc
+from vnet_afni import lib_fp16util       as lfp
 
 import torch
-from vnet_afni import lib_fp16util      as lfp
 
 # ============================================================================
 

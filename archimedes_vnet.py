@@ -6,12 +6,12 @@
 import sys, os
 
 # AFNI libraries
-from   afnipy import option_list   as OL
-from   afnipy import afni_util     as UTIL
-from   afnipy import afni_base     as BASE
+from    afnipy import option_list   as OL
+from    afnipy import afni_util     as UTIL
+from    afnipy import afni_base     as BASE
 
-from   afnipy import lib_arch_vnet_defs as LAVD
-from   afnipy import lib_arch_vnet_run  as LAVR
+from vnet_afni import lib_arch_vnet_defs as LAVD
+from vnet_afni import lib_arch_vnet_run  as LAVR
 
 # ----------------------------------------------------------------------
 # globals
