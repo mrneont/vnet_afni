@@ -44,6 +44,12 @@ LIST_loss_func = [
 ]
 STR_loss_func = ', '.join(LIST_loss_func)
 
+# ... and a related list: each loss_func that uses weights
+LIST_loss_func_w_weight = [
+    "WtSorensen_Dice",
+]
+STR_loss_func_w_weight = ', '.join(LIST_loss_func_w_weight)
+
 # List of available devices to use
 LIST_device = [
     'auto',     # default
@@ -52,8 +58,6 @@ LIST_device = [
     'mps',   # mac 
 ]
 STR_device  = ', '.join(LIST_device)
-
-
 
 # ============================================================================
 # default values, parameters and settings for the main obj

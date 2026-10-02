@@ -24,6 +24,7 @@ g_help_dict   = {
     'STR_scale_mode'   : LAVD.STR_scale_mode,
     'STR_precision'    : LAVD.STR_precision,
     'STR_loss_func'    : LAVD.STR_loss_func,
+    'STR_loss_func_w_weight' : LAVD.STR_loss_func_w_weight,
     'STR_device'       : LAVD.STR_device,
 }
 
@@ -66,7 +67,10 @@ Usage ~1~
 
 -loss_func LF  :choose a particular loss function for training, from among
                 this list:
-                  {STR_loss_func}
+                    {STR_loss_func}
+                NB: some loss_func types require a weight dataset for each
+                mask; those are:
+                    {STR_loss_func_w_weight}
                 (def: {loss_func})
 
 -device D      :choose a particular device to run the training on, from among
@@ -76,17 +80,17 @@ Usage ~1~
 
 -architecture AR :choose a particular architecture for training, from among
                 this list:
-                  {STR_architecture}
+                    {STR_architecture}
                 (def: {architecture})
 
 -optimizer OP  :choose a particular optimizer for training, from among
                 this list:
-                  {STR_optimizer}
+                    {STR_optimizer}
                 (def: {optimizer})
 
 -precision PR  :choose a particular precision for training, from among
                 this list:
-                  {STR_precision}
+                    {STR_precision}
                 (def: {precision})
 
 -seed S        :set a particular seed for any randomization steps
@@ -95,7 +99,7 @@ Usage ~1~
 -num_cpu NCPU  :number of CPU threads to use during skullstripping; 
                 a negative value means that the system decides.
                 NB: to know how many CPUs are available, you can run:
-                     afni_system_check.py -disp_num_cpu
+                    afni_system_check.py -disp_num_cpu
                 (def: {num_cpu})
 
 -restart_checkpoint RC 
