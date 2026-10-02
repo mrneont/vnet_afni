@@ -12,6 +12,7 @@ import platform
 
 from   afnipy import afni_base          as ab
 from   afnipy import afni_util          as au
+from   afnipy import lib_torch_util     as ltu
 
 from   afnipy import lib_arch_vnet_defs as DEF
 
@@ -56,6 +57,11 @@ inobj : InOpts object
         # control variables
         self.num_epoch       = DEF.DOPTS['num_epoch']
         self.learn_rate      = DEF.DOPTS['learn_rate']
+        self.architecture    = DEF.DOPTS['architecture']
+        self.optimizer       = DEF.DOPTS['optimizer']
+        self.scale_mode      = DEF.DOPTS['scale_mode']
+        self.architecture    = DEF.DOPTS['architecture']
+        self.precision       = DEF.DOPTS['precision']
         self.loss_func       = DEF.DOPTS['loss_func']
         self.device          = DEF.DOPTS['device']
         self.seed            = DEF.DOPTS['seed']

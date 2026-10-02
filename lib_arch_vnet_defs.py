@@ -80,7 +80,7 @@ DOPTS = {
     'batch_size'           : 1,
     'do_weight_norm'       : 'No',
     'do_shuffle'           : 'Yes',  
-    'restart_checkpoint'   : '',
+    'restart_checkpoint'   : None,
     'save_checkpoint_rate' : None,
     'save_checkpoint_list' : [],
     'save_mask_rate'       : None,
