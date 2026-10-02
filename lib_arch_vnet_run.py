@@ -19,6 +19,9 @@ from    afnipy import lib_arch_vnet_defs as DEF
 from vnet_afni import lib_ml_models     as lmm
 from vnet_afni import lib_ml_cerebrum   as lmc
 
+import torch
+from vnet_afni import lib_fp16util      as lfp
+
 # ============================================================================
 
 # ----------------------------------------------------------------------------
@@ -405,13 +408,14 @@ inobj : InOpts object
         return 0
 
     def make_net(self):
-        """Create the network with the desired model."""
+        """Create the network with the desired model. This function will also
+        load a restart_checkpoint, if that has been provided"""
 
         BAD_RETURN = -1
 
         if self.architecture == 'vnet_orig' :
             try:
-                net = lmm.VNet_orig(
+                self.net = lmm.VNet_orig(
                     in_channels = self.n_input_channel,
                     num_class   = self.num_class,
                     wt_norm     = self.do_weight_norm, 
@@ -423,7 +427,7 @@ inobj : InOpts object
 
         elif self.architecture == 'Cerebrum' :
             try:
-                net = lmc.Cerebrum(
+                self.net = lmc.Cerebrum(
                     in_channels = self.n_input_channel,
                     num_class   = self.num_class,
                     wt_norm     = self.do_weight_norm, 
@@ -439,6 +443,32 @@ inobj : InOpts object
             msg+= "{}".format(DEF.STR_architecture)
             ab.EP1(msg)
             return BAD_RETURN
+
+        # load "restart" checkpoint?
+        if self.restart_checkpoint :
+            if not(os.path.isfile(self.restart_checkpoint)) :
+                msg = "Cannot find restart checkpoint to load: "
+                msg+= "{}".format(self.restart_checkpoint)
+                ab.EP1(msg)
+                return BAD_RETURN
+
+            try: 
+                self.net.load_state_dict(
+                    torch.load(self.restart_checkpoint), 
+                    strict=False,
+                )
+            except:
+                msg = "Failed to load checkpoint: "
+                msg+= "{}".format(self.restart_checkpoint)
+                ab.EP1(msg)
+                return BAD_RETURN
+
+        # move the model to the device
+        self.net.to(self.device)
+
+        # *** verify that this is possible? ***
+        if self.device == 'cuda' and self.precision == 'half' :
+            self.net = lfp.network_to_half(self.net)
 
         return 0
 
