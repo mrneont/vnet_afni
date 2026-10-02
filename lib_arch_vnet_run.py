@@ -75,6 +75,7 @@ inobj : InOpts object
         self.save_mask_rate  = DEF.DOPTS['save_mask_rate']
         self.save_mask_list  = DEF.DOPTS['save_mask_list']
 
+        self.loss_uses_weight = False         # some loss_func need a wt dset
         self.sysname         = None           # platform system
 
         # ----- take action(s)
@@ -87,10 +88,8 @@ inobj : InOpts object
             tmp = self.basic_setup()
             if tmp : return
 
-            ##### **** ADD THIS WITHIN LTU, and update
-            ##### **** lib_vnet_test.py similarly
-            ###tmp = self.set_cpus()
-            ###if tmp : return
+            tmp = self.set_device_and_cpus()
+            if tmp : return
 
             tmp = self.make_workdir()
             if tmp : return
@@ -214,6 +213,7 @@ inobj : InOpts object
                 msg+= "{}".format(DEF.STR_architecture)
                 ab.EP(msg)
 
+        # determine the loss func
         if self.loss_func : 
             if self.loss_func not in DEF.LIST_loss_func :
                 msg = "Invalid value after -loss_func: "
@@ -221,6 +221,9 @@ inobj : InOpts object
                 msg+= "Please selection from this list:\n"
                 msg+= "{}".format(DEF.STR_loss_func)
                 ab.EP(msg)
+        # ... and check whether it will need a weight
+        if self.loss_func in DEF.LIST_loss_func_w_weight :
+            self.loss_uses_weight = True
 
         if self.scale_mode : 
             if self.scale_mode not in DEF.LIST_scale_mode :
@@ -328,7 +331,7 @@ inobj : InOpts object
         # store platform system name 
         self.sysname = platform.system()
 
-        # setup device (may replace user-entered parameter
+        # setup device
         if self.device : 
             if self.device not in DEF.LIST_device :
                 msg = "Invalid value after -device: "
@@ -336,11 +339,6 @@ inobj : InOpts object
                 msg+= "Please selection from this list:\n"
                 msg+= "{}".format(DEF.STR_device)
                 ab.EP(msg)
-        is_fail, self.device = ltu.select_device_general(dev_in=self.device,
-                                                         verb=self.verb)
-        if is_fail :
-            ab.EP1("Failed select device")
-            return BAD_RETURN
 
         # generate basic items
 
@@ -357,6 +355,29 @@ inobj : InOpts object
         self.do_shuffle     = au.convert_to_bool_yn10(self.do_shuffle)
         self.do_clean       = au.convert_to_bool_yn10(self.do_clean)
         self.do_log         = au.convert_to_bool_yn10(self.do_log)
+
+        return 0
+
+    def set_device_and_cpus(self):
+        """Choose the device to be used; this might override the user's
+        choice, based on the realities of the system. 
+
+        Also set how many CPUs to use. There are different ways to
+        specify; can also do nothing and just let system decide. This
+        is managed in the torch-related library in AFNI."""
+
+        BAD_RETURN = -1
+
+        is_fail, self.device = ltu.select_device_general(dev_in=self.device,
+                                                         verb=self.verb)
+        if is_fail :
+            ab.EP1("Failed select device")
+            return BAD_RETURN
+
+        is_fail = ltu.set_torch_cpus(num_cpu=self.num_cpu, verb=self.verb)
+        if is_fail :
+            ab.EP1("Failed select num_cpu")
+            return BAD_RETURN
 
         return 0
 
