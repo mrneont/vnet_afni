@@ -89,8 +89,9 @@ inobj : InOpts object
         self.n_input_channel = 1        # single vol input
         self.num_class       = 2        # num channels out (binary classifier)
 
-        # the (v)net model itself
-        self.net             = None
+        # model attributes, set/made/loaded below
+        self.net             = None     # the (v)net model itself
+        self.net_optim       = None     # optimizer-in-action for network
         
 
 
@@ -108,6 +109,9 @@ inobj : InOpts object
             if tmp : return
 
             tmp = self.make_net()
+            if tmp : return
+
+            tmp = self.load_optimizer()
             if tmp : return
 
             tmp = self.make_workdir()
@@ -411,6 +415,9 @@ inobj : InOpts object
         """Create the network with the desired model. This function will also
         load a restart_checkpoint, if that has been provided"""
 
+        if self.verb :
+            ab.IP("Make network architecture: {}".format(self.architecture))
+
         BAD_RETURN = -1
 
         if self.architecture == 'vnet_orig' :
@@ -469,6 +476,40 @@ inobj : InOpts object
         # *** verify that this is possible? ***
         if self.device == 'cuda' and self.precision == 'half' :
             self.net = lfp.network_to_half(self.net)
+
+        return 0
+
+    def load_optimizer(self):
+        """Setup the optimizer, using network parameters."""
+
+        if self.verb :
+            ab.IP("Load optimizer: {}".format(self.optimizer))
+
+        BAD_RETURN = -1
+
+        # *** Question: original implementation has 'Adam16' as a
+        # *** choice of optimizer, but never any condition branch
+        # *** using it?
+
+        if self.optimizer == 'Adam':
+            if self.precision in ['half', 'mixed'] : 
+                self.net_optim = torch.optim.Adam(
+                    self.net.parameters(), 
+                    lr  = self.learn_rate,
+                    eps = DEF.adam_nonfull_prec,
+                )
+            else : # full precision
+                self.net_optim = torch.optim.Adam(
+                    self.net.parameters(), 
+                    lr  = self.learn_rate,
+                )
+
+        else:
+            msg = "Unknown optimizer: {}\n".format(self.optimizer)
+            msg+= "Try again, using one from the allowed list:\n"
+            msg+= "{}".format(DEF.STR_optimizer)
+            ab.EP1(msg)
+            return BAD_RETURN
 
         return 0
 

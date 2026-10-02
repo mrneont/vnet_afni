@@ -15,12 +15,19 @@ LIST_architecture  = [
 ]
 STR_architecture = ', '.join(LIST_architecture)
 
+# -----
+
 # List of all possible optimizers
 LIST_optimizer = [
     'Adam',              # default
     'Adam16',
 ]
 STR_optimizer = ', '.join(LIST_optimizer)
+
+# default epsilon value for Adam optimizer, if precision if half or mixed
+EPS_adam_nonfull_prec = 1.0e-4
+
+# -----
 
 # List of all possible data normalizations
 LIST_scale_mode = [
@@ -29,12 +36,16 @@ LIST_scale_mode = [
 ]
 STR_scale_mode = ', '.join(LIST_scale_mode)
 
+# -----
+
 LIST_precision = [
     'full',              # default
     'half',
     'mixed',
 ]
 STR_precision = ', '.join(LIST_precision)
+
+# -----
 
 # List of all possible loss functions
 LIST_loss_func = [
@@ -49,6 +60,8 @@ LIST_loss_func_w_wt = [
     "WtSorensen_Dice",
 ]
 STR_loss_func_w_wt = ', '.join(LIST_loss_func_w_wt)
+
+# -----
 
 # List of available devices to use
 LIST_device = [
