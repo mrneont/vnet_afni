@@ -24,7 +24,7 @@ g_help_dict   = {
     'STR_scale_mode'   : LAVD.STR_scale_mode,
     'STR_precision'    : LAVD.STR_precision,
     'STR_loss_func'    : LAVD.STR_loss_func,
-    'STR_loss_func_w_weight' : LAVD.STR_loss_func_w_weight,
+    'STR_loss_func_w_wt' : LAVD.STR_loss_func_w_wt,
     'STR_device'       : LAVD.STR_device,
 }
 
@@ -70,7 +70,7 @@ Usage ~1~
                     {STR_loss_func}
                 NB: some loss_func types require a weight dataset for each
                 mask; those are:
-                    {STR_loss_func_w_weight}
+                    {STR_loss_func_w_wt}
                 (def: {loss_func})
 
 -device D      :choose a particular device to run the training on, from among

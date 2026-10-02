@@ -10,11 +10,14 @@
 import sys, os, copy, glob
 import platform
 
-from   afnipy import afni_base          as ab
-from   afnipy import afni_util          as au
-from   afnipy import lib_torch_util     as ltu
+from    afnipy import afni_base          as ab
+from    afnipy import afni_util          as au
+from    afnipy import lib_torch_util     as ltu
 
-from   afnipy import lib_arch_vnet_defs as DEF
+from    afnipy import lib_arch_vnet_defs as DEF
+
+from vnet_afni import lib_ml_models     as lmm
+from vnet_afni import lib_ml_cerebrum   as lmc
 
 # ============================================================================
 
@@ -75,8 +78,18 @@ inobj : InOpts object
         self.save_mask_rate  = DEF.DOPTS['save_mask_rate']
         self.save_mask_list  = DEF.DOPTS['save_mask_list']
 
-        self.loss_uses_weight = False         # some loss_func need a wt dset
-        self.sysname         = None           # platform system
+        # things created in the processing/training setup
+        self.sysname         = None     # platform system
+        self.loss_uses_wt    = False    # some loss_func need a wt dset
+
+        # model parameters: here, just for binary classification from 1 vol
+        self.n_input_channel = 1        # single vol input
+        self.num_class       = 2        # num channels out (binary classifier)
+
+        # the (v)net model itself
+        self.net             = None
+        
+
 
         # ----- take action(s)
 
@@ -89,6 +102,9 @@ inobj : InOpts object
             if tmp : return
 
             tmp = self.set_device_and_cpus()
+            if tmp : return
+
+            tmp = self.make_net()
             if tmp : return
 
             tmp = self.make_workdir()
@@ -222,8 +238,8 @@ inobj : InOpts object
                 msg+= "{}".format(DEF.STR_loss_func)
                 ab.EP(msg)
         # ... and check whether it will need a weight
-        if self.loss_func in DEF.LIST_loss_func_w_weight :
-            self.loss_uses_weight = True
+        if self.loss_func in DEF.LIST_loss_func_w_wt :
+            self.loss_uses_wt = True
 
         if self.scale_mode : 
             if self.scale_mode not in DEF.LIST_scale_mode :
@@ -368,15 +384,60 @@ inobj : InOpts object
 
         BAD_RETURN = -1
 
+        # get/set the device
         is_fail, self.device = ltu.select_device_general(dev_in=self.device,
                                                          verb=self.verb)
         if is_fail :
             ab.EP1("Failed select device")
             return BAD_RETURN
 
+        # ... and apparently an extra consideration
+        if self.device == 'cpu' and self.precision == 'half' :
+            ab.EP1("Half precision is not supported on CPU devices")
+            return BAD_RETURN
+
+        # get/set number of CPUs to use
         is_fail = ltu.set_torch_cpus(num_cpu=self.num_cpu, verb=self.verb)
         if is_fail :
             ab.EP1("Failed select num_cpu")
+            return BAD_RETURN
+
+        return 0
+
+    def make_net(self):
+        """Create the network with the desired model."""
+
+        BAD_RETURN = -1
+
+        if self.architecture == 'vnet_orig' :
+            try:
+                net = lmm.VNet_orig(
+                    in_channels = self.n_input_channel,
+                    num_class   = self.num_class,
+                    wt_norm     = self.do_weight_norm, 
+                    verb        = self.verb
+                )
+            except:
+                ab.EP1("Failed to make network: {}".format(architecture))
+                return BAD_RETURN
+
+        elif self.architecture == 'Cerebrum' :
+            try:
+                net = lmc.Cerebrum(
+                    in_channels = self.n_input_channel,
+                    num_class   = self.num_class,
+                    wt_norm     = self.do_weight_norm, 
+                    verb        = self.verb
+                )
+            except:
+                ab.EP1("Failed to make network: {}".format(architecture))
+                return BAD_RETURN
+
+        else:
+            msg = "Unknown architecture: {}\n".format(self.architecture)
+            msg+= "Try again, using one from the allowed list:\n"
+            msg+= "{}".format(DEF.STR_architecture)
+            ab.EP1(msg)
             return BAD_RETURN
 
         return 0
