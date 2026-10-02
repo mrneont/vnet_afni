@@ -43,8 +43,6 @@ Usage ~1~
 
 -outdir OUTDIR :(req) name of the output directory of training data
 
--prefix PREFIX :(req) name of output dset ***STILL KEEP??***
-
 -num_epoch NE  :number of epochs to use for training; these start counting 
                 at 1 
                 (def: {num_epoch})
@@ -210,10 +208,9 @@ checks happen in a subsequent object.
         self.do_log          = None
 
         # main data variables
-        self.inset           = None
-        self.prefix          = None
-        self.workdir         = None
+        self.indir           = None
         self.outdir          = None
+        self.workdir         = None
 
         # control variables
         self.architecture    = None
@@ -271,9 +268,6 @@ checks happen in a subsequent object.
                         helpstr='name of output directory')
 
         # optional parameters
-
-        self.valid_opts.add_opt('-prefix', 1, [], 
-                        helpstr='name of output dataset')
 
         self.valid_opts.add_opt('-workdir', 1, [], 
                         helpstr='name of workdir (no path)')
@@ -410,12 +404,6 @@ checks happen in a subsequent object.
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
                 self.outdir = val
-
-            elif opt.name == '-prefix':
-                val, err = uopts.get_string_opt('', opt=opt)
-                if val is None or err:
-                    BASE.EP(err_base + opt.name)
-                self.prefix = val
 
             elif opt.name == '-workdir':
                 val, err = uopts.get_string_opt('', opt=opt)
@@ -554,18 +542,19 @@ checks happen in a subsequent object.
         return 0
 
     def check_options(self):
-        """perform any final tests before execution"""
+        """perform any final tests before execution; most checks are done
+        in the main object"""
 
         if self.verb > 1:
             BASE.IP("Begin processing options")
 
         # required opt
-        if self.inset is None :
-            BASE.EP1("missing -inset option")
+        if self.indir is None :
+            BASE.EP1("missing -indir option")
             return -1
 
-        if self.prefix is None:
-            BASE.EP1("missing -prefix option")
+        if self.outdir is None:
+            BASE.EP1("missing -outdir option")
             return -1
 
         return 0

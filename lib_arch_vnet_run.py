@@ -50,7 +50,6 @@ inobj : InOpts object
 
         # main data variables
         self.indir           = DEF.DOPTS['indir']
-        self.prefix          = DEF.DOPTS['prefix']
         self.outdir          = DEF.DOPTS['outdir']     # None or str
         self.workdir         = DEF.DOPTS['workdir']
 
@@ -129,8 +128,6 @@ inobj : InOpts object
             self.indir = io.indir
         if io.outdir is not None :
             self.outdir = io.outdir
-        if io.prefix is not None :
-            self.prefix = io.prefix
         if io.workdir is not None :
             self.workdir = io.workdir
 
