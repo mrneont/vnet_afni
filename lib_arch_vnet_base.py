@@ -9,6 +9,135 @@ from afnipy import afni_base as ab
 
 # ============================================================================
 
+class ArchRootTree:
+    """Object for managing the input tree for running both training and
+validation of the VNET. This would likely be the indir for
+archimedes_vnet.py, and would also likely contain two directories of
+split data (for training and validation).  This object defines and checks for
+expected directories and datasets.
+
+Parameters
+----------
+dir_root : str
+    the root directory of the data tree (contains data split directories)
+has_mask : bool
+    should the split data be checked for a directory of mask datasets ('mask')?
+has_wtds : bool
+    should the split data be checked for a directory of weight datasets ('wtds')?
+verb : int
+    verbosity level
+
+    """
+
+    def __init__(self, dir_root, has_mask=True, has_wtds=False, verb=1):
+
+        # ----- set up attributes
+
+        # main input variables
+        self.status        = 0                           # not used
+        self.verb          = verb
+
+        self.has_mask      = has_mask
+        self.has_wtds      = has_wtds
+        self.all_label     = []
+
+        # need to know present working dir, for hopping around
+        self.pwd           = None
+
+        # top dir (all subdirs of interest are decorators)
+        self.dir_root      = dir_root
+
+        # dset names: store in a dictionary, where each subdir is a key
+        self.all_split               = {}
+        self.all_split['training']   = None
+        self.all_split['validation'] = None
+
+        # ----- take action(s)
+
+        tmp = self.basic_setup()
+        if tmp : return
+
+        tmp = self.check_tree_dirs()
+        if tmp : return
+
+        tmp = self.load_split_trees()
+        if tmp : return
+
+    # ----- methods
+
+    def basic_setup(self):
+        """Simple string formatting, like: make sure not '/' at end"""
+
+        # need to know present working dir
+        self.pwd = os.getcwd()
+
+        # don't want backslashes, for aesthetics
+        self.dir_root.rstrip('/')
+
+        return 0
+
+    def check_tree_dirs(self):
+        """Go through a series of directory checks about what should exist in
+        the tree"""
+
+        if self.verb :
+            ab.IP("Check root-level tree dirs exist")
+
+        BAD_RETURN = -1
+
+        if not(os.path.isdir(self.dir_root)) :
+            msg = "Tree check, no dir_root: "
+            msg+= "{}".format(self.dir_split)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        for split in self.all_split :
+            ddd = self.get_splitdir_path(split)
+            if not(os.path.isdir(ddd)) :
+                msg = "Tree check, no dir_{}: {}".format(split, ddd)
+                ab.EP1(msg)
+                return BAD_RETURN
+
+        return 0
+
+    def load_split_trees(self):
+        """Load in the split trees, and make sure they valid"""
+
+        if self.verb :
+            ab.IP("Load in split trees with data")
+
+        BAD_RETURN = -1
+
+        for split in self.all_split :
+            self.all_split[split] = \
+                ArchSplitTree(
+                    self.get_splitdir_path(split),
+                    has_mask = self.has_mask, 
+                    has_wtds = self.has_wtds,
+                    verb     = self.verb
+                )
+            if isinstance(self.all_split[split], int) :
+                msg = "Failed to load split tree for: {}".format(split)
+                ab.EP1(msg)
+                return BAD_RETURN
+
+        return 0
+
+    def get_splitdir_path(self, split):
+        """Simply append dir-of-interest, as defined by the str split, to
+        dir_root (no existence checked)"""
+
+        return self.dir_root + '/' + split
+
+    def count_splitdir_files(self, split):
+        """How many files exist in a subdir (as defined by the str
+        'label')?"""
+
+        return len(self.all_split[split])
+
+
+# ============================================================================
+
 class ArchSplitTree:
     """Object for managing the tree of data splits, like training and
 validation.  This defines and checks for expected directories and
@@ -17,24 +146,37 @@ datasets.
 If has_wtds is True, then we search for a directory containing weight
 datasets for each input dset.
 
-The basic DATA_DIR directory structure looks like this:
+The basic data split directory structure looks like this (but likely
+with more sub*.nii.gz datasets):
 
     dir_split/
     `-- orig/
+        `-- sub-000_orig.nii.gz
+        `-- sub-001_orig.nii.gz
 
 If has_mask is True (which is the case for training and validation),
 then it would look like this:
 
     dir_split/
     `-- mask/
+        `-- sub-000_mask.nii.gz
+        `-- sub-001_mask.nii.gz
     `-- orig/
+        `-- sub-000_orig.nii.gz
+        `-- sub-001_orig.nii.gz
 
 ... and if also has_wtds is True, then it looks like this:
 
     dir_split/
     `-- mask/
+        `-- sub-000_mask.nii.gz
+        `-- sub-001_mask.nii.gz
     `-- orig/
+        `-- sub-000_orig.nii.gz
+        `-- sub-001_orig.nii.gz
     `-- wtds/
+        `-- sub-000_wtds.nii.gz
+        `-- sub-001_wtds.nii.gz
 
 In each of dir_split's subdirectories, there must be correspondingly
 named files, where the only part of the filename that differs is the
@@ -74,7 +216,7 @@ verb : int
         self.pwd           = None
 
         # top dir (all subdirs of interest are decorators)
-        self.dir_split      = dir_split
+        self.dir_split     = dir_split
 
         # dset names: store in a dictionary, where each subdir is a key
         self.all_dset         = {}
@@ -119,31 +261,31 @@ verb : int
         the tree"""
 
         if self.verb :
-            ab.IP("Check tree dirs exist")
+            ab.IP("Check split-level tree dirs exist")
 
         BAD_RETURN = -1
 
-        if not(os.path.isdir(self.dir_split)) :
-            msg = "Tree check, no dir_split: "
-            msg+= "{}".format(self.dir_split)
+        ddd = self.dir_split
+        if not(os.path.isdir(ddd)) :
+            msg = "Tree check, no dir_split: {}".format(ddd)
             ab.EP1(msg)
             return BAD_RETURN
 
-        if self.has_mask and not(os.path.isdir(self.get_subdir_path('mask'))) :
-            msg = "Tree check, no dir_mask: "
-            msg+= "{}".format(self.dir_mask)
+        ddd = self.get_subdir_path('mask')
+        if self.has_mask and not(os.path.isdir(ddd)) :
+            msg = "Tree check, no dir_mask: {}".format(ddd)
             ab.EP1(msg)
             return BAD_RETURN
 
-        if not(os.path.isdir(self.get_subdir_path('orig'))) :
-            msg = "Tree check, no dir_orig: "
-            msg+= "{}".format(self.dir_orig)
+        ddd = self.get_subdir_path('orig')
+        if not(os.path.isdir(ddd)) :
+            msg = "Tree check, no dir_orig: {}".format(ddd)
             ab.EP1(msg)
             return BAD_RETURN
 
-        if self.has_wtds and not(os.path.isdir(self.get_subdir_path('wtds'))) :
-            msg = "Tree check, no dir_wtds: "
-            msg+= "{}".format(self.dir_wtds)
+        ddd = self.get_subdir_path('wtds')
+        if self.has_wtds and not(os.path.isdir(ddd)) :
+            msg = "Tree check, no dir_wtds: {}".format(ddd)
             ab.EP1(msg)
             return BAD_RETURN
 
@@ -154,7 +296,7 @@ verb : int
         the tree"""
 
         if self.verb :
-            ab.IP("Check tree files for names and consistency")
+            ab.IP("Check split-level tree files for names and consistency")
 
         BAD_RETURN = -1
 
