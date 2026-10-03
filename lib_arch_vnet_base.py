@@ -3,7 +3,9 @@
 # A library of base functionality for: archimedes_vnet.py
 # ============================================================================
 
-import os, sys, copy
+import os, glob
+
+from afnipy import afni_base as ab
 
 # ============================================================================
 
@@ -56,31 +58,166 @@ verb : int
         self.verb          = verb
         self.has_wtds      = has_wtds
 
-        # dirs
-        self.dir_root      = dir_root 
+        # need to know present working dir, for hopping around
+        self.pwd           = None
+
+        # top dir (all subdirs of interest are decorators)
+        self.dir_root      = dir_root
+
+        # dset names: store in a dictionary, where each subdir is a key
+        self.all_dset         = {}
+        self.all_dset['mask'] = []
+        self.all_dset['orig'] = []
+        self.all_dset['wtds'] = []
+
 
         # ----- take action(s)
 
-        tmp = self.check_tree()
+        tmp = self.basic_setup()
+        if tmp : return
+
+        tmp = self.check_tree_dirs()
+        if tmp : return
+
+        tmp = self.check_tree_files()
         if tmp : return
 
     # ----- methods
 
-    def check_tree(self):
-        """****"""
+    def basic_setup(self):
+        """Simple string formatting, like: make sure not '/' at end"""
+
+        # need to know present working dir
+        self.pwd = os.getcwd()
+
+        # don't want backslashes, for aesthetics
+        self.dir_root.rstrip('/')
+
+        return 0
+
+    def check_tree_dirs(self):
+        """Go through a series of directory checks about what should exist in
+        the tree"""
+
+        if self.verb :
+            ab.IP("Check tree dirs exist")
 
         BAD_RETURN = -1
 
+        if not(os.path.isdir(self.dir_root)) :
+            msg = "Tree check, no dir_root: "
+            msg+= "{}".format(self.dir_root)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        if not(os.path.isdir(self.get_subdir_path('mask'))) :
+            msg = "Tree check, no dir_mask: "
+            msg+= "{}".format(self.dir_mask)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        if not(os.path.isdir(self.get_subdir_path('orig'))) :
+            msg = "Tree check, no dir_orig: "
+            msg+= "{}".format(self.dir_orig)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        if self.has_wtds and not(os.path.isdir(self.get_subdir_path('wtds'))) :
+            msg = "Tree check, no dir_wtds: "
+            msg+= "{}".format(self.dir_wtds)
+            ab.EP1(msg)
+            return BAD_RETURN
+
         return 0
+
+    def check_tree_files(self):
+        """Go through a series of directory checks about what should exist in
+        the tree"""
+
+        if self.verb :
+            ab.IP("Check tree files for names and consistency")
+
+        BAD_RETURN = -1
+
+        # make a list of subdirs to check
+        all_label = ['mask', 'orig']
+        if self.has_wtds :
+            all_label.append('wtds')
+
+        # ... and then use the label for each to glob equivalently
+        for label in all_label:
+            os.chdir(self.get_subdir_path(label))
+
+            self.all_dset[label] = glob.glob("*{}.nii*".format(label))
+            # NB: list must be sorted, for verifying cross-dir partners below
+            self.all_dset[label].sort()
+
+            os.chdir(self.pwd)
+
+        # verify that the label str appears in each filename only once
+        # (from glob above, we already know it exists _at least_ once)
+        nbad = 0
+        for label in all_label:
+            for dset in self.all_dset[label]:
+                if dset.count(label) > 1 :
+                    msg = "dset {} has too many instances of ".format(dset)
+                    msg+= "{} to be a valid filename here".format(label)
+                    ab.EP1(msg)
+                    nbad+= 1
+        if nbad :
+            return BAD_RETURN
+
+        # verify consistency of filenames across pairs of subdirs,
+        for ii in range(1, len(all_label)):
+            label0 = all_label[ii-1]
+            label1 = all_label[ii]
+            
+            # simplest check: two dirs have same num of files
+            n0 = self.count_subdir_files(label0)
+            n1 = self.count_subdir_files(label1) 
+            if n0 != n1 :
+                msg = "The {} and {} subdirs ".format(label0, label1)
+                msg+= "have differing file counts: {} and {}.".format(n0, n1)
+                msg+= "\nSo, we know they can't have matched files"
+                ab.EP1(msg)
+                return BAD_RETURN
+
+            # can we find cross-subdir matches, i.e., filenames
+            # differing only in label (like sub-123_mask.nii.gz and
+            # sub-123_orig.nii.gz), for each dset? this check requires
+            # sorting has been done previously
+            for jj in range(n0):
+                f0 = self.all_dset[label0][jj]
+                f1 = self.all_dset[label1][jj]
+                g0 = f0.replace(label0, label1) # change label only
+                if g0 != f1 :
+                    msg = "At least one file mismatch between these "
+                    msg+= "subdirs: {} and {}\n".format(label0, label1)
+                    msg+= "One of these doesn't appear to have a partner: "
+                    msg+= "{} and {}.".format(g0, f1)
+                    ab.EP1(msg)
+                    return BAD_RETURN
+
+        return 0
+
+    def get_subdir_path(self, label):
+        """Simply append dir-of-interest, as defined by the str 'label', to
+        dir_root (no existence checked)"""
+
+        return self.dir_root + '/' + label
+
+    def count_subdir_files(self, label):
+        """How many files exist in a subdir (as defined by the str
+        'label')?"""
+
+        return len(self.all_dset[label])
 
 
     # ----- decorators
 
-    @property
-    def some_decorator(self):
-        """****"""
+    #@property
 
-        return 'something'
+
 
 
 # ============================================================================
