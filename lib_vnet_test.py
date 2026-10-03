@@ -13,6 +13,8 @@ from afnipy import afni_base      as ab
 from afnipy import afni_util      as au
 from afnipy import lib_torch_util as ltu
 
+from vnet_afni  import lib_arch_vnet_base      as LAVB
+
 from communifti import lib_nibabel_read_nifti  as lnrn
 from communifti import lib_nibabel_write_nifti as lnwn
 
@@ -218,30 +220,23 @@ VnetTestObj : obj
         used as an input to the model, it is also unsqueezed to insert
         an extra dim in the [0]th index, so 3D data of dim [A, B, C] ->
         [1, A, B, C].
+
+        Should be the same loading+processing that the data went
+        through in training.
         """
 
         BAD_RETURN = -1
 
-        # read NIFTI to tmp data array (needs proc) and header obj
-        is_fail, orig_data, self.hdr_orig = \
-            lnrn.read_nifti_to_nibabel(self.inset, set_dtype=np.float32,
-                                       verb=self.verb)
+        is_fail, self.data_orig, self.hdr_orig = \
+            LAVB.load_orig_dset(self.inset, 
+                                do_perc_thr=True, 
+                                do_zscore=True,
+                                set_dtype=np.float32,
+                                verb=self.verb)
         if is_fail :
-            ab.EP1("Could not read in NIFTI: {}".format(self.inset))
+            ab.EP1("Failed to load inset: {}".format(self.inset))
             return BAD_RETURN
-
-        # simple proc 1: percentile-based thresholding of data
-        top99_thresh = np.percentile(orig_data, 99)
-        orig_data[orig_data > top99_thresh] = top99_thresh
-        down2_thresh = np.percentile(orig_data, 2)
-        orig_data[orig_data < down2_thresh] = down2_thresh
-
-        # simple proc 2: z-score conversion
-        is_fail, orig_data = z_scoring(orig_data)
-        if is_fail :
-            return BAD_RETURN
-
-        self.data_orig = torch.from_numpy(orig_data).unsqueeze(0)
+        
         return 0
 
     def set_cpus(self):
@@ -332,23 +327,6 @@ VnetTestObj : obj
     # ----- decorators
 
     ## none at present
-
-# ----------------------------------------------------------------------------
-
-def z_scoring(img):
-
-    BAD_RETURN = (-1, np.ndarray(0))
-
-    data_mean = img.mean()
-    data_std  = img.std()
-
-    if data_std :
-        Z_normalized = (img - data_mean) / data_std
-    else:
-        ab.EP1("std dev of img dset was zero?")
-        return BAD_RETURN
-
-    return 0, Z_normalized
 
 
 # ============================================================================
