@@ -5,42 +5,38 @@
 
 import os, glob
 
-import torch
-import numpy as np
-
 from afnipy import afni_base as ab
-
-from communifti import lib_nibabel_read_nifti  as lnrn
 
 # ============================================================================
 
-class ArchInputTree:
-    """Object for the data tree for training and validation.  This defines
-and checks for expected directories and datasets.  
+class ArchSplitTree:
+    """Object for managing the tree of data splits, like training and
+validation.  This defines and checks for expected directories and
+datasets.
 
 If has_wtds is True, then we search for a directory containing weight
 datasets for each input dset.
 
 The basic DATA_DIR directory structure looks like this:
 
-    dir_root/
+    dir_split/
     `-- orig/
 
 If has_mask is True (which is the case for training and validation),
 then it would look like this:
 
-    dir_root/
+    dir_split/
     `-- mask/
     `-- orig/
 
 ... and if also has_wtds is True, then it looks like this:
 
-    dir_root/
+    dir_split/
     `-- mask/
     `-- orig/
     `-- wtds/
 
-In each of dir_root's subdirectories, there must be correspondingly
+In each of dir_split's subdirectories, there must be correspondingly
 named files, where the only part of the filename that differs is the
 subdir name.  That is: 
 
@@ -51,8 +47,8 @@ subdirectories that is being used.
 
 Parameters
 ----------
-dir_root : str
-    the root directory of the data tree
+dir_split : str
+    the split directory of the data tree
 has_mask : bool
     should the tree be checked for a directory of mask datasets ('mask')?
 has_wtds : bool
@@ -62,7 +58,7 @@ verb : int
 
     """
 
-    def __init__(self, dir_root, has_mask=True, has_wtds=False, verb=1):
+    def __init__(self, dir_split, has_mask=True, has_wtds=False, verb=1):
 
         # ----- set up attributes
 
@@ -78,7 +74,7 @@ verb : int
         self.pwd           = None
 
         # top dir (all subdirs of interest are decorators)
-        self.dir_root      = dir_root
+        self.dir_split      = dir_split
 
         # dset names: store in a dictionary, where each subdir is a key
         self.all_dset         = {}
@@ -107,7 +103,7 @@ verb : int
         self.pwd = os.getcwd()
 
         # don't want backslashes, for aesthetics
-        self.dir_root.rstrip('/')
+        self.dir_split.rstrip('/')
 
         # make a list of subdirs to check
         self.all_label = ['orig']
@@ -127,9 +123,9 @@ verb : int
 
         BAD_RETURN = -1
 
-        if not(os.path.isdir(self.dir_root)) :
-            msg = "Tree check, no dir_root: "
-            msg+= "{}".format(self.dir_root)
+        if not(os.path.isdir(self.dir_split)) :
+            msg = "Tree check, no dir_split: "
+            msg+= "{}".format(self.dir_split)
             ab.EP1(msg)
             return BAD_RETURN
 
@@ -221,9 +217,9 @@ verb : int
 
     def get_subdir_path(self, label):
         """Simply append dir-of-interest, as defined by the str 'label', to
-        dir_root (no existence checked)"""
+        dir_split (no existence checked)"""
 
-        return self.dir_root + '/' + label
+        return self.dir_split + '/' + label
 
     def count_subdir_files(self, label):
         """How many files exist in a subdir (as defined by the str
@@ -235,89 +231,6 @@ verb : int
     # ----- decorators
 
     #@property
-
-# ============================================================================
-
-def load_orig_dset(inset, do_perc_thr=True, do_zscore=True, set_dtype=np.float32,
-                   verb=1):
-    """Read in inset (NIFTI anatomical dset) using nibabel, and do things
-like percentile-based thresholding (if do_perc_thr=True) and Z-scoring
-(if do_zscore=True) of it.  The header is also stored separately, to
-help with writing out data.
-
-The 3D dset is stored as a torch tensor array.  In order to be used as
-an input to the model, it is also unsqueezed to insert an extra dim in
-the [0]th index, so 3D data of dim [A, B, C] -> [1, A, B, C].
-
-Parameters
-----------
-inset : str
-    the name of the orig (3D, anatomical) dset being input
-do_perc_thr : bool
-    do simple processing to the data, in the form of percentile-based thresholding
-do_zscore : bool
-    do simple processing to the data, in the form of Z-scoring the matrix values
-set_dtype : dtype
-    a parameter passed along to read_nifti_to_nibabel(), probably just leave 
-    at this for now
-verb : int
-    verbosity level
-
-Returns
--------
-is_fail : int
-    0 for success, nonzero for failure
-data_orig : torch tensor
-    the (4D) torch tensor being output
-hdr_orig : nibabel header
-    the header of the inset, to pass along for later processing
-
-    """
-
-    BAD_RETURN = (-1, None, None)
-
-    # read NIFTI to tmp data array (needs proc) and header obj
-    is_fail, orig_data, hdr_orig = \
-        lnrn.read_nifti_to_nibabel(inset, set_dtype=set_dtype, verb=verb)
-    if is_fail :
-        ab.EP1("Could not read in NIFTI: {}".format(inset))
-        return BAD_RETURN
-
-    # simple proc 1: percentile-based thresholding of data
-    if do_perc_thr :
-        top99_thresh = np.percentile(orig_data, 99)
-        orig_data[orig_data > top99_thresh] = top99_thresh
-        down2_thresh = np.percentile(orig_data, 2)
-        orig_data[orig_data < down2_thresh] = down2_thresh
-
-    # simple proc 2: z-score conversion
-    if do_zscore :
-        is_fail, orig_data = z_scoring(orig_data)
-        if is_fail :
-            ab.EP1("Could not read z-score NIFTI: {}".format(inset))
-            return BAD_RETURN
-
-    # numpy array -> torch tensor, with extra dim added at the start
-    data_orig = torch.from_numpy(orig_data).unsqueeze(0)
-
-    return 0, data_orig, hdr_orig
-
-# ----------------------------------------------------------------------------
-
-def z_scoring(img):
-
-    BAD_RETURN = (-1, np.ndarray(0))
-
-    data_mean = img.mean()
-    data_std  = img.std()
-
-    if data_std :
-        Z_normalized = (img - data_mean) / data_std
-    else:
-        ab.EP1("std dev of img dset was zero?")
-        return BAD_RETURN
-
-    return 0, Z_normalized
 
 # ============================================================================
 

@@ -13,7 +13,7 @@ from afnipy import afni_base      as ab
 from afnipy import afni_util      as au
 from afnipy import lib_torch_util as ltu
 
-from vnet_afni  import lib_arch_vnet_base      as LAVB
+from vnet_afni  import lib_arch_vnet_util      as LAVU
 
 from communifti import lib_nibabel_read_nifti  as lnrn
 from communifti import lib_nibabel_write_nifti as lnwn
@@ -228,7 +228,7 @@ VnetTestObj : obj
         BAD_RETURN = -1
 
         is_fail, self.data_orig, self.hdr_orig = \
-            LAVB.load_orig_dset(self.inset, 
+            LAVU.load_orig_dset(self.inset, 
                                 do_perc_thr=True, 
                                 do_zscore=True,
                                 set_dtype=np.float32,
