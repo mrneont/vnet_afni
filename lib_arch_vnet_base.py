@@ -19,10 +19,16 @@ datasets for each input dset.
 The basic DATA_DIR directory structure looks like this:
 
     dir_root/
+    `-- orig/
+
+If has_mask is True (which is the case for training and validation),
+then it would look like this:
+
+    dir_root/
     `-- mask/
     `-- orig/
 
-and if has_wtds is True, then it looks like this:
+... and if also has_wtds is True, then it looks like this:
 
     dir_root/
     `-- mask/
@@ -42,21 +48,26 @@ Parameters
 ----------
 dir_root : str
     the root directory of the data tree
+has_mask : bool
+    should the tree be checked for a directory of mask datasets ('mask')?
 has_wtds : bool
-    should the tree be checked for a directory of weights?
+    should the tree be checked for a directory of weight datasets ('wtds')?
 verb : int
     verbosity level
 
     """
 
-    def __init__(self, dir_root, has_wtds=False, verb=1):
+    def __init__(self, dir_root, has_mask=True, has_wtds=False, verb=1):
 
         # ----- set up attributes
 
         # main input variables
         self.status        = 0                           # not used
         self.verb          = verb
+
+        self.has_mask      = has_mask
         self.has_wtds      = has_wtds
+        self.all_label     = []
 
         # need to know present working dir, for hopping around
         self.pwd           = None
@@ -93,6 +104,13 @@ verb : int
         # don't want backslashes, for aesthetics
         self.dir_root.rstrip('/')
 
+        # make a list of subdirs to check
+        self.all_label = ['orig']
+        if self.has_mask :
+            self.all_label.append('mask')
+        if self.has_wtds :
+            self.all_label.append('wtds')
+
         return 0
 
     def check_tree_dirs(self):
@@ -110,7 +128,7 @@ verb : int
             ab.EP1(msg)
             return BAD_RETURN
 
-        if not(os.path.isdir(self.get_subdir_path('mask'))) :
+        if self.has_mask and not(os.path.isdir(self.get_subdir_path('mask'))) :
             msg = "Tree check, no dir_mask: "
             msg+= "{}".format(self.dir_mask)
             ab.EP1(msg)
@@ -139,13 +157,8 @@ verb : int
 
         BAD_RETURN = -1
 
-        # make a list of subdirs to check
-        all_label = ['mask', 'orig']
-        if self.has_wtds :
-            all_label.append('wtds')
-
         # ... and then use the label for each to glob equivalently
-        for label in all_label:
+        for label in self.all_label:
             os.chdir(self.get_subdir_path(label))
 
             self.all_dset[label] = glob.glob("*{}.nii*".format(label))
@@ -157,7 +170,7 @@ verb : int
         # verify that the label str appears in each filename only once
         # (from glob above, we already know it exists _at least_ once)
         nbad = 0
-        for label in all_label:
+        for label in self.all_label:
             for dset in self.all_dset[label]:
                 if dset.count(label) > 1 :
                     msg = "dset {} has too many instances of ".format(dset)
@@ -167,10 +180,11 @@ verb : int
         if nbad :
             return BAD_RETURN
 
-        # verify consistency of filenames across pairs of subdirs,
-        for ii in range(1, len(all_label)):
-            label0 = all_label[ii-1]
-            label1 = all_label[ii]
+        # verify consistency of filenames across subdirs in a pairwise
+        # fashion (when there are at least 2 subdirs)
+        for ii in range(1, len(self.all_label)):
+            label0 = self.all_label[ii-1]
+            label1 = self.all_label[ii]
             
             # simplest check: two dirs have same num of files
             n0 = self.count_subdir_files(label0)
@@ -216,8 +230,6 @@ verb : int
     # ----- decorators
 
     #@property
-
-
 
 
 # ============================================================================
