@@ -82,11 +82,11 @@ inobj : InOpts object
 
         # things created in the processing/training setup
         self.sysname         = None     # platform system
-        self.loss_uses_wt    = False    # some loss_func need a wt dset
+        self.loss_has_wtds   = False    # some loss_func need a weight dset
 
         # model parameters: here, just for binary classification from 1 vol
-        self.n_input_channel = 1        # single vol input
-        self.num_class       = 2        # num channels out (binary classifier)
+        self.num_channel_in  = 1        # single vol input
+        self.num_class_out   = 2        # num channels out (binary classifier)
 
         # model attributes, set/made/loaded below
         self.net             = None     # the (v)net model itself
@@ -244,8 +244,8 @@ inobj : InOpts object
                 msg+= "{}".format(DEF.STR_loss_func)
                 ab.EP(msg)
         # ... and check whether it will need a weight
-        if self.loss_func in DEF.LIST_loss_func_w_wt :
-            self.loss_uses_wt = True
+        if self.loss_func in DEF.LIST_loss_func_has_wtds :
+            self.loss_has_wtds = True
 
         if self.scale_mode : 
             if self.scale_mode not in DEF.LIST_scale_mode :
@@ -422,8 +422,8 @@ inobj : InOpts object
         if self.architecture == 'vnet_orig' :
             try:
                 self.net = lmm.VNet_orig(
-                    in_channels = self.n_input_channel,
-                    num_class   = self.num_class,
+                    in_channels = self.num_channel_in,
+                    num_class   = self.num_class_out,
                     wt_norm     = self.do_weight_norm, 
                     verb        = self.verb
                 )
@@ -434,8 +434,8 @@ inobj : InOpts object
         elif self.architecture == 'Cerebrum' :
             try:
                 self.net = lmc.Cerebrum(
-                    in_channels = self.n_input_channel,
-                    num_class   = self.num_class,
+                    in_channels = self.num_channel_in,
+                    num_class   = self.num_class_out,
                     wt_norm     = self.do_weight_norm, 
                     verb        = self.verb
                 )

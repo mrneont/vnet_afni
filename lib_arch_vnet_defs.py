@@ -56,10 +56,10 @@ LIST_loss_func = [
 STR_loss_func = ', '.join(LIST_loss_func)
 
 # ... and a related list: each loss_func that uses weights
-LIST_loss_func_w_wt = [
+LIST_loss_func_has_wtds = [
     "WtSorensen_Dice",
 ]
-STR_loss_func_w_wt = ', '.join(LIST_loss_func_w_wt)
+STR_loss_func_has_wtds = ', '.join(LIST_loss_func_has_wtds)
 
 # -----
 

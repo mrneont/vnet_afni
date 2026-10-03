@@ -84,6 +84,10 @@ VnetTestObj : obj
         self.hdr_orig         = None
         self.data_mask        = None
 
+        # model parameters: here, just for binary classification from 1 vol
+        self.num_channel_in  = 1        # single vol input
+        self.num_class_out   = 2        # num channels out (binary classifier)
+
         # to be calculated
         self.data_pred_mask   = None
 
@@ -254,8 +258,8 @@ VnetTestObj : obj
 
         ab.IP("Using device: {}".format(self.device))
 
-        self.model = lmm.VNet_orig(in_channels = 1, 
-                                   num_class   = 2,
+        self.model = lmm.VNet_orig(in_channels = self.num_channel_in, 
+                                   num_class   = self.num_class_out,
                                    wt_norm     = 0, 
                                    verb        = self.verb)
 
