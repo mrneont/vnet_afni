@@ -701,7 +701,7 @@ inobj : InOpts object
 
         # keep predicted masks together in their own output subdirectory
         if self.nsave_mask :
-            self.outdir_mask = os.path.join(self.outdir, 'mask_pred')
+            self.outdir_mask = os.path.join(self.outdir, 'pmask')
             try:
                 os.makedirs(self.outdir_mask, exist_ok=self.overwrite)
             except OSError:
