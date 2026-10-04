@@ -11,7 +11,7 @@
 # List of all possible net architectures to choose from. 
 LIST_architecture  = [
     'vnet_orig',     # default 
-    'Cerebrum',
+ #   'Cerebrum',     # NB: we are just using vnet_orig at present
 ]
 STR_architecture = ', '.join(LIST_architecture)
 
@@ -20,12 +20,13 @@ STR_architecture = ', '.join(LIST_architecture)
 # List of all possible optimizers
 LIST_optimizer = [
     'Adam',              # default
-    'Adam16',
+#    'Adam16',           # NB: this doesn't seem to be enabled/usable
 ]
 STR_optimizer = ', '.join(LIST_optimizer)
 
-# default epsilon value for Adam optimizer, if precision if half or mixed
-EPS_adam_nonfull_prec = 1.0e-4
+## This is not needed at present
+### default epsilon value for Adam optimizer, if precision if half or mixed
+##EPS_adam_nonfull_prec = 1.0e-4
 
 # -----
 
@@ -40,7 +41,7 @@ STR_scale_mode = ', '.join(LIST_scale_mode)
 
 LIST_precision = [
     'full',              # default
-    'half',
+    #'half',             # not implemented at present
     'mixed',
 ]
 STR_precision = ', '.join(LIST_precision)
@@ -91,12 +92,13 @@ DOPTS = {
     'loss_func'            : LIST_loss_func[0],
     'device'               : LIST_device[0],
     'num_cpu'              : -1,
-    'num_epoch'            : 100,
+    'max_epoch'            : 100,
     'learn_rate'           : 0.0001,
     'seed'                 : 42,
     'batch_size'           : 1,
     'do_weight_norm'       : 'No',
     'do_shuffle'           : 'Yes',  
+    'do_strict_load'       : 'Yes',  
     'restart_checkpoint'   : None,
     'save_checkpoint_rate' : None,
     'save_checkpoint_list' : [],

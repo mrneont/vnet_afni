@@ -24,7 +24,7 @@ g_help_dict   = {
     'STR_scale_mode'   : LAVD.STR_scale_mode,
     'STR_precision'    : LAVD.STR_precision,
     'STR_loss_func'    : LAVD.STR_loss_func,
-    'STR_loss_func_w_wt' : LAVD.STR_loss_func_w_wt,
+    'STR_loss_func_has_wtds' : LAVD.STR_loss_func_has_wtds,
     'STR_device'       : LAVD.STR_device,
 }
 
@@ -44,9 +44,9 @@ Usage ~1~
 
 -outdir OUTDIR :(req) name of the output directory of training data
 
--num_epoch NE  :number of epochs to use for training; these start counting 
-                at 1 
-                (def: {num_epoch})
+-max_epoch NE  :maximum epoch value to use for training; epoch counting 
+                is zero-based, so run from 0 through max_epoch, inclusive
+                (def: {max_epoch})
 
 -learn_rate LR :learning rate during training, which is the step size while
                 optimizing; smaller values can improve stability, but 
@@ -65,12 +65,18 @@ Usage ~1~
                :use weight normalization during training?
                 (def: {do_weight_norm})
 
+-do_strict_load DSL
+               :load model with strict parameter matching during training?
+                NB: this is a developer setting that should probably remain
+                Yes or 1.
+                (def: {do_strict_load})
+
 -loss_func LF  :choose a particular loss function for training, from among
                 this list:
                     {STR_loss_func}
                 NB: some loss_func types require a weight dataset for each
                 mask; those are:
-                    {STR_loss_func_w_wt}
+                    {STR_loss_func_has_wtds}
                 (def: {loss_func})
 
 -device D      :choose a particular device to run the training on, from among
@@ -96,7 +102,7 @@ Usage ~1~
 -seed S        :set a particular seed for any randomization steps
                 (def: {seed})
 
--num_cpu NCPU  :number of CPU threads to use during skullstripping; 
+-num_cpu NCPU  :number of CPU threads to use during training; 
                 a negative value means that the system decides.
                 NB: to know how many CPUs are available, you can run:
                     afni_system_check.py -disp_num_cpu
@@ -105,40 +111,40 @@ Usage ~1~
 -restart_checkpoint RC 
                :to start training from an already-created checkpoint,
                 provide its name here
-                (def: {do_weight_norm})
+                (def: {restart_checkpoint})
 
 -save_checkpoint_rate SCR :write out a checkpoint at a regular interval;
                 if using this option, a checkpoint will be written for the
-                [0]th epoch and then every SCR-th one up to num_epochs. For
-                example, if num_epochs is 20 and SCR is 5, then checkpoints
+                [0]th epoch and then every SCR-th one up to max_epoch. For
+                example, if max_epoch is 20 and SCR is 5, then checkpoints
                 will be written out at these epochs: 0, 5, 10, 15, 20.
                 (def: only save the final checkpoint)
 
 -save_checkpoint_list SCL 
                :write out a checkpoint at specified epochs; users
                 can provide a list of one or more integers in the range:
-                [0, num_epoch].
+                [0, max_epoch].
                 (def: only save the final checkpoint)
 
        NB: the above -save_checkpoint_* options can both be used; the result
-           is to create a list of their union and num_epoch (without repeats).
+           is to create a list of their union and max_epoch (without repeats).
 
 -save_mask_rate SMR 
                :write out estimated masks at a regular interval;
                 if using this option, masks will be written for the
-                [0]th epoch and then every SCR-th one up to
-                num_epochs. For example, if num_epochs is 20 and SCR
-                is 5, then maskss will be written out at these epochs:
+                [0]th epoch and then every SMR-th one up to
+                max_epoch. For example, if max_epoch is 20 and SMR
+                is 5, then masks will be written out at these epochs:
                 0, 5, 10, 15, 20.  
                 (def: no masks written out)
 
 -save_mask_list SML 
                :write out estimated masks at specified epochs; users
                 can provide a list of one or more integers in the range:
-                [0, num_epoch].
+                [0, max_epoch].
                 (def: no masks written out)
 
-       NB: the above -save_masks_* options can both be used; the result
+       NB: the above -save_mask_* options can both be used; the result
            is to create a list of their union (without repeats).
 
 
@@ -221,7 +227,7 @@ checks happen in a subsequent object.
         self.scale_mode      = None
         self.optimizer       = None
         self.precision       = None
-        self.num_epoch       = None
+        self.max_epoch       = None
         self.learn_rate      = None
         self.loss_func       = None
         self.device          = None
@@ -229,7 +235,8 @@ checks happen in a subsequent object.
         self.num_cpu         = None
         self.batch_size      = None
         self.do_weight_norm  = None
-        self.do_train_shuffle     = None
+        self.do_strict_load  = None
+        self.do_shuffle      = None
         self.restart_checkpoint   = None
         self.save_checkpoint_rate = None
         self.save_checkpoint_list = None
@@ -276,8 +283,8 @@ checks happen in a subsequent object.
         self.valid_opts.add_opt('-workdir', 1, [], 
                         helpstr='name of workdir (no path)')
 
-        self.valid_opts.add_opt('-num_epoch', 1, [], 
-                        helpstr='number of epochs (iterations) for training')
+        self.valid_opts.add_opt('-max_epoch', 1, [], 
+                        helpstr='max epoch (iterations) for training')
 
         self.valid_opts.add_opt('-learn_rate', 1, [], 
                         helpstr='learning rate for training')
@@ -293,6 +300,9 @@ checks happen in a subsequent object.
 
         self.valid_opts.add_opt('-do_weight_norm', 1, [], 
                         helpstr='do weight normalization (or not)')
+
+        self.valid_opts.add_opt('-do_strict_load', 1, [], 
+                        helpstr='do strict parameter matching; likely leave 1')
 
         self.valid_opts.add_opt('-do_shuffle', 1, [], 
                         helpstr='if batch size >1, shuffle dsets in training')
@@ -417,11 +427,11 @@ checks happen in a subsequent object.
 
             # control options
 
-            elif opt.name == '-num_epoch':
+            elif opt.name == '-max_epoch':
                 val, err = uopts.get_type_opt(int, '', opt=opt)
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
-                self.num_epoch = val
+                self.max_epoch = val
 
             elif opt.name == '-learn_rate':
                 val, err = uopts.get_type_opt(float, '', opt=opt)
@@ -452,6 +462,12 @@ checks happen in a subsequent object.
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
                 self.do_weight_norm = val
+
+            elif opt.name == '-do_strict_load':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_strict_load = val
 
             elif opt.name == '-do_shuffle':
                 val, err = uopts.get_string_opt('', opt=opt)
@@ -580,10 +596,7 @@ checks happen in a subsequent object.
 
     # ----- decorators
 
-    @property
-    def ninset(self):
-        """number of insets"""
-        return len(self.inset)
+    #@property
 
 
 # ----------------------------------------------------------------------------
@@ -614,8 +627,8 @@ def main():
 
     # use options to create main object
     mainobj = LAVR.MainObj( user_inobj=inobj )
-    if not mainobj :  
-        return 1
+    if not(mainobj) or mainobj.status :  
+        return 1, mainobj
 
     # write out log/history of what has been done (not done by default, to
     # save some time, bc this takes a mini-while)

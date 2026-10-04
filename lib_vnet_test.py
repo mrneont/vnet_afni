@@ -14,6 +14,7 @@ from afnipy import afni_util      as au
 from afnipy import lib_torch_util as ltu
 
 from vnet_afni  import lib_arch_vnet_util      as LAVU
+from vnet_afni  import lib_arch_vnet_defs      as LAVD
 
 from communifti import lib_nibabel_read_nifti  as lnrn
 from communifti import lib_nibabel_write_nifti as lnwn
@@ -48,6 +49,13 @@ num_cpu : int
 device : str
     keyword for the device: 'cpu', 'mps', 'cuda', or 'auto'.
     'auto' selects MPS on Apple Silicon, otherwise CPU.
+scale_mode : str
+    name of scaling to use just after reading in orig dset (should
+    match training setting)
+do_weight_norm : bool
+    use weight normalization during testing? (should match training setting)
+do_strict_load : bool
+    check to make sure all state parameters in model are consistent
 do_overwrite : bool
     should the outputs here be able to overwrite pre-existing dsets?
 do_compile : bool
@@ -67,6 +75,8 @@ VnetTestObj : obj
 
     def __init__(self, inset, prefix='mask_new.nii.gz',
                  checkpoint=None, device='auto', num_cpu=-1,
+                 scale_mode='z_scoring', do_weight_norm=False,
+                 do_strict_load=True,
                  do_overwrite=False, do_compile=False, verb=1):
 
         # ----- set up attributes
@@ -75,6 +85,9 @@ VnetTestObj : obj
         self.inset            = inset
         self.prefix           = prefix
 
+        self.scale_mode       = scale_mode
+        self.do_weight_norm   = do_weight_norm
+        self.do_strict_load   = do_strict_load
         self.checkpoint       = checkpoint
         self.device           = device         # checked (maybe changed) below
         self.num_cpu          = num_cpu        # number of CPUs, if >0
@@ -95,27 +108,27 @@ VnetTestObj : obj
         self.verb             = verb
         self.do_overwrite     = do_overwrite
         self.do_compile       = do_compile
-        self.status           = 0                  # not used
+        self.status           = 0
 
         # ----- take action(s)
 
-        tmp = self.basic_setup()
-        if tmp : return
+        self.status = self.basic_setup()
+        if self.status : return
 
-        tmp = self.set_cpus()
-        if tmp : return
+        self.status = self.set_cpus()
+        if self.status : return
 
-        tmp = self.load_data()
-        if tmp : return
+        self.status = self.load_data()
+        if self.status : return
 
-        tmp = self.load_model()
-        if tmp : return
+        self.status = self.load_model()
+        if self.status : return
 
-        tmp = self.run_model()
-        if tmp : return
+        self.status = self.run_model()
+        if self.status : return
 
-        tmp = self.write_output()
-        if tmp : return
+        self.status = self.write_output()
+        if self.status : return
 
     # ----- methods
 
@@ -147,8 +160,12 @@ VnetTestObj : obj
             # autocast: on MPS this runs the forward pass in float16, halving
             # memory bandwidth and giving a free speed boost at negligible
             # accuracy cost for inference.  On CPU it is a no-op (float32).
-            ac_device = 'mps' if self.device == 'mps' else 'cpu'
-            ac_dtype  = torch.float16 if self.device == 'mps' else torch.float32
+            if self.device == 'mps' :
+                ac_device = 'mps'
+                ac_dtype  = torch.float16
+            else:
+                ac_device = 'cpu'
+                ac_dtype  = torch.float32
 
             with torch.inference_mode():
                 # because autocast might be used, convert back to float32 below;
@@ -157,14 +174,14 @@ VnetTestObj : obj
                 # *** and decide about casting back to float32 here ***
                 with torch.autocast(device_type=ac_device, dtype=ac_dtype,
                                      enabled=(self.device == 'mps')):
-                    self.data_pred_mask = self.model.forward(orig_data)
+                    ##self.data_pred_mask = self.model.forward(orig_data)
+                    self.data_pred_mask = self.model(orig_data)
 
         else:
             # get correct shape for tensor
             orig_data = self.data_orig.unsqueeze(1).to(self.device)
 
             self.model.to(self.device)
-            device_model = next(self.model.parameters()).device
 
             # useful for inference
             self.model.eval()
@@ -173,7 +190,8 @@ VnetTestObj : obj
             # fine since we will not use grads later
             with torch.inference_mode():
                 # main calculation: estimate the mask with vnet
-                self.data_pred_mask = self.model.forward(orig_data)
+                ##self.data_pred_mask = self.model.forward(orig_data)
+                self.data_pred_mask = self.model(orig_data)
 
         return 0
 
@@ -233,10 +251,10 @@ VnetTestObj : obj
 
         is_fail, self.data_orig, self.hdr_orig = \
             LAVU.load_orig_dset(self.inset, 
-                                do_perc_thr=True, 
-                                do_zscore=True,
-                                set_dtype=np.float32,
-                                verb=self.verb)
+                                do_perc_thr = True, 
+                                scale_mode  = self.scale_mode,
+                                set_dtype   = np.float32,
+                                verb        = self.verb)
         if is_fail :
             ab.EP1("Failed to load inset: {}".format(self.inset))
             return BAD_RETURN
@@ -258,9 +276,11 @@ VnetTestObj : obj
 
         ab.IP("Using device: {}".format(self.device))
 
+        BAD_RETURN = -1
+
         self.model = lmm.VNet_orig(in_channels = self.num_channel_in, 
                                    num_class   = self.num_class_out,
-                                   wt_norm     = 0, 
+                                   wt_norm     = self.do_weight_norm, 
                                    verb        = self.verb)
 
         # use weights_only=True simply to avoid warning; should not
@@ -269,7 +289,16 @@ VnetTestObj : obj
                            weights_only=True,
                            map_location = torch.device(self.device))
 
-        self.model.load_state_dict(tload, strict=False)
+        # in case strict=False, add in potential debugging
+        # about differences in the state load that could
+        # happen (NB: we don't want these to happen!)
+        missing, unexpected = \
+            self.model.load_state_dict(tload, 
+                                       strict=self.do_strict_load)
+        if missing :
+            ab.WP("Missing checkpoint keys: {}".format(missing))
+        if unexpected :
+            ab.WP("Unexpected checkpoint keys: {}".format(unexpected))
 
         if self.do_compile:
             is_fail, can_compile = ltu.torch_can_compile(verb=self.verb)
@@ -304,6 +333,9 @@ VnetTestObj : obj
             if not(os.path.isfile(self.checkpoint)) :
                 ab.EP1("Failed to load checkpoint")
                 return BAD_RETURN
+        else:
+            ab.EP1("Need to provide a checkpoint, via '-checkpoint ...'")
+            return BAD_RETURN
 
         # (req)
         if not(self.prefix) :
@@ -316,6 +348,13 @@ VnetTestObj : obj
             ab.EP1(msg)
             return BAD_RETURN
 
+        if self.scale_mode not in LAVD.LIST_scale_mode :
+            msg = "Invalid scale_mode: {}\n".format(self.scale_mode)
+            msg+= "Please select from this list:\n"
+            msg+= "{}".format(LAVD.STR_scale_mode)
+            ab.EP1(msg)
+            return BAD_RETURN
+
         # store platform system name 
         self.sysname = platform.system()
 
@@ -325,6 +364,11 @@ VnetTestObj : obj
         if is_fail :
             ab.EP1("Failed select device")
             return BAD_RETURN
+
+        
+        # convert bool-ish opts to bools
+        self.do_weight_norm = au.convert_to_bool_yn10(self.do_weight_norm)
+        self.do_strict_load = au.convert_to_bool_yn10(self.do_strict_load)
 
         return 0
 

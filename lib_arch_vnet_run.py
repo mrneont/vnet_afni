@@ -15,16 +15,132 @@ from    afnipy import afni_util          as au
 from    afnipy import lib_torch_util     as ltu
 
 from vnet_afni import lib_arch_vnet_defs as DEF
+from vnet_afni import lib_arch_vnet_base as LAVB
+from vnet_afni import lib_arch_vnet_util as LAVU
+from vnet_afni import lib_ml_losses      as lml
 from vnet_afni import lib_ml_models      as lmm
 from vnet_afni import lib_ml_cerebrum    as lmc
-from vnet_afni import lib_fp16util       as lfp
+
+import numpy as np
 
 import torch
+from   torch.utils.data import Dataset, DataLoader
+
+from communifti import lib_nibabel_read_nifti as lnrn
+
+# ============================================================================
+# the allowed split/phase keywords when looping through epochs
+
+LIST_phase = [
+    'training',
+    'validation',
+]
+STR_phase = ', '.join(LIST_phase)
 
 # ============================================================================
 
-# ----------------------------------------------------------------------------
+# NB: we define a 'sample' as a matched packet of volumes to be used
+# for training or validation: orig + mask (+ wtds, optionally). A
+# 'sample set' is the indexed collection of such samples used for
+# training or validation.  
+# 
+# This hopefully avoids overloading the term 'dataset', which we often
+# use in AFNI for a single NIFTI volume. A sample_set can (and
+# generally will) be more than one dataset, in that sense.
 
+class ArchVnetSampleSet(Dataset):
+    """PyTorch dataset wrapper around one ArchSplitTree.
+
+    ArchSplitTree has already checked that orig, mask and optional wtds
+    datasets correspond.  This class just loads and prepares one indexed
+    sample of volumes.
+    """
+
+    def __init__(self, split_tree, scale_mode='z_scoring',
+                 has_wtds=False, verb=1):
+
+        self.split_tree = split_tree
+        self.scale_mode = scale_mode
+        self.has_wtds   = has_wtds
+        self.verb       = verb
+
+
+    def __len__(self):
+
+        return self.split_tree.count_subdir_files('orig')
+
+
+    def __getitem__(self, index):
+
+        # ----- orig
+
+        fname_orig = self.split_tree.all_dset['orig'][index]
+        path_orig  = os.path.join(
+            self.split_tree.get_subdir_path('orig'),
+            fname_orig
+        )
+
+        is_fail, data_orig, _ = LAVU.load_orig_dset(
+            path_orig,
+            do_perc_thr = True,
+            scale_mode  = self.scale_mode,
+            verb        = 0
+        )
+        if is_fail :
+            msg = "Failed to load orig dset: {}".format(path_orig)
+            raise RuntimeError(msg)
+
+        # ----- mask
+
+        fname_mask = self.split_tree.all_dset['mask'][index]
+        path_mask  = os.path.join(
+            self.split_tree.get_subdir_path('mask'),
+            fname_mask
+        )
+
+        is_fail, arr_mask, _ = lnrn.read_nifti_to_nibabel(
+            path_mask,
+            set_dtype = np.float32,
+            verb      = 0
+        )
+        if is_fail :
+            msg = "Failed to load mask dset: {}".format(path_mask)
+            raise RuntimeError(msg)
+
+        # [D,H,W] -> [1,D,H,W]
+        data_mask = torch.from_numpy(arr_mask).unsqueeze(0)
+
+        # ----- output sample
+
+        sample = {
+            'orig'  : data_orig,
+            'mask'  : data_mask,
+            'fname' : fname_orig,
+        }
+
+        # ----- optional weight dset
+
+        if self.has_wtds :
+
+            fname_wtds = self.split_tree.all_dset['wtds'][index]
+            path_wtds  = os.path.join(
+                self.split_tree.get_subdir_path('wtds'),
+                fname_wtds
+            )
+
+            is_fail, arr_wtds, _ = lnrn.read_nifti_to_nibabel(
+                path_wtds,
+                set_dtype = np.float32,
+                verb      = 0
+            )
+            if is_fail :
+                raise RuntimeError(
+                    "Failed to load weight dset: {}".format(path_wtds)
+                )
+
+            sample['wtds'] = torch.from_numpy(arr_wtds).unsqueeze(0)
+
+        return sample
 
 # ============================================================================
 
@@ -44,7 +160,7 @@ inobj : InOpts object
         # ----- set up attributes
 
         # main input variables
-        self.status          = 0                        # not used
+        self.status          = 0
         self.user_opts       = DEF.DOPTS['user_opts']  # command the user ran
         self.user_inobj      = user_inobj
 
@@ -60,12 +176,11 @@ inobj : InOpts object
         self.workdir         = DEF.DOPTS['workdir']
 
         # control variables
-        self.num_epoch       = DEF.DOPTS['num_epoch']
+        self.max_epoch       = DEF.DOPTS['max_epoch']
         self.learn_rate      = DEF.DOPTS['learn_rate']
         self.architecture    = DEF.DOPTS['architecture']
         self.optimizer       = DEF.DOPTS['optimizer']
         self.scale_mode      = DEF.DOPTS['scale_mode']
-        self.architecture    = DEF.DOPTS['architecture']
         self.precision       = DEF.DOPTS['precision']
         self.loss_func       = DEF.DOPTS['loss_func']
         self.device          = DEF.DOPTS['device']
@@ -74,11 +189,12 @@ inobj : InOpts object
         self.batch_size      = DEF.DOPTS['batch_size']
         self.do_weight_norm  = DEF.DOPTS['do_weight_norm']
         self.do_shuffle      = DEF.DOPTS['do_shuffle']
+        self.do_strict_load  = DEF.DOPTS['do_strict_load']
         self.restart_checkpoint   = DEF.DOPTS['restart_checkpoint']
         self.save_checkpoint_rate = DEF.DOPTS['save_checkpoint_rate']
-        self.save_checkpoint_list = DEF.DOPTS['save_checkpoint_list']
+        self.save_checkpoint_list = DEF.DOPTS['save_checkpoint_list'].copy()
         self.save_mask_rate  = DEF.DOPTS['save_mask_rate']
-        self.save_mask_list  = DEF.DOPTS['save_mask_list']
+        self.save_mask_list  = DEF.DOPTS['save_mask_list'].copy()
 
         # things created in the processing/training setup
         self.sysname         = None     # platform system
@@ -91,36 +207,49 @@ inobj : InOpts object
         # model attributes, set/made/loaded below
         self.net             = None     # the (v)net model itself
         self.net_optim       = None     # optimizer-in-action for network
-        
+        self.grad_scaler     = None
 
+        self.data_tree       = None
+        self.loader_train    = None
+        self.loader_valid    = None
+        self.net_loss        = None
 
         # ----- take action(s)
 
         # prelim stuff
         if user_inobj :
-            tmp = self.load_from_inopts()
-            if tmp : return
+            self.status = self.load_from_inopts()
+            if self.status : return
 
-            tmp = self.basic_setup()
-            if tmp : return
+            self.status = self.basic_setup()
+            if self.status : return
 
-            tmp = self.set_device_and_cpus()
-            if tmp : return
+            self.status = self.set_device_and_cpus()
+            if self.status : return
 
-            tmp = self.make_net()
-            if tmp : return
+            self.status = self.make_net()
+            if self.status : return
 
-            tmp = self.load_optimizer()
-            if tmp : return
+            self.status = self.load_optimizer()
+            if self.status : return
 
-            tmp = self.make_workdir()
-            if tmp : return
+            ### NOT NEEDED SO FAR ***
+            ###tmp = self.make_workdir()
+            ###if tmp : return
 
-            # ****
+            self.status = self.make_dataloaders()
+            if self.status : return
 
-            if self.do_clean :
-                tmp10 = self.remove_workdir()
-                if tmp10 : return
+            self.status = self.make_loss()
+            if self.status : return
+
+            self.status = self.run_training()
+            if self.status : return
+
+            ### NOT NEEDED SO FAR ***
+            ###if self.do_clean :
+            ###    self.status = self.remove_workdir()
+            ###    if self.status : return
 
     # ----- methods
 
@@ -168,8 +297,8 @@ inobj : InOpts object
             self.optimizer = io.optimizer
         if io.precision is not None :
             self.precision = io.precision
-        if io.num_epoch is not None :
-            self.num_epoch = io.num_epoch
+        if io.max_epoch is not None :
+            self.max_epoch = io.max_epoch
         if io.learn_rate is not None :
             self.learn_rate = io.learn_rate
         if io.loss_func is not None :
@@ -184,8 +313,10 @@ inobj : InOpts object
             self.batch_size = io.batch_size
         if io.do_weight_norm is not None :
             self.do_weight_norm = io.do_weight_norm
-        if io.do_train_shuffle is not None :
-            self.do_train_shuffle = io.do_train_shuffle
+        if io.do_strict_load is not None :
+            self.do_strict_load = io.do_strict_load
+        if io.do_shuffle is not None :
+            self.do_shuffle = io.do_shuffle
         if io.restart_checkpoint is not None :
             self.restart_checkpoint = io.restart_checkpoint
         if io.save_checkpoint_rate is not None :
@@ -283,10 +414,10 @@ inobj : InOpts object
             msg+= "Cannot be <= 0"
             ab.EP(msg)
 
-        if self.num_epoch <= 0 :
-            msg = "Invalid value after -num_epoch: "
-            msg+= "{}\n".format(self.num_epoch)
-            msg+= "Cannot be <= 0"
+        if self.max_epoch < 0 :
+            msg = "Invalid value after -max_epoch: "
+            msg+= "{}\n".format(self.max_epoch)
+            msg+= "Cannot be < 0"
             ab.EP(msg)
 
         if self.save_checkpoint_rate is not None :
@@ -303,29 +434,28 @@ inobj : InOpts object
                                            verb=self.verb)
             if is_fail :
                 msg = "Invalid values after -save_checkpoint_list: "
-                msg+= "{}\n".format(self.save_checkpoint_rate)
+                msg+= "{}\n".format(self.save_checkpoint_list)
                 msg+= "Could not convert all to int"
                 ab.EP(msg)
 
-        # if using save_checkpoint_rate, have to combine with list
-        # (default or user-entered)
-        if self.save_checkpoint_rate is not None :
-            is_fail, self.save_checkpoint_list = \
-                combine_list_rate_max(
-                    self.save_checkpoint_list,
-                    self.save_checkpoint_rate,
-                    self.max_epoch,
-                    label="checkpoint",
-                    verb=self.verb
-                )
-            if is_fail :
-                msg = "Could not merge in values from -save_checkpoint_rate: "
-                msg+= "{}\n".format(self.save_checkpoint_rate)
-                ab.EP(msg)
+        # check about combining save_checkpoint_rate with the list, or just
+        # verify the list (default or user-entered)
+        is_fail, self.save_checkpoint_list = \
+            combine_list_rate_max(
+                self.save_checkpoint_list,
+                self.save_checkpoint_rate,
+                self.max_epoch,
+                label="checkpoint",
+                verb=self.verb
+            )
+        if is_fail :
+            msg = "Could not merge in values from -save_checkpoint_rate: "
+            msg+= "{}\n".format(self.save_checkpoint_rate)
+            ab.EP(msg)
 
-        # finalize checkpoint list: always include self.num_epochs
-        if self.num_epoch not in self.save_checkpoint_list :
-            self.save_checkpoint_list.append(self.num_epoch)
+        # finalize checkpoint list: always include self.max_epochs
+        if self.max_epoch not in self.save_checkpoint_list :
+            self.save_checkpoint_list.append(self.max_epoch)
 
         if self.save_mask_rate is not None :
             if self.save_mask_rate <= 0 :
@@ -334,21 +464,31 @@ inobj : InOpts object
                 msg+= "Cannot be <= 0"
                 ab.EP(msg)
 
-        # if using save_mask_rate, have to combine with list
-        # (default or user-entered)
-        if self.save_mask_rate is not None :
+        # if using save_mask_list, values must be ints
+        if len(self.save_mask_list) :
             is_fail, self.save_mask_list = \
-                combine_list_rate_max(
-                    self.save_mask_list,
-                    self.save_mask_rate,
-                    self.max_epoch,
-                    label="mask",
-                    verb=self.verb
-                )
+                convert_list_of_str_to_int(self.save_mask_list, 
+                                           verb=self.verb)
             if is_fail :
-                msg = "Could not merge in values from -save_mask_rate: "
-                msg+= "{}\n".format(self.save_mask_rate)
+                msg = "Invalid values after -save_mask_list: "
+                msg+= "{}\n".format(self.save_mask_list)
+                msg+= "Could not convert all to int"
                 ab.EP(msg)
+
+        # check about combining save_mask_rate with the list, or just
+        # verify the list (default or user-entered)
+        is_fail, self.save_mask_list = \
+            combine_list_rate_max(
+                self.save_mask_list,
+                self.save_mask_rate,
+                self.max_epoch,
+                label="mask",
+                verb=self.verb
+            )
+        if is_fail :
+            msg = "Could not merge in values from -save_mask_rate: "
+            msg+= "{}\n".format(self.save_mask_rate)
+            ab.EP(msg)
 
         # store platform system name 
         self.sysname = platform.system()
@@ -374,6 +514,7 @@ inobj : InOpts object
 
         # convert bool-ish opts to bools
         self.do_weight_norm = au.convert_to_bool_yn10(self.do_weight_norm)
+        self.do_strict_load = au.convert_to_bool_yn10(self.do_strict_load)
         self.do_shuffle     = au.convert_to_bool_yn10(self.do_shuffle)
         self.do_clean       = au.convert_to_bool_yn10(self.do_clean)
         self.do_log         = au.convert_to_bool_yn10(self.do_log)
@@ -397,16 +538,24 @@ inobj : InOpts object
             ab.EP1("Failed select device")
             return BAD_RETURN
 
-        # ... and apparently an extra consideration
-        if self.device == 'cpu' and self.precision == 'half' :
-            ab.EP1("Half precision is not supported on CPU devices")
-            return BAD_RETURN
+        # another precision-based consideration
+        if self.precision == 'mixed':
+            if self.device != 'cuda':
+                msg = "Mixed precision training requires device to be 'cuda'"
+                ab.EP1(msg)
+                return BAD_RETURN
+
+            self.grad_scaler = torch.amp.GradScaler('cuda')
 
         # get/set number of CPUs to use
         is_fail = ltu.set_torch_cpus(num_cpu=self.num_cpu, verb=self.verb)
         if is_fail :
             ab.EP1("Failed select num_cpu")
             return BAD_RETURN
+
+        # make use of random seed, if provided by user
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
 
         return 0
 
@@ -428,10 +577,11 @@ inobj : InOpts object
                     verb        = self.verb
                 )
             except:
-                ab.EP1("Failed to make network: {}".format(architecture))
+                ab.EP1("Failed to make network: {}".format(self.architecture))
                 return BAD_RETURN
 
-        elif self.architecture == 'Cerebrum' :
+        # this if-branch is now impossible, bc Cerebrum is not enabled now
+        elif 0 and self.architecture == 'Cerebrum' :
             try:
                 self.net = lmc.Cerebrum(
                     in_channels = self.num_channel_in,
@@ -440,7 +590,7 @@ inobj : InOpts object
                     verb        = self.verb
                 )
             except:
-                ab.EP1("Failed to make network: {}".format(architecture))
+                ab.EP1("Failed to make network: {}".format(self.architecture))
                 return BAD_RETURN
 
         else:
@@ -458,11 +608,22 @@ inobj : InOpts object
                 ab.EP1(msg)
                 return BAD_RETURN
 
-            try: 
-                self.net.load_state_dict(
-                    torch.load(self.restart_checkpoint), 
-                    strict=False,
+            try:
+                tload = torch.load(
+                    self.restart_checkpoint,
+                    weights_only=True,
+                    map_location=torch.device(self.device),
                 )
+                # in case strict=False, add in potential debugging
+                # about differences in the state load that could
+                # happen (NB: we don't want these to happen!)
+                missing, unexpected = \
+                    self.net.load_state_dict(tload, 
+                                             strict=self.do_strict_load)
+                if missing :
+                    ab.WP("Missing checkpoint keys: {}".format(missing))
+                if unexpected :
+                    ab.WP("Unexpected checkpoint keys: {}".format(unexpected))
             except:
                 msg = "Failed to load checkpoint: "
                 msg+= "{}".format(self.restart_checkpoint)
@@ -471,10 +632,6 @@ inobj : InOpts object
 
         # move the model to the device
         self.net.to(self.device)
-
-        # *** verify that this is possible? ***
-        if self.device == 'cuda' and self.precision == 'half' :
-            self.net = lfp.network_to_half(self.net)
 
         return 0
 
@@ -486,22 +643,12 @@ inobj : InOpts object
 
         BAD_RETURN = -1
 
-        # *** Question: original implementation has 'Adam16' as a
-        # *** choice of optimizer, but never any condition branch
-        # *** using it?
-
+        # only one optimizer at present
         if self.optimizer == 'Adam':
-            if self.precision in ['half', 'mixed'] : 
-                self.net_optim = torch.optim.Adam(
-                    self.net.parameters(), 
-                    lr  = self.learn_rate,
-                    eps = DEF.adam_nonfull_prec,
-                )
-            else : # full precision
-                self.net_optim = torch.optim.Adam(
-                    self.net.parameters(), 
-                    lr  = self.learn_rate,
-                )
+            self.net_optim = torch.optim.Adam(
+                self.net.parameters(),
+                lr = self.learn_rate,
+            )
 
         else:
             msg = "Unknown optimizer: {}\n".format(self.optimizer)
@@ -509,6 +656,224 @@ inobj : InOpts object
             msg+= "{}".format(DEF.STR_optimizer)
             ab.EP1(msg)
             return BAD_RETURN
+
+        return 0
+
+    def make_dataloaders(self):
+        """Create training and validation datasets/loaders."""
+
+        if self.verb :
+            ab.IP("Make training and validation dataloaders")
+
+        BAD_RETURN = -1
+
+        # This object verifies the training/validation directory trees and
+        # the correspondence among orig/mask/optional-wtds datasets.
+        self.data_tree = LAVB.ArchRootTree(
+            self.indir,
+            has_mask = True,
+            has_wtds = self.loss_has_wtds,
+            verb     = self.verb
+        )
+        if self.data_tree.status :
+            ab.EP1("Could not load main input dir correctly")
+            return BAD_RETURN
+
+        split_train = self.data_tree.all_split['training']
+        split_valid = self.data_tree.all_split['validation']
+
+        if split_train is None or split_valid is None :
+            ab.EP1("Failed to make training/validation data trees")
+            return BAD_RETURN
+
+        sample_set_train = ArchVnetSampleSet(
+            split_train,
+            scale_mode = self.scale_mode,
+            has_wtds   = self.loss_has_wtds,
+            verb       = self.verb
+        )
+        if not len(sample_set_train):
+            ab.EP1("No training datasets found")
+            return BAD_RETURN
+
+        sample_set_valid = ArchVnetSampleSet(
+            split_valid,
+            scale_mode = self.scale_mode,
+            has_wtds   = self.loss_has_wtds,
+            verb       = self.verb
+        )
+        if not len(sample_set_valid):
+            ab.EP1("No validation datasets found")
+            return BAD_RETURN
+
+        self.loader_train = DataLoader(
+            sample_set_train,
+            batch_size = self.batch_size,
+            shuffle    = self.do_shuffle
+        )
+
+        # Retain the old behavior of validating one dataset at a time.
+        self.loader_valid = DataLoader(
+            sample_set_valid,
+            batch_size = 1,
+            shuffle    = False
+        )
+
+        if self.verb :
+            ab.IP("Num training dsets   : {}".format(len(sample_set_train)))
+            ab.IP("Num validation dsets : {}".format(len(sample_set_valid)))
+
+        return 0
+
+    def make_loss(self):
+        """Create the selected loss-function object."""
+
+        if self.verb :
+            ab.IP("Make loss function: {}".format(self.loss_func))
+
+        BAD_RETURN = -1
+
+        loss_name = 'CalcLoss_' + self.loss_func
+
+        try:
+            loss_class = getattr(lml, loss_name)
+            self.net_loss = loss_class()
+        except (AttributeError, TypeError):
+            ab.EP1("Failed to make loss function: {}".format(loss_name))
+            return BAD_RETURN
+
+        return 0
+
+    def run_epoch(self, loader, phase='training'):
+        """Run one training or validation epoch.
+
+        Parameters
+        ----------
+        loader : DataLoader
+            loader for the desired data split
+        phase : str
+            one of allowed phase/splits
+
+        Returns
+        -------
+        is_fail : int
+            0 for success
+        losses : list
+            scalar loss for each batch
+        """
+
+        BAD_RETURN = (-1, [])
+        
+        if not(phase in LIST_phase) :
+            msg = "Unknown phase in run_epoch : {}\n".format(phase)
+            msg+= "Should be from this list:\n{}".format(STR_phase)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        # convenient to have this as a boolean, below
+        do_train = False
+
+        if phase == 'training' :
+            self.net.train()
+            do_train = True
+        elif phase == 'validation' :
+            self.net.eval()
+        else:
+            # should never reach
+            msg = "Reached an impossible point, via phase: {}".format(phase)
+            ab.EP1(msg)
+            return BAD_RETURN
+
+        if self.verb :
+            ab.IP("Start {} epoch".format(phase))
+
+        # add this for mixed precision and cuda behavior; amp =
+        # Automatic Mixed Precision, PyTorch automatically chooses
+        # when to use float16 or float32 for operations
+        use_amp = (
+            self.precision == 'mixed'
+            and self.device == 'cuda'
+        )
+
+        losses = []
+
+        # no gradients are needed during validation
+        with torch.set_grad_enabled(do_train):
+
+            for batch in loader:
+
+                data_orig = batch['orig'].to(self.device)
+                data_mask = batch['mask'].to(self.device)
+
+                if self.loss_has_wtds :
+                    data_wtds = batch['wtds'].to(self.device)
+
+                if do_train :
+                    self.net_optim.zero_grad(set_to_none=True)
+
+                with torch.autocast(
+                        device_type = 'cuda',
+                        dtype       = torch.float16,
+                        enabled     = use_amp):
+
+                    # Cerebrum has a different forward signature than Vnet
+                    if self.architecture == 'Cerebrum' :
+                        pred = self.net(data_orig, self.verb)
+                    else:
+                        pred = self.net(data_orig)
+
+                    if self.loss_has_wtds :
+                        loss = self.net_loss(pred, data_mask, data_wtds)
+                    else:
+                        loss = self.net_loss(pred, data_mask)
+
+                if do_train :
+                    if use_amp :
+                        self.grad_scaler.scale(loss).backward()
+                        self.grad_scaler.step(self.net_optim)
+                        self.grad_scaler.update()
+                    else:
+                        loss.backward()
+                        self.net_optim.step()
+
+                losses.append(float(loss.detach().cpu()))
+
+        return 0, losses
+
+    def run_training(self):
+        """Run all training and validation epochs."""
+
+        BAD_RETURN = -1
+
+        for epoch in range(self.num_epoch):
+
+            if self.verb :
+                ab.IP("Epoch {:04d} / {:04d}".format(epoch, self.max_epoch))
+
+            # run training phase
+            is_fail, train_losses = self.run_epoch(
+                self.loader_train,
+                phase = 'training',
+            )
+            if is_fail :
+                ab.EP1("Training failed at epoch {}".format(epoch))
+                return BAD_RETURN
+
+            # run validation phase
+            is_fail, valid_losses = self.run_epoch(
+                self.loader_valid,
+                phase = 'validation',
+            )
+            if is_fail :
+                ab.EP1("Validation failed at epoch {}".format(epoch))
+                return BAD_RETURN
+
+            train_mean = np.mean(train_losses)
+            valid_mean = np.mean(valid_losses)
+
+            if self.verb :
+                ab.IP("Mean training loss   : {:.6f}".format(train_mean))
+                ab.IP("Mean validation loss : {:.6f}".format(valid_mean))
 
         return 0
 
@@ -549,12 +914,12 @@ inobj : InOpts object
     # ----- decorators
 
     @property
-    def max_epoch(self):
-        """the number to use at the top of loops over epochs, because of half
-        open intervals; that is, [0, self.num_epoch] is the same as
-        [0, self.max_epoch)"""
+    def num_epoch(self):
+        """the total number of epochs; also, the number to use at the
+        top of loops over epochs, because of half-open intervals; that
+        is, [0, self.max_epoch] is the same as [0, self.num_epoch)"""
 
-        return self.num_epoch + 1
+        return self.max_epoch + 1
 
     @property
     def nsave_checkpoint(self):
@@ -577,6 +942,8 @@ the integers: rate Brate and maximum allowed number Cmax.  Return the
 combined set of numbers in a sorted list that does not contain
 repeats.  It is possible that Alist is empty and/or Brate is None.
 
+Values outside of the interval [0, Cmax] are rejected.
+
 For example, if these are inputs:
     Alist : [2, 12, 17]
     Brate : 5
@@ -589,7 +956,8 @@ Parameters
 Alist : list
     list of integers
 Brate : int
-    rate for generating a sequence of ints; must have Brate>0
+    rate for generating a sequence of ints; must have Brate>0; if Brate is
+    None, then only the list is checked
 Cmax : int
     max number for the rate to end at (so last one can be at Cmax itself)
 label : str
@@ -610,20 +978,33 @@ Dlist : list
 
     BAD_RETURN = (-1, [])
 
-    if Brate <= 0 :
+    if Brate is not None and Brate <= 0 :
         ab.EP1("Brate value must be >0, not: {}".format(Brate))
         return BAD_RETURN
-    if Cmax <= 0 :
-        ab.EP1("Cmax value must be >0, not: {}".format(Cmax))
+    if Cmax < 0 :
+        ab.EP1("Cmax value must be >=0, not: {}".format(Cmax))
         return BAD_RETURN
 
-    for ii in range(0, Cmax+1, Brate):
-        Dlist.append(ii)
+    if Brate is not None :
+        for ii in range(0, Cmax+1, Brate):
+            Dlist.append(ii)
 
     # combine lists
     Dlist.extend(list(Alist))
     # ... and remove any duplicates
     Dlist = list(set(Dlist))
+    # ... and reject values outside of valid range
+    tmp = []
+    for x in Dlist :
+        if x>=0 and x<=Cmax :
+            tmp.append(x)
+        else:
+            msg = "Removing invalid 'save' index "
+            if label :
+                msg+= " for {}".format(label)
+            msg+= ": {}".format(x)
+            ab.WP(msg)
+    Dlist = copy.deepcopy(tmp)  # deepcopy may be unnecessary here, but fine
     # ... and sort
     Dlist.sort()
 

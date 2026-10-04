@@ -23,7 +23,8 @@ dir_root : str
 has_mask : bool
     should the split data be checked for a directory of mask datasets ('mask')?
 has_wtds : bool
-    should the split data be checked for a directory of weight datasets ('wtds')?
+    should the split data be checked for a directory of weight datasets 
+    ('wtds')?
 verb : int
     verbosity level
 
@@ -34,7 +35,7 @@ verb : int
         # ----- set up attributes
 
         # main input variables
-        self.status        = 0                           # not used
+        self.status        = 0
         self.verb          = verb
 
         self.has_mask      = has_mask
@@ -54,14 +55,14 @@ verb : int
 
         # ----- take action(s)
 
-        tmp = self.basic_setup()
-        if tmp : return
+        self.status = self.basic_setup()
+        if self.status : return
 
-        tmp = self.check_tree_dirs()
-        if tmp : return
+        self.status = self.check_tree_dirs()
+        if self.status : return
 
-        tmp = self.load_split_trees()
-        if tmp : return
+        self.status = self.load_split_trees()
+        if self.status : return
 
     # ----- methods
 
@@ -72,7 +73,7 @@ verb : int
         self.pwd = os.getcwd()
 
         # don't want backslashes, for aesthetics
-        self.dir_root.rstrip('/')
+        self.dir_root = self.dir_root.rstrip('/')
 
         return 0
 
@@ -87,7 +88,7 @@ verb : int
 
         if not(os.path.isdir(self.dir_root)) :
             msg = "Tree check, no dir_root: "
-            msg+= "{}".format(self.dir_split)
+            msg+= "{}".format(self.dir_root)
             ab.EP1(msg)
             return BAD_RETURN
 
@@ -116,7 +117,7 @@ verb : int
                     has_wtds = self.has_wtds,
                     verb     = self.verb
                 )
-            if isinstance(self.all_split[split], int) :
+            if self.all_split[split].status :
                 msg = "Failed to load split tree for: {}".format(split)
                 ab.EP1(msg)
                 return BAD_RETURN
@@ -133,7 +134,7 @@ verb : int
         """How many files exist in a subdir (as defined by the str
         'label')?"""
 
-        return len(self.all_split[split])
+        return self.all_split[split].count_subdir_files('orig')
 
 
 # ============================================================================
@@ -205,7 +206,7 @@ verb : int
         # ----- set up attributes
 
         # main input variables
-        self.status        = 0                           # not used
+        self.status        = 0
         self.verb          = verb
 
         self.has_mask      = has_mask
@@ -227,14 +228,14 @@ verb : int
 
         # ----- take action(s)
 
-        tmp = self.basic_setup()
-        if tmp : return
+        self.status = self.basic_setup()
+        if self.status : return
 
-        tmp = self.check_tree_dirs()
-        if tmp : return
+        self.status = self.check_tree_dirs()
+        if self.status : return
 
-        tmp = self.check_tree_files()
-        if tmp : return
+        self.status = self.check_tree_files()
+        if self.status : return
 
     # ----- methods
 
@@ -245,7 +246,7 @@ verb : int
         self.pwd = os.getcwd()
 
         # don't want backslashes, for aesthetics
-        self.dir_split.rstrip('/')
+        self.dir_split = self.dir_split.rstrip('/')
 
         # make a list of subdirs to check
         self.all_label = ['orig']
