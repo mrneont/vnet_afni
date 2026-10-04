@@ -2,7 +2,7 @@ import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
-import lib_EDT
+
 import numpy as np
 import lib_nibabel_utils    as lnu
 
