@@ -233,6 +233,9 @@ inobj : InOpts object
             self.status = self.load_optimizer()
             if self.status : return
 
+            self.status = self.make_outdir()
+            if self.status : return
+
             ### NOT NEEDED SO FAR ***
             ###tmp = self.make_workdir()
             ###if tmp : return
@@ -349,7 +352,12 @@ inobj : InOpts object
         else:
             dir_exists = os.path.isdir(self.outdir)
             if dir_exists :
-                ab.EP("The outdir {} exists already".format(self.outdir))
+                msg = "The outdir {} exists already".format(self.outdir)
+                if not(self.overwrite) :
+                    ab.EP(msg)
+                else:
+                    msg+= "\n... but -overwrite is used, so we continue"
+                    ab.WP(msg)
 
         if self.restart_checkpoint is not None :
             file_exists = os.path.isfile(self.restart_checkpoint)
@@ -659,6 +667,20 @@ inobj : InOpts object
 
         return 0
 
+    def make_outdir(self):
+        """make the outdir, if it doesn't exist already."""
+
+        BAD_RETURN = -1
+
+        # create output directory before writing checkpoints or other outputs
+        try:
+            os.makedirs(self.outdir, exist_ok=self.overwrite)
+        except OSError:
+            ab.EP1("Could not create outdir: {}".format(self.outdir))
+            return BAD_RETURN
+
+        return 0
+
     def make_dataloaders(self):
         """Create training and validation datasets/loaders."""
 
@@ -858,6 +880,21 @@ inobj : InOpts object
             if is_fail :
                 ab.EP1("Training failed at epoch {}".format(epoch))
                 return BAD_RETURN
+
+            # save checkpoint after training phase, when requested
+            if epoch in self.save_checkpoint_list :
+                checkpoint_fname = os.path.join(
+                    self.outdir,
+                    "checkpoint_train_{:04d}.pt".format(epoch),
+                )
+                if self.verb :
+                    ab.IP("Save checkpoint: {}".format(checkpoint_fname))
+                try:
+                    torch.save(self.net.state_dict(), checkpoint_fname)
+                except Exception:
+                    ab.EP1("Failed to save checkpoint: {}".format(
+                        checkpoint_fname))
+                    return BAD_RETURN
 
             # run validation phase
             is_fail, valid_losses = self.run_epoch(
