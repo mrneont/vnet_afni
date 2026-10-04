@@ -26,7 +26,8 @@ import numpy as np
 import torch
 from   torch.utils.data import Dataset, DataLoader
 
-from communifti import lib_nibabel_read_nifti as lnrn
+from communifti import lib_nibabel_read_nifti  as lnrn
+from communifti import lib_nibabel_write_nifti as lnwn
 
 # ============================================================================
 # the allowed split/phase keywords when looping through epochs
@@ -80,7 +81,7 @@ class ArchVnetSampleSet(Dataset):
             fname_orig
         )
 
-        is_fail, data_orig, _ = LAVU.load_orig_dset(
+        is_fail, data_orig, hdr_orig = LAVU.load_orig_dset(
             path_orig,
             do_perc_thr = True,
             scale_mode  = self.scale_mode,
@@ -113,9 +114,10 @@ class ArchVnetSampleSet(Dataset):
         # ----- output sample
 
         sample = {
-            'orig'  : data_orig,
-            'mask'  : data_mask,
-            'fname' : fname_orig,
+            'orig'     : data_orig,
+            'mask'     : data_mask,
+            'fname'    : fname_orig,
+            'hdr_orig' : hdr_orig,
         }
 
         # ----- optional weight dset
@@ -141,6 +143,23 @@ class ArchVnetSampleSet(Dataset):
             sample['wtds'] = torch.from_numpy(arr_wtds).unsqueeze(0)
 
         return sample
+
+
+def collate_arch_vnet_samples(sample_list):
+    """Collate samples while preserving nibabel header objects as a list."""
+
+    batch = {
+        'orig'     : torch.stack([x['orig'] for x in sample_list]),
+        'mask'     : torch.stack([x['mask'] for x in sample_list]),
+        'fname'    : [x['fname'] for x in sample_list],
+        'hdr_orig' : [x['hdr_orig'] for x in sample_list],
+    }
+
+    if 'wtds' in sample_list[0] :
+        batch['wtds'] = torch.stack([x['wtds'] for x in sample_list])
+
+    return batch
+
 
 # ============================================================================
 
@@ -213,6 +232,7 @@ inobj : InOpts object
         self.loader_train    = None
         self.loader_valid    = None
         self.net_loss        = None
+        self.outdir_mask     = None
 
         # ----- take action(s)
 
@@ -679,6 +699,16 @@ inobj : InOpts object
             ab.EP1("Could not create outdir: {}".format(self.outdir))
             return BAD_RETURN
 
+        # keep predicted masks together in their own output subdirectory
+        if self.nsave_mask :
+            self.outdir_mask = os.path.join(self.outdir, 'mask_pred')
+            try:
+                os.makedirs(self.outdir_mask, exist_ok=self.overwrite)
+            except OSError:
+                ab.EP1("Could not create mask outdir: {}".format(
+                    self.outdir_mask))
+                return BAD_RETURN
+
         return 0
 
     def make_dataloaders(self):
@@ -731,14 +761,16 @@ inobj : InOpts object
         self.loader_train = DataLoader(
             sample_set_train,
             batch_size = self.batch_size,
-            shuffle    = self.do_shuffle
+            shuffle    = self.do_shuffle,
+            collate_fn = collate_arch_vnet_samples
         )
 
         # Retain the old behavior of validating one dataset at a time.
         self.loader_valid = DataLoader(
             sample_set_valid,
             batch_size = 1,
-            shuffle    = False
+            shuffle    = False,
+            collate_fn = collate_arch_vnet_samples
         )
 
         if self.verb :
@@ -766,7 +798,7 @@ inobj : InOpts object
 
         return 0
 
-    def run_epoch(self, loader, phase='training'):
+    def run_epoch(self, loader, phase='training', epoch=None):
         """Run one training or validation epoch.
 
         Parameters
@@ -775,6 +807,8 @@ inobj : InOpts object
             loader for the desired data split
         phase : str
             one of allowed phase/splits
+        epoch : int
+            current epoch index; used for optional predicted-mask output
 
         Returns
         -------
@@ -860,7 +894,63 @@ inobj : InOpts object
 
                 losses.append(float(loss.detach().cpu()))
 
+                if epoch in self.save_mask_list :
+                    is_fail = self.write_pred_masks(pred, batch, phase, epoch)
+                    if is_fail :
+                        return BAD_RETURN
+
         return 0, losses
+
+    def get_pred_mask_fname(self, fname_orig, phase, epoch):
+        """Return output name for one predicted foreground mask."""
+
+        fname_base = fname_orig.replace('_orig', '')
+        if fname_base.endswith('.nii.gz') :
+            fname_base = fname_base[:-7]
+        elif fname_base.endswith('.nii') :
+            fname_base = fname_base[:-4]
+
+        if len(phase) > 5 :
+            ppp = phase[:5]
+        else:
+            ppp = phase
+
+        fname_out = "{}_pmask_{}_{:04d}.nii.gz".format(
+            fname_base, ppp, epoch)
+
+        return os.path.join(self.outdir_mask, fname_out)
+
+    def write_pred_masks(self, pred, batch, phase, epoch):
+        """Write predicted foreground masks for one batch."""
+
+        BAD_RETURN = -1
+
+        for bb in range(pred.shape[0]) :
+            fname_out = self.get_pred_mask_fname(
+                batch['fname'][bb], phase, epoch)
+
+            if self.verb :
+                ab.IP("Writing out pred_mask to file:\n{}".format(fname_out))
+
+            # make an appropriate type and convert to numpy array on cpu
+            arr = (pred[bb][1]
+                   .detach()
+                   .to(device='cpu', dtype=torch.float32)
+                   .numpy())
+
+            # actually write out the file to disk
+            try:
+                lnwn.BabelNiftiWrite(
+                    arr, batch['hdr_orig'][bb], fname_out,
+                    map_rules    = "afni_rules",
+                    do_overwrite = bool(self.overwrite),
+                    do_rm_exts   = True,
+                    verb         = self.verb )
+            except Exception:
+                ab.EP1("Failed to write pred_mask: {}".format(fname_out))
+                return BAD_RETURN
+
+        return 0
 
     def run_training(self):
         """Run all training and validation epochs."""
@@ -876,6 +966,7 @@ inobj : InOpts object
             is_fail, train_losses = self.run_epoch(
                 self.loader_train,
                 phase = 'training',
+                epoch = epoch,
             )
             if is_fail :
                 ab.EP1("Training failed at epoch {}".format(epoch))
@@ -900,6 +991,7 @@ inobj : InOpts object
             is_fail, valid_losses = self.run_epoch(
                 self.loader_valid,
                 phase = 'validation',
+                epoch = epoch,
             )
             if is_fail :
                 ab.EP1("Validation failed at epoch {}".format(epoch))
