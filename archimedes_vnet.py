@@ -313,13 +313,13 @@ checks happen in a subsequent object.
         self.valid_opts.add_opt('-save_checkpoint_rate', 1, [], 
                         helpstr='write a checkpoint every n-th epoch')
 
-        self.valid_opts.add_opt('-save_checkpoint_list', 1, [], 
+        self.valid_opts.add_opt('-save_checkpoint_list', -1, [], 
                         helpstr='write a checkpoint at every listed epoch')
 
         self.valid_opts.add_opt('-save_mask_rate', 1, [], 
                         helpstr='write masks every n-th epoch')
 
-        self.valid_opts.add_opt('-save_mask_list', 1, [], 
+        self.valid_opts.add_opt('-save_mask_list', -1, [], 
                         helpstr='write masks at every listed epoch')
 
         self.valid_opts.add_opt('-architecture', 1, [], 
