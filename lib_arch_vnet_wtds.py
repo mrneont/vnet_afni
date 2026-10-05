@@ -190,15 +190,15 @@ class MainObj:
 
         BAD_RETURN = -1
 
-        txt  = "swarm                                                          \\\n"
-        txt+= "        -f {:<30s}             \\\n".format(self.swarm_script)
-        txt+= "        --partition=norm,quick                             \\\n"
-        txt+= "        --threads-per-process=1                            \\\n"
-        txt+= "        --gb-per-process=8                                 \\\n"
-        txt+= "        --time=00:02:00                                    \\\n"
-        txt+= "        --bundle 3                                         \\\n"
-        txt+= "        --job-name=job_vnet_wtds                           \\\n"
-        txt+= "        --merge-output\n"
+        txt = "swarm                                                      \\\n"
+        txt+= "    -f {:<40s}            \\\n".format(self.swarm_script)
+        txt+= "    --partition=norm,quick                                 \\\n"
+        txt+= "    --threads-per-process=1                                \\\n"
+        txt+= "    --gb-per-process=8                                     \\\n"
+        txt+= "    --time=00:02:00                                        \\\n"
+        txt+= "    --bundle 3                                             \\\n"
+        txt+= "    --job-name=job_vnet_wtds                               \\\n"
+        txt+= "    --merge-output\n"
 
         try:
             with open(self.swarm_cmd_file, 'w') as fff:
