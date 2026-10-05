@@ -1,0 +1,179 @@
+#!/usr/bin/env python
+
+# python3 status: compatible
+
+# system libraries
+import sys
+
+# AFNI libraries
+from    afnipy import option_list   as OL
+from    afnipy import afni_base     as ab
+
+from vnet_afni import lib_arch_vnet_wtds as LAVW
+
+# ----------------------------------------------------------------------
+# globals
+
+g_help_string = """Overview ~1~
+
+This program helps prepare a data tree that is going to be used to
+make a VNET, by making weight dataset ('wtds') volumes for each
+existing mask.
+
+The input directory is expected to contain training/ and validation/
+data split directories, each with a mask/ subdirectory.  
+
+This program will create a new wtds/ subdirectory parallel to it. For
+each mask/*_mask.nii* dataset, an associated wtds/*_wtds.nii.gz
+dataset will be created by running the supplementary
+adjunct_mask_to_wtds.tcsh script.
+
+auth: Y Narayana Swamy (SSCC, NIMH, NIH, USA)
+      PA Taylor (SSCC, NIMH, NIH, USA)
+
+--------------------------------------------------------------------------
+
+Usage ~1~
+
+-indir INDIR     :(req) VNET input directory containing training/ and
+                  validation/ directories
+
+-overwrite       :allow pre-existing wtds/ directories and overwrite their
+                  associated output datasets
+
+-verb VVV        :control verbosity 
+                  (def: 1)
+
+-help, -h        :display program help file
+
+-show_valid_opts :show valid options for this program
+
+--------------------------------------------------------------------------
+
+Examples ~1~
+
+  1. Basic usage (pretty much all there is!):
+
+     adjunct_vnet_make_wtds.py    \\
+         -indir data_vnet
+
+"""
+
+
+class InOpts:
+    """Object for storing and parsing command line inputs."""
+
+    def __init__(self):
+
+        self.status     = 0
+        self.valid_opts = None
+        self.user_opts  = None
+
+        self.verb       = 1
+        self.indir      = None
+        self.overwrite  = False
+
+        self.init_options()
+
+    def init_options(self):
+        """Prepare the set of all options."""
+
+        self.valid_opts = OL.OptionList('valid opts')
+
+        self.valid_opts.add_opt('-help', 0, [],
+                                helpstr='display program help')
+
+        self.valid_opts.add_opt('-show_valid_opts', 0, [],
+                                helpstr='display all valid options')
+
+        self.valid_opts.add_opt('-indir', 1, [],
+                                helpstr='VNET input directory')
+
+        self.valid_opts.add_opt('-overwrite', 0, [],
+                                helpstr='overwrite pre-existing wtds outputs')
+
+        self.valid_opts.add_opt('-verb', 1, [],
+                                helpstr='set the verbosity level')
+
+        return 0
+
+    def process_options(self):
+        """Read command line options."""
+
+        self.valid_opts.check_special_opts(sys.argv)
+
+        if len(sys.argv) <= 1 or '-help' in sys.argv or '-h' in sys.argv:
+            print(g_help_string)
+            return 1
+
+        if '-show_valid_opts' in sys.argv:
+            self.valid_opts.show('', 1)
+            return 1
+
+        self.user_opts = OL.read_options(sys.argv, self.valid_opts)
+        uopts = self.user_opts
+        if not uopts:
+            return -1
+
+        val, err = uopts.get_type_opt(int, '-verb')
+        if val is not None and not err:
+            self.verb = val
+
+        err_base = "Problem interpreting use of opt: "
+
+        for opt in uopts.olist:
+
+            if opt.name == '-indir':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    ab.EP(err_base + opt.name)
+                self.indir = val
+
+            elif opt.name == '-overwrite':
+                self.overwrite = True
+
+        return 0
+
+    def check_options(self):
+        """Perform final command line checks before execution."""
+
+        BAD_RETURN = -1
+
+        if self.indir is None:
+            ab.EP1("missing -indir option")
+            return BAD_RETURN
+
+        return 0
+
+
+# ----------------------------------------------------------------------------
+
+def main():
+
+    inobj = InOpts()
+
+    rv = inobj.process_options()
+    if rv > 0:
+        return 0, None
+    if rv < 0:
+        ab.EP1('failed to process options')
+        return 1, None
+
+    rv = inobj.check_options()
+    if rv:
+        ab.EP1('failed whilst checking options')
+        return rv, None
+
+    mainobj = LAVW.MainObj(user_inobj=inobj)
+    if not(mainobj) or mainobj.status:
+        return 1, mainobj
+
+    return 0, mainobj
+
+
+# ============================================================================
+
+if __name__ == '__main__':
+
+    stat, mainobj = main()
+    sys.exit(stat)
