@@ -3,7 +3,7 @@
 # A library of default settings for: archimedes_vnet.py
 # ============================================================================
 
-#import os, sys, copy
+from afnipy import lib_format_cmd_str as lfcs
 
 # ============================================================================
 # training parameter options (and default settings)
@@ -82,6 +82,7 @@ DOPTS = {
     'overwrite'            : '',
     'do_clean'             : 'Yes',
     'do_log'               : 'No',
+    'do_log_loss'          : 'Yes',
     'indir'                : '',
     'outdir'               : None,
     'workdir'              : '',
@@ -105,6 +106,43 @@ DOPTS = {
     'save_mask_rate'       : None,
     'save_mask_list'       : [],
 }
+
+DOPTS_all_keys = list(DOPTS.keys())
+
+# ============================================================================
+
+def get_arg_str(argv, do_niceify=True):
+    """Parse the command line call argv, which is a list of all the pieces
+therein.  The pieces can just be joined together with whitespace, or
+more nicely spaced out across multiple lines and vertically aligned
+with do_niceify.
+
+Parameters
+----------
+argv: list
+    list of strings, being the pieces of the command line command
+do_niceify: bool
+    should we space things out nicely across multiple lines?
+    (def: of course we should!)
+
+Returns
+-------
+arg_str : str
+    The single string that is the full command line command
+
+    """
+
+    arg_str = ' '.join(argv)
+
+    if do_niceify :
+        # might be simpler way to get from parser?
+        all_opts = ["-" + key for key in DOPTS_all_keys]
+
+        # create str
+        is_diff, arg_str = \
+            lfcs.afni_niceify_cmd_str(arg_str, list_cmd_args = all_opts)
+
+    return arg_str
 
 # ============================================================================
 

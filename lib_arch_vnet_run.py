@@ -9,6 +9,7 @@
 
 import sys, os, copy, glob
 import platform
+from  datetime import datetime
 
 from    afnipy import afni_base          as ab
 from    afnipy import afni_util          as au
@@ -174,7 +175,7 @@ inobj : InOpts object
 
     """
 
-    def __init__(self, user_inobj=None):
+    def __init__(self, user_inobj=None, args_orig=[]):
 
         # ----- set up attributes
 
@@ -182,17 +183,20 @@ inobj : InOpts object
         self.status          = 0
         self.user_opts       = DEF.DOPTS['user_opts']  # command the user ran
         self.user_inobj      = user_inobj
+        self.args_orig       = args_orig
 
         # general variables
         self.verb            = DEF.DOPTS['verb']
         self.overwrite       = DEF.DOPTS['overwrite']
         self.do_clean        = DEF.DOPTS['do_clean']
         self.do_log          = DEF.DOPTS['do_log']
+        self.do_log_loss     = DEF.DOPTS['do_log_loss']
 
         # main data variables
         self.indir           = DEF.DOPTS['indir']
         self.outdir          = DEF.DOPTS['outdir']     # None or str
         self.workdir         = DEF.DOPTS['workdir']
+        self.time_start      = None
 
         # control variables
         self.max_epoch       = DEF.DOPTS['max_epoch']
@@ -233,6 +237,9 @@ inobj : InOpts object
         self.loader_valid    = None
         self.net_loss        = None
         self.outdir_mask     = None
+        self.fname_log_cmd   = None
+        self.fname_log_loss_training   = None
+        self.fname_log_loss_validation = None
 
         # ----- take action(s)
 
@@ -269,6 +276,9 @@ inobj : InOpts object
             self.status = self.run_training()
             if self.status : return
 
+            self.status = self.finish_cmd_log()
+            if self.status : return
+
             ### NOT NEEDED SO FAR ***
             ###if self.do_clean :
             ###    self.status = self.remove_workdir()
@@ -301,6 +311,9 @@ inobj : InOpts object
             self.do_clean = io.do_clean
         if io.do_log is not None :
             self.do_log = io.do_log
+
+        if io.do_log_loss is not None :
+            self.do_log_loss = io.do_log_loss
 
         # main data variables
         if io.indir is not None :
@@ -357,6 +370,8 @@ inobj : InOpts object
     def basic_setup(self):
         """Run through basic checks of what has been input, and fill in any
         further information that is needed (like wdir, etc.)"""
+
+        self.time_start = datetime.now().astimezone().isoformat(timespec='seconds')
 
         # check basic requirements
 
@@ -546,6 +561,7 @@ inobj : InOpts object
         self.do_shuffle     = au.convert_to_bool_yn10(self.do_shuffle)
         self.do_clean       = au.convert_to_bool_yn10(self.do_clean)
         self.do_log         = au.convert_to_bool_yn10(self.do_log)
+        self.do_log_loss    = au.convert_to_bool_yn10(self.do_log_loss)
 
         return 0
 
@@ -701,6 +717,39 @@ inobj : InOpts object
         except OSError:
             ab.EP1("Could not create outdir: {}".format(self.outdir))
             return BAD_RETURN
+
+        # log the command that was run (in nice format) and its start time
+        self.fname_log_cmd = os.path.join(self.outdir, 'log_cmd_run.txt')
+        try:
+            cmd_run = DEF.get_arg_str(self.args_orig, do_niceify=True)
+
+            with open(self.fname_log_cmd, 'w') as fff:
+                fff.write("# started: {}\n\n".format(self.time_start))
+                fff.write("# cmd run:\n".format(self.time_start))
+                fff.write("{}\n".format(cmd_run))
+        except OSError:
+            ab.EP1("Could not write command log: {}".format(
+                self.fname_log_cmd))
+            return BAD_RETURN
+
+        # initialize per-epoch loss logs
+        if self.do_log_loss :
+            self.fname_log_loss_training = os.path.join(
+                self.outdir, 'log_loss_training.dat')
+            self.fname_log_loss_validation = os.path.join(
+                self.outdir, 'log_loss_validation.dat')
+            for fname in [self.fname_log_loss_training,
+                          self.fname_log_loss_validation]:
+                try:
+                    with open(fname, 'w') as fff:
+                        # match the format spacing of the numbers, below
+                        txt = "{:7s} ".format('# epoch')
+                        txt+= "{:>10s} {:>10s} ".format('min', 'max')
+                        txt+= "{:>10s} {:>10s}\n".format('mean', 'stdev')
+                        fff.write(txt)
+                except OSError:
+                    ab.EP1("Could not create loss log: {}".format(fname))
+                    return BAD_RETURN
 
         # keep predicted masks together in their own output subdirectory
         if self.nsave_mask :
@@ -859,7 +908,11 @@ inobj : InOpts object
         # no gradients are needed during validation
         with torch.set_grad_enabled(do_train):
 
-            for batch in loader:
+            num_batch = len(loader)
+            for ibatch, batch in enumerate(loader):
+
+                if self.verb :
+                    ab.IP("Batch {:04d} / {:04d}".format(ibatch+1, num_batch))
 
                 data_orig = batch['orig'].to(self.device)
                 data_mask = batch['mask'].to(self.device)
@@ -1003,9 +1056,71 @@ inobj : InOpts object
             train_mean = np.mean(train_losses)
             valid_mean = np.mean(valid_losses)
 
+            if self.do_log_loss :
+                is_fail = self.write_loss_log(epoch, 
+                                              'training', 
+                                              train_losses)
+                if is_fail :
+                    return BAD_RETURN
+                is_fail = self.write_loss_log(epoch, 
+                                              'validation', 
+                                              valid_losses)
+                if is_fail :
+                    return BAD_RETURN
+
             if self.verb :
                 ab.IP("Mean training loss   : {:.6f}".format(train_mean))
                 ab.IP("Mean validation loss : {:.6f}".format(valid_mean))
+
+        return 0
+
+    def write_loss_log(self, epoch, phase, losses):
+        """Append per-epoch loss statistics for one phase."""
+
+        BAD_RETURN = -1
+
+        arr = np.asarray(losses, dtype=float)
+        vals1 = (arr.min(), arr.max())
+        vals2 = (arr.mean(), arr.std())
+
+        if phase == 'training' :
+            fname = self.fname_log_loss_training
+        elif phase == 'validation' :
+            fname = self.fname_log_loss_validation
+        else:
+            ab.EP1("Unknown phase for loss log: {}".format(phase))
+            return BAD_RETURN
+
+        try:
+            with open(fname, 'a') as fff:
+                # NB: the use of "#" in the string formatting curly
+                # brackets below is to force the 'g' of the general
+                # format to always use 6 numbers after the decimal;
+                # otherwise it might cheat and leave any off.
+                txt = "   {:04d} ".format(epoch)
+                txt+= "{:#10.6g} {:#10.6g} ".format(*vals1)
+                txt+= "{:#10.6g} {:#10.6g}\n".format(*vals2)
+                fff.write(txt)
+        except OSError:
+            ab.EP1("Could not append loss log: {}".format(fname))
+            return BAD_RETURN
+
+        return 0
+
+    def finish_cmd_log(self):
+        """Append the command completion time, if its log exists."""
+
+        if not(self.fname_log_cmd) :
+            return 0
+
+        time_finish = datetime.now().astimezone().isoformat(timespec='seconds')
+        try:
+            with open(self.fname_log_cmd, 'a') as fff:
+                fff.write("\n# finished: {}\n".format(time_finish))
+        except OSError:
+            ab.EP1("Could not finish command log: {}".format(
+                self.fname_log_cmd))
+            return -1
 
         return 0
 

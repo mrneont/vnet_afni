@@ -10,7 +10,7 @@ from    afnipy import option_list   as OL
 from    afnipy import afni_util     as UTIL
 from    afnipy import afni_base     as BASE
 
-from vnet_afni import lib_arch_vnet_defs as LAVD
+from vnet_afni import lib_arch_vnet_defs as DEF
 from vnet_afni import lib_arch_vnet_run  as LAVR
 
 # ----------------------------------------------------------------------
@@ -18,19 +18,21 @@ from vnet_afni import lib_arch_vnet_run  as LAVR
 
 # combine all entries for help here
 g_help_dict   = {
-    **LAVD.DOPTS, 
-    'STR_architecture' : LAVD.STR_architecture,
-    'STR_optimizer'    : LAVD.STR_optimizer,
-    'STR_scale_mode'   : LAVD.STR_scale_mode,
-    'STR_precision'    : LAVD.STR_precision,
-    'STR_loss_func'    : LAVD.STR_loss_func,
-    'STR_loss_func_has_wtds' : LAVD.STR_loss_func_has_wtds,
-    'STR_device'       : LAVD.STR_device,
+    **DEF.DOPTS, 
+    'STR_architecture' : DEF.STR_architecture,
+    'STR_optimizer'    : DEF.STR_optimizer,
+    'STR_scale_mode'   : DEF.STR_scale_mode,
+    'STR_precision'    : DEF.STR_precision,
+    'STR_loss_func'    : DEF.STR_loss_func,
+    'STR_loss_func_has_wtds' : DEF.STR_loss_func_has_wtds,
+    'STR_device'       : DEF.STR_device,
 }
 
 g_help_string = """Overview ~1~
 
-This program is for running a VNET  the start of a python program
+This program is for applying machine learning training+validation to
+generate a VNET checkpoint to be used within 3dBrainTeaser (which does
+skullstripping of a T1w anatomical dataset).
 
 auth = Y Narayana Swamy (SSCC, NIMH, NIH, USA)
        RC Reynolds (SSCC, NIMH, NIH, USA)
@@ -162,6 +164,13 @@ Usage ~1~
                 shell commands that are run when this program is
                 executed.  Mainly for debugging purposes.
 
+-do_log_loss DLL
+               :write per-epoch loss statistics to these files:
+                OUTDIR/log_loss_training.dat and
+                OUTDIR/log_loss_validation.dat?
+                allowed values are:  Yes, 1, No, 0
+                (def: '{do_log_loss}')
+
 -help, -h      :display program help file
 
 -hist          :display program history
@@ -212,10 +221,11 @@ checks happen in a subsequent object.
         self.user_opts       = None
 
         # general variables
-        self.verb            = LAVD.DOPTS['verb']
+        self.verb            = DEF.DOPTS['verb']
         self.do_clean        = None
         self.overwrite       = None
         self.do_log          = None
+        self.do_log_loss     = None
 
         # main data variables
         self.indir           = None
@@ -347,6 +357,9 @@ checks happen in a subsequent object.
 
         self.valid_opts.add_opt('-do_log', 0, [], 
                         helpstr="turn on/off logging shell cmd execution")
+
+        self.valid_opts.add_opt('-do_log_loss', 1, [], 
+                        helpstr="write per-epoch loss statistics")
 
         self.valid_opts.add_opt('-overwrite', 0, [], 
                         helpstr='overwrite preexisting outputs')
@@ -554,6 +567,12 @@ checks happen in a subsequent object.
             elif opt.name == '-do_log':
                 self.do_log = True
 
+            elif opt.name == '-do_log_loss':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_log_loss = val
+
             elif opt.name == '-overwrite':
                 self.overwrite = '-overwrite'
 
@@ -626,7 +645,7 @@ def main():
         return rv2, None
 
     # use options to create main object
-    mainobj = LAVR.MainObj( user_inobj=inobj )
+    mainobj = LAVR.MainObj( user_inobj=inobj, args_orig=sys.argv )
     if not(mainobj) or mainobj.status :  
         return 1, mainobj
 
