@@ -197,6 +197,8 @@ inobj : InOpts object
         self.outdir          = DEF.DOPTS['outdir']     # None or str
         self.workdir         = DEF.DOPTS['workdir']
         self.time_start      = None
+        self.time_finish     = None
+        self.time_duration   = None
 
         # control variables
         self.max_epoch       = DEF.DOPTS['max_epoch']
@@ -371,7 +373,7 @@ inobj : InOpts object
         """Run through basic checks of what has been input, and fill in any
         further information that is needed (like wdir, etc.)"""
 
-        self.time_start = datetime.now().astimezone().isoformat(timespec='seconds')
+        self.time_start = datetime.now()
 
         # check basic requirements
 
@@ -724,8 +726,9 @@ inobj : InOpts object
             cmd_run = DEF.get_arg_str(self.args_orig, do_niceify=True)
 
             with open(self.fname_log_cmd, 'w') as fff:
-                fff.write("# started: {}\n\n".format(self.time_start))
-                fff.write("# cmd run:\n".format(self.time_start))
+                tts = self.time_start.isoformat(timespec='seconds')
+                fff.write("# started: {}\n\n".format(tts))
+                fff.write("# cmd run:\n")
                 fff.write("{}\n".format(cmd_run))
         except OSError:
             ab.EP1("Could not write command log: {}".format(
@@ -1109,10 +1112,15 @@ inobj : InOpts object
         if not(self.fname_log_cmd) :
             return 0
 
-        time_finish = datetime.now().astimezone().isoformat(timespec='seconds')
+        self.time_finish   = datetime.now()
+        self.time_duration = self.time_finish - self.time_start
+
         try:
             with open(self.fname_log_cmd, 'a') as fff:
-                fff.write("\n# finished: {}\n".format(time_finish))
+                ttf = self.time_finish.isoformat(timespec='seconds')
+                ttd = str(self.time_duration).split('.')[0] # no frac sec
+                fff.write("\n# finished: {}\n".format(ttf))
+                fff.write("# duration: {}\n".format(ttd))
         except OSError:
             ab.EP1("Could not finish command log: {}".format(
                 self.fname_log_cmd))
