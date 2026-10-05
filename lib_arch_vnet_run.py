@@ -1093,13 +1093,9 @@ inobj : InOpts object
 
         try:
             with open(fname, 'a') as fff:
-                # NB: the use of "#" in the string formatting curly
-                # brackets below is to force the 'g' of the general
-                # format to always use 6 numbers after the decimal;
-                # otherwise it might cheat and leave any off.
                 txt = "   {:04d} ".format(epoch)
-                txt+= "{:#10.6g} {:#10.6g} ".format(*vals1)
-                txt+= "{:#10.6g} {:#10.6g}\n".format(*vals2)
+                txt+= "{:10.6f} {:10.6f} ".format(*vals1)
+                txt+= "{:10.6f} {:10.6f}\n".format(*vals2)
                 fff.write(txt)
         except OSError:
             ab.EP1("Could not append loss log: {}".format(fname))
