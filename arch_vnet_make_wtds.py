@@ -68,15 +68,15 @@ Examples ~1~
 
   1. Basic usage):
 
-     adjunct_vnet_make_wtds.py              \\
+     arch_vnet_make_wtds.py                      \\
          -indir data_vnet
 
   2. Basic usage for making a swarm script and executable swarm command, 
      to be run separately to do all the work:
 
-     adjunct_vnet_make_wtds.py                 \\
-         -indir           data_vnet           \\
-         -swarm_script    run_vnet_wtds.swarm \\
+     arch_vnet_make_wtds.py                      \\
+         -indir           data_vnet              \\
+         -swarm_script    run_vnet_wtds.swarm    \\
          -swarm_cmd_file  run_vnet_wtds.tcsh
 
 """
