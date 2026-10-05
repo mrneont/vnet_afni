@@ -365,7 +365,7 @@ class VNet_orig(nn.Module):
         """Forward pass.
         """
 
-        if self.verb :
+        if self.verb > 1 :
             print("++ encode stage: init", flush=True)
         down1 = self.down1(x) + torch.cat(16*[x], dim=1)
 
@@ -377,32 +377,32 @@ class VNet_orig(nn.Module):
         down4 = self.down4(down3)
         down5 = self.down5(down4) 
        
-        if self.verb :
+        if self.verb > 1 :
             print("++ decode stage: 1/5",  flush=True)
         up1 = self.up1(down5, down4)  
         del down5, down4
 
-        if self.verb :
+        if self.verb > 1 :
             print("++ decode stage: 2/5",  flush=True)
         up2 = self.up2(up1, down3)
         del up1, down3
 
-        if self.verb :
+        if self.verb > 1 :
             print("++ decode stage: 3/5",  flush=True)
         up3 = self.up3(up2, down2)
         del up2, down2
 
-        if self.verb :
+        if self.verb > 1 :
             print("++ decode stage: 4/5",  flush=True)
         up4 = self.up4(up3, down1)
         del up3, down1
 
-        if self.verb : 
+        if self.verb > 1 : 
             print("++ decode stage: 5/5",  flush=True)
         up5 = self.up5(up4)
         del up4
 
-        if self.verb :
+        if self.verb > 1 :
             print("++ decode stage: done", flush=True)
 
         return up5

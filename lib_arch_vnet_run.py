@@ -596,13 +596,16 @@ inobj : InOpts object
 
         BAD_RETURN = -1
 
+        # NB: verb level is 'downgraded' here, to keep useful default
+        # outputs for both this program and 3dBrainTeaser. So, we
+        # cheat a bit here.
         if self.architecture == 'vnet_orig' :
             try:
                 self.net = lmm.VNet_orig(
                     in_channels = self.num_channel_in,
                     num_class   = self.num_class_out,
                     wt_norm     = self.do_weight_norm, 
-                    verb        = self.verb
+                    verb        = max(self.verb-1, 0)
                 )
             except:
                 ab.EP1("Failed to make network: {}".format(self.architecture))
@@ -615,7 +618,7 @@ inobj : InOpts object
                     in_channels = self.num_channel_in,
                     num_class   = self.num_class_out,
                     wt_norm     = self.do_weight_norm, 
-                    verb        = self.verb
+                    verb        = max(self.verb-1, 0)
                 )
             except:
                 ab.EP1("Failed to make network: {}".format(self.architecture))
