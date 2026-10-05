@@ -50,6 +50,11 @@ Usage ~1~
                   mask-to-wtds commands directly; each line will contain one
                   adjunct_mask_to_wtds.tcsh call with full input/output paths
 
+-swarm_cmd_file SCF
+                 :write a command file SCF for running the swarm script, which
+                  the user can either edit/refine, or execute directly; 
+                  NB: this option requires also using -swarm_script
+
 -verb VVV        :control verbosity 
                   (def: 1)
 
@@ -66,12 +71,13 @@ Examples ~1~
      adjunct_vnet_make_wtds.py              \\
          -indir data_vnet
 
-  2. Basic usage for making a swarm script, to be run separately to do all
-     the work:
+  2. Basic usage for making a swarm script and executable swarm command, 
+     to be run separately to do all the work:
 
-     adjunct_vnet_make_wtds.py              \\
-         -indir         data_vnet           \\
-         -swarm_script  run_vnet_wtds.swarm
+     adjunct_vnet_make_wtds.py                 \\
+         -indir           data_vnet           \\
+         -swarm_script    run_vnet_wtds.swarm \\
+         -swarm_cmd_file  run_vnet_wtds.tcsh
 
 """
 
@@ -88,7 +94,8 @@ class InOpts:
         self.verb       = 1
         self.indir      = None
         self.overwrite  = False
-        self.swarm_script = None
+        self.swarm_script   = None
+        self.swarm_cmd_file = None
 
         self.init_options()
 
@@ -111,6 +118,9 @@ class InOpts:
 
         self.valid_opts.add_opt('-swarm_script', 1, [],
                                 helpstr='write swarm command file')
+
+        self.valid_opts.add_opt('-swarm_cmd_file', 1, [],
+                                helpstr='write command file to run swarm')
 
         self.valid_opts.add_opt('-verb', 1, [],
                                 helpstr='set the verbosity level')
@@ -158,6 +168,12 @@ class InOpts:
                     ab.EP(err_base + opt.name)
                 self.swarm_script = val
 
+            elif opt.name == '-swarm_cmd_file':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    ab.EP(err_base + opt.name)
+                self.swarm_cmd_file = val
+
         return 0
 
     def check_options(self):
@@ -167,6 +183,10 @@ class InOpts:
 
         if self.indir is None:
             ab.EP1("missing -indir option")
+            return BAD_RETURN
+
+        if self.swarm_cmd_file and not(self.swarm_script):
+            ab.EP1("-swarm_cmd_file requires -swarm_script")
             return BAD_RETURN
 
         return 0

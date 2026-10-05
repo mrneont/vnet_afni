@@ -31,7 +31,8 @@ class MainObj:
         self.verb          = 1
         self.overwrite     = False
         self.indir         = None
-        self.swarm_script  = None
+        self.swarm_script   = None
+        self.swarm_cmd_file = None
 
         # ----- take action(s)
 
@@ -44,9 +45,14 @@ class MainObj:
 
             if self.swarm_script:
                 self.status = self.write_swarm_script()
+                if self.status: return
+
+                if self.swarm_cmd_file:
+                    self.status = self.write_swarm_cmd_file()
+                    if self.status: return
             else:
                 self.status = self.run_all_splits()
-            if self.status: return
+                if self.status: return
 
     # ----- methods
 
@@ -61,8 +67,10 @@ class MainObj:
 
         self.verb      = io.verb
         self.overwrite = io.overwrite
-        self.indir        = io.indir
-        self.swarm_script = io.swarm_script
+
+        self.indir          = io.indir
+        self.swarm_script   = io.swarm_script
+        self.swarm_cmd_file = io.swarm_cmd_file
 
         return 0
 
@@ -173,6 +181,35 @@ class MainObj:
         if self.verb:
             ab.IP("Wrote swarm script: {}".format(self.swarm_script))
             ab.IP("Num swarm commands: {}".format(len(cmd_list)))
+
+        return 0
+
+
+    def write_swarm_cmd_file(self):
+        """Write a command file for running the generated swarm script."""
+
+        BAD_RETURN = -1
+
+        txt  = "swarm                                                          \\\n"
+        txt+= "        -f {:<30s}             \\\n".format(self.swarm_script)
+        txt+= "        --partition=norm,quick                             \\\n"
+        txt+= "        --threads-per-process=1                            \\\n"
+        txt+= "        --gb-per-process=8                                 \\\n"
+        txt+= "        --time=00:02:00                                    \\\n"
+        txt+= "        --bundle 3                                         \\\n"
+        txt+= "        --job-name=job_vnet_wtds                           \\\n"
+        txt+= "        --merge-output\n"
+
+        try:
+            with open(self.swarm_cmd_file, 'w') as fff:
+                fff.write(txt)
+        except OSError:
+            ab.EP1("Could not write swarm command file: {}".format(
+                self.swarm_cmd_file))
+            return BAD_RETURN
+
+        if self.verb:
+            ab.IP("Wrote swarm command file: {}".format(self.swarm_cmd_file))
 
         return 0
 
