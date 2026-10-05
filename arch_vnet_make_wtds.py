@@ -28,6 +28,11 @@ each mask/*_mask.nii* dataset, an associated wtds/*_wtds.nii.gz
 dataset will be created by running the supplementary
 adjunct_mask_to_wtds.tcsh script.
 
+One can also use the -swarm_script option to create a swarmable script
+(i.e., one full call to the adjunct*.tcsh script for each mask dataset)
+for carrying out this procedure, which can be executed according to the 
+user's desired settings.
+
 auth: Y Narayana Swamy (SSCC, NIMH, NIH, USA)
       PA Taylor (SSCC, NIMH, NIH, USA)
 
@@ -41,6 +46,10 @@ Usage ~1~
 -overwrite       :allow pre-existing wtds/ directories and overwrite their
                   associated output datasets
 
+-swarm_script SS :write a swarmable command file SS instead of running the
+                  mask-to-wtds commands directly; each line will contain one
+                  adjunct_mask_to_wtds.tcsh call with full input/output paths
+
 -verb VVV        :control verbosity 
                   (def: 1)
 
@@ -52,10 +61,17 @@ Usage ~1~
 
 Examples ~1~
 
-  1. Basic usage (pretty much all there is!):
+  1. Basic usage):
 
-     adjunct_vnet_make_wtds.py    \\
+     adjunct_vnet_make_wtds.py              \\
          -indir data_vnet
+
+  2. Basic usage for making a swarm script, to be run separately to do all
+     the work:
+
+     adjunct_vnet_make_wtds.py              \\
+         -indir         data_vnet           \\
+         -swarm_script  run_vnet_wtds.swarm
 
 """
 
@@ -72,6 +88,7 @@ class InOpts:
         self.verb       = 1
         self.indir      = None
         self.overwrite  = False
+        self.swarm_script = None
 
         self.init_options()
 
@@ -91,6 +108,9 @@ class InOpts:
 
         self.valid_opts.add_opt('-overwrite', 0, [],
                                 helpstr='overwrite pre-existing wtds outputs')
+
+        self.valid_opts.add_opt('-swarm_script', 1, [],
+                                helpstr='write swarm command file')
 
         self.valid_opts.add_opt('-verb', 1, [],
                                 helpstr='set the verbosity level')
@@ -131,6 +151,12 @@ class InOpts:
 
             elif opt.name == '-overwrite':
                 self.overwrite = True
+
+            elif opt.name == '-swarm_script':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    ab.EP(err_base + opt.name)
+                self.swarm_script = val
 
         return 0
 

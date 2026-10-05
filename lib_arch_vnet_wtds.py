@@ -31,6 +31,7 @@ class MainObj:
         self.verb          = 1
         self.overwrite     = False
         self.indir         = None
+        self.swarm_script  = None
 
         # ----- take action(s)
 
@@ -41,7 +42,10 @@ class MainObj:
             self.status = self.basic_setup()
             if self.status: return
 
-            self.status = self.run_all_splits()
+            if self.swarm_script:
+                self.status = self.write_swarm_script()
+            else:
+                self.status = self.run_all_splits()
             if self.status: return
 
     # ----- methods
@@ -57,7 +61,8 @@ class MainObj:
 
         self.verb      = io.verb
         self.overwrite = io.overwrite
-        self.indir     = io.indir
+        self.indir        = io.indir
+        self.swarm_script = io.swarm_script
 
         return 0
 
@@ -95,6 +100,82 @@ class MainObj:
 
         return 0
 
+
+    def get_mask_wtds_pairs(self, split):
+        """Return full-path mask/wtds filename pairs for one split."""
+
+        BAD_RETURN = (-1, [])
+
+        dir_split = os.path.join(self.indir, split)
+        dir_mask  = os.path.join(dir_split, 'mask')
+        dir_wtds  = os.path.join(dir_split, 'wtds')
+
+        mask_list = glob.glob(os.path.join(dir_mask, '*_mask.nii*'))
+        mask_list.sort()
+
+        if not len(mask_list):
+            ab.EP1("No mask datasets found in: {}".format(dir_mask))
+            return BAD_RETURN
+
+        pair_list = []
+        for fname_mask in mask_list:
+
+            fname_base = os.path.basename(fname_mask)
+            if fname_base.endswith('_mask.nii.gz'):
+                fname_wtds = fname_base[:-12] + '_wtds.nii.gz'
+            elif fname_base.endswith('_mask.nii'):
+                fname_wtds = fname_base[:-9] + '_wtds.nii.gz'
+            else:
+                ab.EP1("Unexpected mask filename: {}".format(fname_mask))
+                return BAD_RETURN
+
+            path_mask = os.path.abspath(fname_mask)
+            path_wtds = os.path.abspath(os.path.join(dir_wtds, fname_wtds))
+            pair_list.append((path_mask, path_wtds))
+
+        return 0, pair_list
+
+    def write_swarm_script(self):
+        """Write one full-path mask-to-wtds command per dataset."""
+
+        BAD_RETURN = -1
+
+        cmd_list = []
+
+        for split in LIST_split:
+            dir_wtds = os.path.join(self.indir, split, 'wtds')
+
+            try:
+                os.makedirs(dir_wtds, exist_ok=self.overwrite)
+            except OSError:
+                ab.EP1("Could not create wtds dir: {}".format(dir_wtds))
+                return BAD_RETURN
+
+            is_fail, pair_list = self.get_mask_wtds_pairs(split)
+            if is_fail:
+                return BAD_RETURN
+
+            for fname_mask, path_wtds in pair_list:
+                cmd = '{} "{}" "{}"'.format(
+                    PROG_mask_to_wtds, fname_mask, path_wtds
+                )
+                cmd_list.append(cmd)
+
+        try:
+            with open(self.swarm_script, 'w') as fff:
+                for cmd in cmd_list:
+                    fff.write(cmd + '\n')
+        except OSError:
+            ab.EP1("Could not write swarm script: {}".format(
+                self.swarm_script))
+            return BAD_RETURN
+
+        if self.verb:
+            ab.IP("Wrote swarm script: {}".format(self.swarm_script))
+            ab.IP("Num swarm commands: {}".format(len(cmd_list)))
+
+        return 0
+
     def run_all_splits(self):
         """Create wtds datasets for training and validation splits."""
 
@@ -112,9 +193,7 @@ class MainObj:
 
         BAD_RETURN = -1
 
-        dir_split = os.path.join(self.indir, split)
-        dir_mask  = os.path.join(dir_split, 'mask')
-        dir_wtds  = os.path.join(dir_split, 'wtds')
+        dir_wtds = os.path.join(self.indir, split, 'wtds')
 
         if self.verb:
             ab.IP("Process masks: {}".format(split))
@@ -125,29 +204,15 @@ class MainObj:
             ab.EP1("Could not create wtds dir: {}".format(dir_wtds))
             return BAD_RETURN
 
-        mask_list = glob.glob(os.path.join(dir_mask, '*_mask.nii*'))
-        mask_list.sort()
-
-        if not len(mask_list):
-            ab.EP1("No mask datasets found in: {}".format(dir_mask))
+        is_fail, pair_list = self.get_mask_wtds_pairs(split)
+        if is_fail:
             return BAD_RETURN
 
-        for ii, fname_mask in enumerate(mask_list):
-
-            fname_base = os.path.basename(fname_mask)
-            if fname_base.endswith('_mask.nii.gz'):
-                fname_wtds = fname_base[:-12] + '_wtds.nii.gz'
-            elif fname_base.endswith('_mask.nii'):
-                fname_wtds = fname_base[:-9] + '_wtds.nii.gz'
-            else:
-                ab.EP1("Unexpected mask filename: {}".format(fname_mask))
-                return BAD_RETURN
-
-            path_wtds = os.path.join(dir_wtds, fname_wtds)
+        for ii, (fname_mask, path_wtds) in enumerate(pair_list):
 
             if self.verb:
                 ab.IP("Dset {:04d} / {:04d}: {}".format(
-                    ii+1, len(mask_list), fname_base))
+                    ii+1, len(pair_list), os.path.basename(fname_mask)))
 
             cmd = '{} "{}" "{}"'.format(
                 PROG_mask_to_wtds, fname_mask, path_wtds
