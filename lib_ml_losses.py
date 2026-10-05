@@ -203,14 +203,16 @@ class CalcLoss_Sorensen_Dice_single_channel(nn.Module):
         numerator    = 2.0 * torch.sum(pred * target, dim=(2, 3, 4))
         denominator  = torch.sum(pred + target, dim=(2, 3, 4))
         
-        dice         = (numerator)/denominator
-
         ###print("dice = ",dice)
         # this part of the code logic requires re-visit when handling
         # multi-class data if the denominator of the predicted brain
         # mask is zero them return loss as 1 (high)
         if denominator[0][1] == 0: #channel containing predicted brain mask.
-            return 1  # check the return type 
+            ### change return to be a type that matches other outputs
+            #return 1  # check the return type 
+            return pred[0][1].sum() * 0.0 + 1.0
+
+        dice = (numerator)/denominator
 
         # returning the dice loss pertaining to the channel containing
         # predicted brain mask.
