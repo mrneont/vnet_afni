@@ -113,13 +113,22 @@ def make_one_hot_scatter(gt, num_classes):
     # define the masks tensor
     # the number of masks created is equal to the number of classes, 
     # the size of each mask is equal to the (D, H, W) of ground truth
-    masks       = torch.zeros([batch_sz, num_ch, depth, height, width]) 
+    ### [pt] include the device here, because the data_mask has already been
+    ### moved to self.device by the run_epoch() method
+    #masks       = torch.zeros([batch_sz, num_ch, depth, height, width]) 
+    masks = torch.zeros(
+        [batch_sz, num_ch, depth, height, width],
+        device=gt.device,
+    )
+
     #print('masks size \n',masks.size())
     #print('gt size \n'   ,gt.size())
 
     #dimension here is (batch_sz, channels, D, H, W)
     #tensor.scatter_() in this case operates along dim = 1
-    masks.scatter_(1, gt.data.long(), 1)  ##(dim, index, src) 
+    ### [pt] remove unnecessary .data from here
+    ###masks.scatter_(1, gt.data.long(), 1)  ##(dim, index, src) 
+    masks.scatter_(1, gt.long(), 1)
     #print(' mask type \n' , masks.type())
 
     '''
