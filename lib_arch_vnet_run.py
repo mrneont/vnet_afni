@@ -191,6 +191,7 @@ inobj : InOpts object
         self.do_clean        = DEF.DOPTS['do_clean']
         self.do_log          = DEF.DOPTS['do_log']
         self.do_log_loss     = DEF.DOPTS['do_log_loss']
+        self.do_plot_loss    = DEF.DOPTS['do_plot_loss']
 
         # main data variables
         self.indir           = DEF.DOPTS['indir']
@@ -242,6 +243,7 @@ inobj : InOpts object
         self.fname_log_cmd   = None
         self.fname_log_loss_training   = None
         self.fname_log_loss_validation = None
+        self.fname_plot_loss_tcsh      = None
 
         # ----- take action(s)
 
@@ -277,6 +279,10 @@ inobj : InOpts object
 
             self.status = self.run_training()
             if self.status : return
+
+            if self.do_plot_loss :
+                self.status = self.plot_loss()
+                if self.status : return
 
             self.status = self.finish_cmd_log()
             if self.status : return
@@ -316,6 +322,8 @@ inobj : InOpts object
 
         if io.do_log_loss is not None :
             self.do_log_loss = io.do_log_loss
+        if io.do_plot_loss is not None :
+            self.do_plot_loss = io.do_plot_loss
 
         # main data variables
         if io.indir is not None :
@@ -564,6 +572,11 @@ inobj : InOpts object
         self.do_clean       = au.convert_to_bool_yn10(self.do_clean)
         self.do_log         = au.convert_to_bool_yn10(self.do_log)
         self.do_log_loss    = au.convert_to_bool_yn10(self.do_log_loss)
+        self.do_plot_loss   = au.convert_to_bool_yn10(self.do_plot_loss)
+
+        if self.do_plot_loss and not(self.do_log_loss) :
+            ab.EP1("-do_plot_loss Yes requires -do_log_loss Yes")
+            return -1
 
         return 0
 
@@ -1102,6 +1115,60 @@ inobj : InOpts object
                 fff.write(txt)
         except OSError:
             ab.EP1("Could not append loss log: {}".format(fname))
+            return BAD_RETURN
+
+        return 0
+
+
+    def plot_loss(self):
+        """Write and execute tcsh script for plotting the loss logs."""
+
+        BAD_RETURN = -1
+
+        self.fname_plot_loss_tcsh = os.path.join(
+            self.outdir, 'run_plot_loss.tcsh')
+
+        txt = '#!/bin/tcsh -f\n\n'
+        txt = '# a simple script to plot the mean and stdev of the     \n'
+        txt = '# training and validation loss functions values from    \n'
+        txt = '# a VNet creation run using archimedes_vnet.py.         \n'
+        txt = '\n\n'
+        txt+= '1dplot.py                                               \\\n'
+        txt+= '    -xfile        "log_loss_training.dat[0]"            \\\n'
+        txt+= '    -yfiles       "log_loss_training.dat[3]"            \\\n'
+        txt+= '                  "log_loss_validation.dat[3]"          \\\n'
+        txt+= '    -yfiles_pm    "log_loss_training.dat[4]"            \\\n'
+        txt+= '                  "log_loss_validation.dat[4]"          \\\n'
+        txt+= '    -ylim_use_pm                                        \\\n'
+        txt+= '    -one_graph                                          \\\n'
+        txt+= '    -colors        blue red                             \\\n'
+        txt+= '    -legend_on                                          \\\n'
+        txt+= '    -legend_labels "training" "validation"              \\\n'
+        txt+= '    -legend_locs   upper_right upper_right              \\\n'
+        txt+= '    -xlabel        "epoch"                              \\\n'
+        txt+= '    -ylabels       "loss" "loss"                        \\\n'
+        txt+= '    -title         "VNet training and validation loss"  \\\n'
+        txt+= '    -figsize       10 5                                 \\\n'
+        txt+= '    -prefix        log_loss_plot.png\n'
+
+        try:
+            with open(self.fname_plot_loss_tcsh, 'w') as fff:
+                fff.write(txt)
+        except OSError:
+            ab.EP1("Could not write loss plot script: {}".format(
+                self.fname_plot_loss_tcsh))
+            return BAD_RETURN
+
+        if self.verb :
+            ab.IP("Plot loss: {}".format(os.path.join(
+                self.outdir, 'log_loss_plot.png')))
+
+        cmd  = 'cd "{}" && tcsh "{}"'.format(
+            self.outdir, os.path.basename(self.fname_plot_loss_tcsh))
+        com  = ab.shell_com(cmd, capture=1)
+        stat = com.run()
+        if stat :
+            ab.EP1("Failed to plot loss")
             return BAD_RETURN
 
         return 0

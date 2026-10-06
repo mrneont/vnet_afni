@@ -83,6 +83,7 @@ DOPTS = {
     'do_clean'             : 'Yes',
     'do_log'               : 'No',
     'do_log_loss'          : 'Yes',
+    'do_plot_loss'         : 'Yes',
     'indir'                : '',
     'outdir'               : None,
     'workdir'              : '',

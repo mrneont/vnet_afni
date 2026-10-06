@@ -149,13 +149,6 @@ Usage ~1~
        NB: the above -save_mask_* options can both be used; the result
            is to create a list of their union (without repeats).
 
-
-****
-
--workdir WD    :working directory name, without path; the working dir
-                will be subdirectory of the output location
-                (def: name with random chars) ***STILL KEEP??***
-
 -do_clean DC   :state whether to clean up any intermediate files;
                 allowed values are:  Yes, 1, No, 0
                 (def: '{do_clean}')
@@ -171,6 +164,14 @@ Usage ~1~
                 allowed values are:  Yes, 1, No, 0
                 (def: '{do_log_loss}')
 
+-do_plot_loss DPL
+               :make a plot of the training and validation loss logs?
+                This writes and executes a tcsh script in OUTDIR, creating:
+                    OUTDIR/log_loss_plot.png
+                NB: this requires -do_log_loss Yes.
+                Allowed values are:  Yes, 1, No, 0
+                (def: '{do_plot_loss}')
+
 -help, -h      :display program help file
 
 -hist          :display program history
@@ -185,7 +186,61 @@ Usage ~1~
 
 Notes ~1~
 
-***
+Outputs ~2~
+
+A default run of archimedes_vnet.py creates and OUTDIR directory and
+populates it with several useful outputs from training and validation,
+including one or more checkpoints, various logs, and a loss function plot.
+The output directory contains:
+
+  OUTDIR/
+  + checkpoint_train_XXXX.pt : primary output, the VNet itself that can
+                               be provided as an input for 3dBrainTeaser;
+                               XXXX is the zero-padded epoch number
+
+  + log_cmd_run.txt          : a copy of the executed archimedes_vnet.py
+                               command, with start/finish/duration times
+
+  + log_loss_training.dat    : per-epoch loss function values from the
+                               training data (min, max, mean, stdev) 
+
+  + log_loss_validation.dat  : per-epoch loss function values from the
+                               validation data (min, max, mean, stdev) 
+
+  + log_loss_plot.png        : a plot of the log_loss*.dat files, showing
+                               the mean and stdev across epochs
+
+  + run_plot_loss.tcsh       : the script used to create log_loss_plot.png,
+                               which could be adjusted and re-run if
+                               different image styles are desired.
+
+  + pmask/                   : optionally, a directory of prediction masks
+                               can be output
+
+Re. the main VNet checkpoint_train_*.pt outputs: 
+By default, the final epoch checkpoint is always written. Checkpoints
+from additional epochs can be generated when the corresponding
+-save_checkpoint_* options are used.
+
+Re. the main optional pmask/ directory outputs: 
+
+When using -save_mask_* options, predicted masks are written for the
+selected epochs. (The two options can be combined, and the resulting
+save epochs are the union of the requested values.)  Within the pmask/
+directory, outputs mirror the contents of the mask/ directory from the
+input training/ and validation/ data splits, like:
+
+  pmask/
+    |-- SUBJ_pmask_train_XXXX.nii.gz
+    `-- SUBJ_pmask_valid_XXXX.nii.gz
+    ...
+
+where XXXX is the zero-padded epoch number, and SUBJ is the subject ID
+(like sub-123). The pmask/*.nii.gz datasets are floating point values
+between [0, 1], like probabilities, for the brain mask; they could be
+binarized above a threshold of 0.5 (so values above 0.5 -> 1) to
+produce the estimated brain mask. Ideally, by the final epoch, all
+pmask values should be either very close to either 0 or 1.
 
 ------------------------------------------------------------------------
 
@@ -226,6 +281,7 @@ checks happen in a subsequent object.
         self.overwrite       = None
         self.do_log          = None
         self.do_log_loss     = None
+        self.do_plot_loss    = None
 
         # main data variables
         self.indir           = None
@@ -360,6 +416,9 @@ checks happen in a subsequent object.
 
         self.valid_opts.add_opt('-do_log_loss', 1, [], 
                         helpstr="write per-epoch loss statistics")
+
+        self.valid_opts.add_opt('-do_plot_loss', 1, [], 
+                        helpstr="plot training and validation loss")
 
         self.valid_opts.add_opt('-overwrite', 0, [], 
                         helpstr='overwrite preexisting outputs')
@@ -572,6 +631,12 @@ checks happen in a subsequent object.
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
                 self.do_log_loss = val
+
+            elif opt.name == '-do_plot_loss':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_plot_loss = val
 
             elif opt.name == '-overwrite':
                 self.overwrite = '-overwrite'
