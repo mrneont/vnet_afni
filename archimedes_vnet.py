@@ -227,8 +227,8 @@ The output directory contains:
                                the mean and stdev across epochs
 
   + run_plot_loss.tcsh       : the script used to create log_loss_plot.png,
-                               which could be adjusted and re-run if
-                               different image styles are desired.
+                               via 1dplot.py; could be adjusted and re-run
+                               if different image styles are desired.
 
   + pmask_train/             : dir of output training prediction masks 
                               (if using: '-save_pmask_* ..')
