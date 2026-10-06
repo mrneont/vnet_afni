@@ -799,9 +799,9 @@ inobj : InOpts object
 
             if self.save_pmask_qc_frac > 0.0 :
                 self.outdir_pmask_qc_train = os.path.join(
-                    self.outdir, 'pmask_qc_train')
+                    self.outdir, 'pmask_train_qc')
                 self.outdir_pmask_qc_valid = os.path.join(
-                    self.outdir, 'pmask_qc_valid')
+                    self.outdir, 'pmask_valid_qc')
                 for ddd in [self.outdir_pmask_qc_train,
                             self.outdir_pmask_qc_valid] :
                     try:
@@ -1194,14 +1194,14 @@ inobj : InOpts object
                 dir_pmask = os.path.abspath(self.outdir_pmask_train)
                 dir_qc = os.path.abspath(self.outdir_pmask_qc_train)
                 fname_tcsh = os.path.join(
-                    self.outdir, 'run_pmask_qc_train.tcsh')
+                    self.outdir, 'run_pmask_train_qc.tcsh')
                 self.fname_pmask_qc_tcsh_train = fname_tcsh
             else:
                 ppp = 'valid'
                 dir_pmask = os.path.abspath(self.outdir_pmask_valid)
                 dir_qc = os.path.abspath(self.outdir_pmask_qc_valid)
                 fname_tcsh = os.path.join(
-                    self.outdir, 'run_pmask_qc_valid.tcsh')
+                    self.outdir, 'run_pmask_valid_qc.tcsh')
                 self.fname_pmask_qc_tcsh_valid = fname_tcsh
 
             subj_list = []
@@ -1302,7 +1302,7 @@ end
                 return BAD_RETURN
 
             if self.verb :
-                ab.IP("Make {} pmask QC images in: {}".format(phase, dir_qc))
+                ab.IP("Make {} pmask QC images in:\n{}".format(phase, dir_qc))
 
             cmd  = 'cd "{}" && tcsh "{}"'.format(
                 self.outdir, os.path.basename(fname_tcsh))

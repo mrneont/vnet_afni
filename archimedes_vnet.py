@@ -231,14 +231,16 @@ The output directory contains:
                                different image styles are desired.
 
   + pmask_train/             : dir of output training prediction masks 
-                              (if the user requested it)
+                              (if using: '-save_pmask_* ..')
 
   + pmask_valid/             : dir of output validation prediction masks
-                               (if the user requested it)
+                               (if using: '-save_pmask_* ..')
 
-  + pmask_qc_train/          : dir of QC images for saved training pmasks
+  + pmask_train_qc/          : dir of QC images for saved training pmasks
+                               (if using: '-save_pmask_qc_frac ..')
 
-  + pmask_qc_valid/          : dir of QC images for saved validation pmasks
+  + pmask_valid_qc/          : dir of QC images for saved validation pmasks
+                               (if using: '-save_pmask_qc_frac ..')
 
 Re. the main VNet checkpoint_train_*.pt outputs: 
 By default, the final epoch checkpoint is always written. Checkpoints
@@ -272,8 +274,8 @@ epoch. The sorted training and validation pmask lists are handled
 separately, using the first fraction F of each. Each selected prediction
 is binarized at 0.5 and compared with the corresponding input mask using
 compare_mask_overlap.tcsh, with the corresponding orig dataset as
-underlay. The resulting outputs are kept separately in pmask_qc_train/
-and pmask_qc_valid/.
+underlay. The resulting outputs are kept separately in pmask_train_qc/
+and pmask_valid_qc/.
 
 ------------------------------------------------------------------------
 
