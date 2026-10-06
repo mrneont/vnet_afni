@@ -11,7 +11,6 @@ from    afnipy import afni_util     as UTIL
 from    afnipy import afni_base     as BASE
 
 from vnet_afni import lib_arch_vnet_defs as DEF
-from vnet_afni import lib_arch_vnet_run  as LAVR
 
 # ----------------------------------------------------------------------
 # globals
@@ -131,23 +130,40 @@ Usage ~1~
        NB: the above -save_checkpoint_* options can both be used; the result
            is to create a list of their union and max_epoch (without repeats).
 
--save_mask_rate SMR 
+-save_pmask_rate SPR
                :write out estimated masks at a regular interval;
-                if using this option, masks will be written for the
-                [0]th epoch and then every SMR-th one up to
-                max_epoch. For example, if max_epoch is 20 and SMR
-                is 5, then masks will be written out at these epochs:
+                if using this option, pmasks will be written for the
+                [0]th epoch and then every SPR-th one up to
+                max_epoch. For example, if max_epoch is 20 and SPR
+                is 5, then pmasks will be written out at these epochs:
                 0, 5, 10, 15, 20.  
-                (def: no masks written out)
+                (def: no pmasks written out)
 
--save_mask_list SML 
+-save_pmask_list SPL
                :write out estimated masks at specified epochs; users
                 can provide a list of one or more integers in the range:
                 [0, max_epoch].
-                (def: no masks written out)
+                (def: no pmasks written out)
 
-       NB: the above -save_mask_* options can both be used; the result
+       NB: the above -save_pmask_* options can both be used; the result
            is to create a list of their union (without repeats).
+
+-save_pmask_qc_frac F
+               :make QC images for a fraction F of the training and validation
+                pmasks from the highest-numbered saved-pmask epoch. F must be
+                in the range [0.0, 1.0].  The pmask lists are sorted, and QC
+                images are made for the first fraction F of each list; F=1.0
+                means all pmasks. Each prediction is binarized at 0.5 and
+                shown over its corresponding orig dataset, along with the
+                corresponding input mask using compare_mask_overlap.tcsh, with
+                the corresponding orig dataset as underlay. The QC images are
+                written into:
+                    OUTDIR/pmask_qc_train/
+                    OUTDIR/pmask_qc_valid/
+                and the tcsh scripts used to make them are:
+                    OUTDIR/run_pmask_qc_train.tcsh
+                    OUTDIR/run_pmask_qc_valid.tcsh
+                (def: {save_pmask_qc_frac})
 
 -do_clean DC   :state whether to clean up any intermediate files;
                 allowed values are:  Yes, 1, No, 0
@@ -214,33 +230,50 @@ The output directory contains:
                                which could be adjusted and re-run if
                                different image styles are desired.
 
-  + pmask/                   : optionally, a directory of prediction masks
-                               can be output
+  + pmask_train/             : dir of output training prediction masks 
+                              (if the user requested it)
+
+  + pmask_valid/             : dir of output validation prediction masks
+                               (if the user requested it)
+
+  + pmask_qc_train/          : dir of QC images for saved training pmasks
+
+  + pmask_qc_valid/          : dir of QC images for saved validation pmasks
 
 Re. the main VNet checkpoint_train_*.pt outputs: 
 By default, the final epoch checkpoint is always written. Checkpoints
 from additional epochs can be generated when the corresponding
 -save_checkpoint_* options are used.
 
-Re. the main optional pmask/ directory outputs: 
+Re. the main optional pmask_train/ and pmask_valid/ directory outputs:
 
-When using -save_mask_* options, predicted masks are written for the
+When using -save_pmask_* options, predicted masks are written for the
 selected epochs. (The two options can be combined, and the resulting
-save epochs are the union of the requested values.)  Within the pmask/
-directory, outputs mirror the contents of the mask/ directory from the
-input training/ and validation/ data splits, like:
+save epochs are the union of the requested values.) Training and validation
+pmasks are kept separately, like:
 
-  pmask/
-    |-- SUBJ_pmask_train_XXXX.nii.gz
+  pmask_train/
+    `-- SUBJ_pmask_train_XXXX.nii.gz
+
+  pmask_valid/
     `-- SUBJ_pmask_valid_XXXX.nii.gz
     ...
 
 where XXXX is the zero-padded epoch number, and SUBJ is the subject ID
-(like sub-123). The pmask/*.nii.gz datasets are floating point values
+(like sub-123). The pmask_*.nii.gz datasets are floating point values
 between [0, 1], like probabilities, for the brain mask; they could be
 binarized above a threshold of 0.5 (so values above 0.5 -> 1) to
 produce the estimated brain mask. Ideally, by the final epoch, all
 pmask values should be either very close to either 0 or 1.
+
+When -save_pmask_qc_frac is used (and the provided fraction F is greater 
+than 0.0), QC images are made from the highest-numbered saved-pmask 
+epoch. The sorted training and validation pmask lists are handled 
+separately, using the first fraction F of each. Each selected prediction
+is binarized at 0.5 and compared with the corresponding input mask using
+compare_mask_overlap.tcsh, with the corresponding orig dataset as
+underlay. The resulting outputs are kept separately in pmask_qc_train/
+and pmask_qc_valid/.
 
 ------------------------------------------------------------------------
 
@@ -272,14 +305,16 @@ Examples ~1~
 
  4. Also specify extra/intermediate epoch output, a batch size, and 
     output pmasks (prediction masks) of training and validation dsets
-    at the end:
+    at the end, with QC images for 10% of the training and validation 
+    pmasks:
 
     archimedes_vnet.py                                       \\
         -indir                 data_00_basic                 \\
         -outdir                odir_vnet                     \\
         -loss_func             Sorensen_Dice_single_channel  \\
         -max_epoch             120                           \\
-        -save_mask_list        120                           \\
+        -save_pmask_list       120                           \\
+        -save_pmask_qc_frac    0.1                           \\
         -save_checkpoint_list  10 78 100
            
 
@@ -315,6 +350,7 @@ checks happen in a subsequent object.
         self.do_log          = None
         self.do_log_loss     = None
         self.do_plot_loss    = None
+        self.save_pmask_qc_frac = None
 
         # main data variables
         self.indir           = None
@@ -339,8 +375,8 @@ checks happen in a subsequent object.
         self.restart_checkpoint   = None
         self.save_checkpoint_rate = None
         self.save_checkpoint_list = None
-        self.save_mask_rate  = None
-        self.save_mask_list  = None
+        self.save_pmask_rate  = None
+        self.save_pmask_list  = None
 
 
         # ----- take action(s)
@@ -415,11 +451,14 @@ checks happen in a subsequent object.
         self.valid_opts.add_opt('-save_checkpoint_list', -1, [], 
                         helpstr='write a checkpoint at every listed epoch')
 
-        self.valid_opts.add_opt('-save_mask_rate', 1, [], 
-                        helpstr='write masks every n-th epoch')
+        self.valid_opts.add_opt('-save_pmask_rate', 1, [], 
+                        helpstr='write pmasks every n-th epoch')
 
-        self.valid_opts.add_opt('-save_mask_list', -1, [], 
-                        helpstr='write masks at every listed epoch')
+        self.valid_opts.add_opt('-save_pmask_list', -1, [], 
+                        helpstr='write pmasks at every listed epoch')
+
+        self.valid_opts.add_opt('-save_pmask_qc_frac', 1, [], 
+                        helpstr='fraction of saved pmasks for QC images')
 
         self.valid_opts.add_opt('-architecture', 1, [], 
                         helpstr='network architecture type for training')
@@ -599,18 +638,24 @@ checks happen in a subsequent object.
                     BASE.EP(err_base + opt.name)
                 self.save_checkpoint_list = val
 
-            elif opt.name == '-save_mask_rate':
+            elif opt.name == '-save_pmask_rate':
                 val, err = uopts.get_type_opt(int, '', opt=opt)
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
-                self.save_mask_rate = val
+                self.save_pmask_rate = val
 
             # list (of int)
-            elif opt.name == '-save_mask_list':
+            elif opt.name == '-save_pmask_list':
                 val, err = uopts.get_string_list('', opt=opt)
                 if val is None or err:
                     BASE.EP(err_base + opt.name)
-                self.save_mask_list = val
+                self.save_pmask_list = val
+
+            elif opt.name == '-save_pmask_qc_frac':
+                val, err = uopts.get_type_opt(float, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_pmask_qc_frac = val
 
             elif opt.name == '-architecture':
                 val, err = uopts.get_string_opt('', opt=opt)
@@ -741,6 +786,10 @@ def main():
         # exit with error status
         BASE.EP1('failed whilst checking options')
         return rv2, None
+    
+    # this import is here, because it leads to torch being imported,
+    # and we don't want that getting in the way of help display, above
+    from vnet_afni import lib_arch_vnet_run  as LAVR
 
     # use options to create main object
     mainobj = LAVR.MainObj( user_inobj=inobj, args_orig=sys.argv )

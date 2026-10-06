@@ -84,6 +84,7 @@ DOPTS = {
     'do_log'               : 'No',
     'do_log_loss'          : 'Yes',
     'do_plot_loss'         : 'Yes',
+    'save_pmask_qc_frac'   : 0.0,
     'indir'                : '',
     'outdir'               : None,
     'workdir'              : '',
@@ -104,8 +105,8 @@ DOPTS = {
     'restart_checkpoint'   : None,
     'save_checkpoint_rate' : None,
     'save_checkpoint_list' : [],
-    'save_mask_rate'       : None,
-    'save_mask_list'       : [],
+    'save_pmask_rate'      : None,
+    'save_pmask_list'      : [],
 }
 
 DOPTS_all_keys = list(DOPTS.keys())

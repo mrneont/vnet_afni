@@ -192,6 +192,7 @@ inobj : InOpts object
         self.do_log          = DEF.DOPTS['do_log']
         self.do_log_loss     = DEF.DOPTS['do_log_loss']
         self.do_plot_loss    = DEF.DOPTS['do_plot_loss']
+        self.save_pmask_qc_frac = DEF.DOPTS['save_pmask_qc_frac']
 
         # main data variables
         self.indir           = DEF.DOPTS['indir']
@@ -219,8 +220,8 @@ inobj : InOpts object
         self.restart_checkpoint   = DEF.DOPTS['restart_checkpoint']
         self.save_checkpoint_rate = DEF.DOPTS['save_checkpoint_rate']
         self.save_checkpoint_list = DEF.DOPTS['save_checkpoint_list'].copy()
-        self.save_mask_rate  = DEF.DOPTS['save_mask_rate']
-        self.save_mask_list  = DEF.DOPTS['save_mask_list'].copy()
+        self.save_pmask_rate = DEF.DOPTS['save_pmask_rate']
+        self.save_pmask_list = DEF.DOPTS['save_pmask_list'].copy()
 
         # things created in the processing/training setup
         self.sysname         = None     # platform system
@@ -239,11 +240,16 @@ inobj : InOpts object
         self.loader_train    = None
         self.loader_valid    = None
         self.net_loss        = None
-        self.outdir_mask     = None
+        self.outdir_pmask_train = None
+        self.outdir_pmask_valid = None
+        self.outdir_pmask_qc_train = None
+        self.outdir_pmask_qc_valid = None
         self.fname_log_cmd   = None
         self.fname_log_loss_training   = None
         self.fname_log_loss_validation = None
         self.fname_plot_loss_tcsh      = None
+        self.fname_pmask_qc_tcsh_train = None
+        self.fname_pmask_qc_tcsh_valid = None
 
         # ----- take action(s)
 
@@ -282,6 +288,10 @@ inobj : InOpts object
 
             if self.do_plot_loss :
                 self.status = self.plot_loss()
+                if self.status : return
+
+            if self.save_pmask_qc_frac > 0.0 and self.nsave_pmask :
+                self.status = self.save_pmask_qc()
                 if self.status : return
 
             self.status = self.finish_cmd_log()
@@ -324,6 +334,8 @@ inobj : InOpts object
             self.do_log_loss = io.do_log_loss
         if io.do_plot_loss is not None :
             self.do_plot_loss = io.do_plot_loss
+        if io.save_pmask_qc_frac is not None :
+            self.save_pmask_qc_frac = io.save_pmask_qc_frac
 
         # main data variables
         if io.indir is not None :
@@ -369,10 +381,10 @@ inobj : InOpts object
             self.save_checkpoint_rate = io.save_checkpoint_rate
         if io.save_checkpoint_list is not None :
             self.save_checkpoint_list = io.save_checkpoint_list
-        if io.save_mask_rate is not None :
-            self.save_mask_rate = io.save_mask_rate
-        if io.save_mask_list is not None :
-            self.save_mask_list = io.save_mask_list
+        if io.save_pmask_rate is not None :
+            self.save_pmask_rate = io.save_pmask_rate
+        if io.save_pmask_list is not None :
+            self.save_pmask_list = io.save_pmask_list
 
         return 0
 
@@ -510,37 +522,37 @@ inobj : InOpts object
         if self.max_epoch not in self.save_checkpoint_list :
             self.save_checkpoint_list.append(self.max_epoch)
 
-        if self.save_mask_rate is not None :
-            if self.save_mask_rate <= 0 :
-                msg = "Invalid value after -save_mask_rate: "
-                msg+= "{}\n".format(self.save_mask_rate)
+        if self.save_pmask_rate is not None :
+            if self.save_pmask_rate <= 0 :
+                msg = "Invalid value after -save_pmask_rate: "
+                msg+= "{}\n".format(self.save_pmask_rate)
                 msg+= "Cannot be <= 0"
                 ab.EP(msg)
 
-        # if using save_mask_list, values must be ints
-        if len(self.save_mask_list) :
-            is_fail, self.save_mask_list = \
-                convert_list_of_str_to_int(self.save_mask_list, 
+        # if using save_pmask_list, values must be ints
+        if len(self.save_pmask_list) :
+            is_fail, self.save_pmask_list = \
+                convert_list_of_str_to_int(self.save_pmask_list, 
                                            verb=self.verb)
             if is_fail :
-                msg = "Invalid values after -save_mask_list: "
-                msg+= "{}\n".format(self.save_mask_list)
+                msg = "Invalid values after -save_pmask_list: "
+                msg+= "{}\n".format(self.save_pmask_list)
                 msg+= "Could not convert all to int"
                 ab.EP(msg)
 
-        # check about combining save_mask_rate with the list, or just
+        # check about combining save_pmask_rate with the list, or just
         # verify the list (default or user-entered)
-        is_fail, self.save_mask_list = \
+        is_fail, self.save_pmask_list = \
             combine_list_rate_max(
-                self.save_mask_list,
-                self.save_mask_rate,
+                self.save_pmask_list,
+                self.save_pmask_rate,
                 self.max_epoch,
-                label="mask",
+                label="pmask",
                 verb=self.verb
             )
         if is_fail :
-            msg = "Could not merge in values from -save_mask_rate: "
-            msg+= "{}\n".format(self.save_mask_rate)
+            msg = "Could not merge in values from -save_pmask_rate: "
+            msg+= "{}\n".format(self.save_pmask_rate)
             ab.EP(msg)
 
         # store platform system name 
@@ -573,6 +585,13 @@ inobj : InOpts object
         self.do_log         = au.convert_to_bool_yn10(self.do_log)
         self.do_log_loss    = au.convert_to_bool_yn10(self.do_log_loss)
         self.do_plot_loss   = au.convert_to_bool_yn10(self.do_plot_loss)
+
+        if self.save_pmask_qc_frac < 0.0 or self.save_pmask_qc_frac > 1.0 :
+            msg = "Invalid value after -save_pmask_qc_frac: "
+            msg+= "{}\n".format(self.save_pmask_qc_frac)
+            msg+= "Must be in the range [0.0, 1.0]"
+            ab.EP1(msg)
+            return -1
 
         if self.do_plot_loss and not(self.do_log_loss) :
             ab.EP1("-do_plot_loss Yes requires -do_log_loss Yes")
@@ -767,15 +786,31 @@ inobj : InOpts object
                     ab.EP1("Could not create loss log: {}".format(fname))
                     return BAD_RETURN
 
-        # keep predicted masks together in their own output subdirectory
-        if self.nsave_mask :
-            self.outdir_mask = os.path.join(self.outdir, 'pmask')
-            try:
-                os.makedirs(self.outdir_mask, exist_ok=self.overwrite)
-            except OSError:
-                ab.EP1("Could not create mask outdir: {}".format(
-                    self.outdir_mask))
-                return BAD_RETURN
+        # keep training and validation predicted masks in separate output dirs
+        if self.nsave_pmask :
+            self.outdir_pmask_train = os.path.join(self.outdir, 'pmask_train')
+            self.outdir_pmask_valid = os.path.join(self.outdir, 'pmask_valid')
+            for ddd in [self.outdir_pmask_train, self.outdir_pmask_valid] :
+                try:
+                    os.makedirs(ddd, exist_ok=self.overwrite)
+                except OSError:
+                    ab.EP1("Could not create pmask outdir: {}".format(ddd))
+                    return BAD_RETURN
+
+            if self.save_pmask_qc_frac > 0.0 :
+                self.outdir_pmask_qc_train = os.path.join(
+                    self.outdir, 'pmask_qc_train')
+                self.outdir_pmask_qc_valid = os.path.join(
+                    self.outdir, 'pmask_qc_valid')
+                for ddd in [self.outdir_pmask_qc_train,
+                            self.outdir_pmask_qc_valid] :
+                    try:
+                        os.makedirs(ddd, exist_ok=self.overwrite)
+                    except OSError:
+                        msg = "Could not create pmask QC outdir: "
+                        msg+= "{}".format(ddd)
+                        ab.EP1(msg)
+                        return BAD_RETURN
 
         return 0
 
@@ -966,7 +1001,7 @@ inobj : InOpts object
 
                 losses.append(float(loss.detach().cpu()))
 
-                if epoch in self.save_mask_list :
+                if epoch in self.save_pmask_list :
                     is_fail = self.write_pred_masks(pred, batch, phase, epoch)
                     if is_fail :
                         return BAD_RETURN
@@ -990,7 +1025,14 @@ inobj : InOpts object
         fname_out = "{}_pmask_{}_{:04d}.nii.gz".format(
             fname_base, ppp, epoch)
 
-        return os.path.join(self.outdir_mask, fname_out)
+        if phase == 'training' :
+            outdir = self.outdir_pmask_train
+        elif phase == 'validation' :
+            outdir = self.outdir_pmask_valid
+        else:
+            outdir = self.outdir
+
+        return os.path.join(outdir, fname_out)
 
     def write_pred_masks(self, pred, batch, phase, epoch):
         """Write predicted foreground masks for one batch."""
@@ -1120,6 +1162,158 @@ inobj : InOpts object
         return 0
 
 
+
+    def save_pmask_qc(self):
+        """Write and execute tcsh scripts for QC of saved predicted masks."""
+
+        BAD_RETURN = -1
+
+        if not(self.nsave_pmask) or self.save_pmask_qc_frac <= 0.0 :
+            return 0
+
+        epoch = max(self.save_pmask_list)
+
+        for phase in LIST_phase :
+            split_tree = self.data_tree.all_split[phase]
+            dir_orig   = split_tree.get_subdir_path('orig')
+            dir_mask   = split_tree.get_subdir_path('mask')
+
+            pair_list = []
+            for ii, fname_orig in enumerate(split_tree.all_dset['orig']) :
+                fname_mask = split_tree.all_dset['mask'][ii]
+                path_pred = os.path.abspath(
+                    self.get_pred_mask_fname(fname_orig, phase, epoch))
+                pair_list.append((path_pred, fname_orig, fname_mask))
+
+            pair_list.sort(key=lambda x: x[0])
+            npair = int(np.ceil(self.save_pmask_qc_frac * len(pair_list)))
+            pair_list = pair_list[:npair]
+
+            if phase == 'training' :
+                ppp = 'train'
+                dir_pmask = os.path.abspath(self.outdir_pmask_train)
+                dir_qc = os.path.abspath(self.outdir_pmask_qc_train)
+                fname_tcsh = os.path.join(
+                    self.outdir, 'run_pmask_qc_train.tcsh')
+                self.fname_pmask_qc_tcsh_train = fname_tcsh
+            else:
+                ppp = 'valid'
+                dir_pmask = os.path.abspath(self.outdir_pmask_valid)
+                dir_qc = os.path.abspath(self.outdir_pmask_qc_valid)
+                fname_tcsh = os.path.join(
+                    self.outdir, 'run_pmask_qc_valid.tcsh')
+                self.fname_pmask_qc_tcsh_valid = fname_tcsh
+
+            subj_list = []
+            for _, fname_orig, _ in pair_list :
+                if fname_orig.endswith('_orig.nii.gz') :
+                    subj = fname_orig[:-12]
+                elif fname_orig.endswith('_orig.nii') :
+                    subj = fname_orig[:-9]
+                else:
+                    subj = fname_orig.replace('_orig', '')
+                subj_list.append(subj)
+
+            txt = r"""#!/bin/tcsh -f
+
+# QC images for archimedes_vent.py for saved prediction masks (pmasks)
+# from epoch: {epoch:04d}.  We have used the first {qc_frac:.6f} fraction
+# of the sorted {phase} pmask list.  
+#
+# Each prediction mask will be binarized at 0.5 and compared with its
+# corresponding input (target) mask; each underlay volume is the
+# corresponding orig dset. An accompanying text file of relative fractions,
+# overlaps and relevant Dice coefficients is also created.
+# 
+# The colors in the images are (A = output pmask, B = input mask):
+#
+#    blue   :  overlap  (dset val = 18)
+#    red    :  A not B  (dset val = 24)
+#    green  :  B not A  (dset val = 26)
+#
+# Users could add the following option to compare_mask_overlap.tcsh,
+# below, to have the QC outputs also include subdirectories of data with 
+# driving scripts, for more interactive viewing and comparison:
+#
+#    -add_data_to_outdir Yes
+# 
+# ==========================================================================
+
+# directory info, from primary archimedes_vnet.py run
+set dir_orig  = "{dir_orig}"
+set dir_mask  = "{dir_mask}"
+set dir_pmask = "{dir_pmask}"
+set dir_qc    = "{dir_qc}"
+
+set phase = "{ppp}"
+set epoch = "{epoch:04d}"
+set phep  = "${{phase}}_${{epoch}}"
+
+# list of subjects, fraction of total via -save_pmask_qc_frac
+set subj_list = ( \
+{subj_list}
+)
+
+foreach subj ( $subj_list )
+    set dset_orig  = "$dir_orig"/${{subj}}_orig.nii*
+    set dset_mask  = "$dir_mask"/${{subj}}_mask.nii*
+    set dset_pmask = "$dir_pmask/${{subj}}_pmask_${{phep}}.nii.gz"
+    set dset_bin   = "$dir_qc/__tmp_${{subj}}_pmask_${{phep}}_bin.nii.gz"
+    set pref_comp  = "${{subj}}_pmask_${{phase}}_${{epoch}}"
+
+    echo "++ QC for pmask: ${{subj}}_pmask_${{phep}}.nii.gz"
+
+    # binarize pmask (temp file)
+    3dcalc                                                \
+        -overwrite                                        \
+        -a          "$dset_pmask"                         \
+        -expr       "step(a-0.5)"                         \
+        -prefix     "$dset_bin"
+
+    compare_mask_overlap.tcsh                             \
+        -overwrite                                        \
+        -add_bt_text                                      \
+        -inputA       "$dset_bin"                         \
+        -inputB       "$dset_mask"                        \
+        -ulay         "$dset_orig"                        \
+        -outdir       "$dir_qc"                           \
+        -prefix       "${{pref_comp}}"
+
+    \rm -f "$dset_bin"
+end
+""".format(
+    epoch     = epoch,
+    qc_frac   = self.save_pmask_qc_frac,
+    phase     = phase,
+    ppp       = ppp,
+    dir_orig  = os.path.abspath(dir_orig),
+    dir_mask  = os.path.abspath(dir_mask),
+    dir_pmask = dir_pmask,
+    dir_qc    = dir_qc,
+    subj_list = '\n'.join(
+        ['    "{}" \\'.format(x) for x in subj_list]),
+)
+
+            try:
+                with open(fname_tcsh, 'w') as fff:
+                    fff.write(txt)
+            except OSError:
+                ab.EP1("Could not write pmask QC script: {}".format(fname_tcsh))
+                return BAD_RETURN
+
+            if self.verb :
+                ab.IP("Make {} pmask QC images in: {}".format(phase, dir_qc))
+
+            cmd  = 'cd "{}" && tcsh "{}"'.format(
+                self.outdir, os.path.basename(fname_tcsh))
+            com  = ab.shell_com(cmd, capture=1)
+            stat = com.run()
+            if stat :
+                ab.EP1("Failed to make {} pmask QC images".format(phase))
+                return BAD_RETURN
+
+        return 0
+
     def plot_loss(self):
         """Write and execute tcsh script for plotting the loss logs."""
 
@@ -1246,10 +1440,10 @@ inobj : InOpts object
         return len(self.save_checkpoint_list)
 
     @property
-    def nsave_mask(self):
-        """the number of epochs for saving masks"""
+    def nsave_pmask(self):
+        """the number of epochs for saving pmasks"""
 
-        return len(self.save_mask_list)
+        return len(self.save_pmask_list)
 
 
 # ----------------------------------------------------------------------------
