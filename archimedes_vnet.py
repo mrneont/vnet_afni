@@ -248,38 +248,38 @@ Examples ~1~
 
  1. Basic run (use default loss function and epoch count):
 
-    archimedes_vnet.py                            \
-        -indir      data_00_basic                 \
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
         -outdir     odir_vnet
 
  2. Specify loss function and total number of epochs:
 
-    archimedes_vnet.py                            \
-        -indir      data_00_basic                 \
-        -outdir     odir_vnet                     \
-        -loss_func  Sorensen_Dice_single_channel  \
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
+        -outdir     odir_vnet                     \\
+        -loss_func  Sorensen_Dice_single_channel  \\
         -max_epoch  120
 
  3. Specify different loss function, one that requires having the wtds/
     (weight dataset) directory in the training/ and validation/ trees,
     which would be created by running arch_make_wtds.py earlier:
 
-    archimedes_vnet.py                            \
-        -indir      data_00_basic                 \
-        -outdir     odir_vnet                     \
-        -loss_func  WtSorensen_Dice               \
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
+        -outdir     odir_vnet                     \\
+        -loss_func  WtSorensen_Dice               \\
         -max_epoch  120
 
  4. Also specify extra/intermediate epoch output, a batch size, and 
     output pmasks (prediction masks) of training and validation dsets
     at the end:
 
-    archimedes_vnet.py                                       \
-        -indir                 data_00_basic                 \
-        -outdir                odir_vnet                     \
-        -loss_func             Sorensen_Dice_single_channel  \
-        -max_epoch             120                           \
-        -save_mask_list        120                           \
+    archimedes_vnet.py                                       \\
+        -indir                 data_00_basic                 \\
+        -outdir                odir_vnet                     \\
+        -loss_func             Sorensen_Dice_single_channel  \\
+        -max_epoch             120                           \\
+        -save_mask_list        120                           \\
         -save_checkpoint_list  10 78 100
            
 
