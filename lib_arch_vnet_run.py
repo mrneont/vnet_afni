@@ -616,6 +616,9 @@ inobj : InOpts object
             ab.EP1("Failed select device")
             return BAD_RETURN
 
+        if self.verb :
+            ab.IP("Make network device: {}".format(self.device))
+
         # another precision-based consideration
         if self.precision == 'mixed':
             if self.device != 'cuda':
