@@ -246,8 +246,8 @@ if ( $status ) goto BAD_EXIT
 # 'afni_refacer2 -prefix ..', because of the ability to run with
 # multiple modes, so we need just the short-mode name, too. Basically,
 # this means removing "mode2_" or "mode_"x
-set smode = `basename ${mode}  mode2_`
-set smode = `basename ${smode} mode_`
+set smode = "${mode:gas/mode2_//}"
+set smode = "${smode:gas/mode_//}"
 
 # outputs
 set orig_result = orig_01_${mode}.${smode}.nii.gz
