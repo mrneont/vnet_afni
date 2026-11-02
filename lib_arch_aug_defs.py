@@ -88,7 +88,7 @@ DICT_aug_script = {
 }
 
 LIST_swarm_opts = [
-    '--module', 'afni',
+    '--module afni',
     '--partition=norm,quick',
     '--threads-per-process=4',
     '--gb-per-process=3',
