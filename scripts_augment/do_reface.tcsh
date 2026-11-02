@@ -242,8 +242,15 @@ if ( $status ) goto BAD_EXIT
 # ---------------------------------------------------------------------
 # Write out both requested datasets after all processing succeeds.
 
+# the output names aren't as simple as just what is specified with
+# 'afni_refacer2 -prefix ..', because of the ability to run with
+# multiple modes, so we need just the short-mode name, too. Basically,
+# this means removing "mode2_" or "mode_"x
+set smode = `basename ${mode}  mode2_`
+set smode = `basename ${smode} mode_`
+
 # outputs
-set orig_result = orig_01_${mode}.nii.gz
+set orig_result = orig_01_${mode}.${smode}.nii.gz
 set mask_result = "$mask_in"                # output mask matches input
 
 3dcopy -overwrite "$orig_result" "$prefix_orig"
