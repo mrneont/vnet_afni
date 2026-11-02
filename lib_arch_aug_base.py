@@ -656,12 +656,12 @@ class MainObj:
         log_path   = os.path.join(self.outdir, 'logs')
         swarm_path = os.path.join(self.odir_scripts, DEF.FNAME_swarm)
 
-        swarm_cmd_parts = ['swarm']
-        swarm_cmd_parts+= ['-f', master_path]
-        swarm_cmd_parts+= DEF.LIST_swarm_opts
-        swarm_cmd_parts+= ['--logdir=' + log_path]
+        swarm_cmd_parts = 'swarm \\\n'
+        for opt in DEF.LIST_swarm_opts:
+            swarm_cmd_parts+= '    {} \\\n'.format(opt)
+        swarm_cmd_parts+= '    --logdir={} \\\n'.format(log_path)
+        swarm_cmd_parts+= '    -f {} \\\n'.format(master_path)
 
-        swarm_command = ' '.join(swarm_cmd_parts)
         self.write_tcsh(swarm_path, [swarm_command])
 
         return 0
