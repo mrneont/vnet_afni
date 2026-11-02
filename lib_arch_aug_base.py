@@ -6,7 +6,6 @@ import copy
 import json
 import os
 import random
-import shlex
 import shutil
 
 from afnipy    import afni_base          as ab
@@ -522,87 +521,80 @@ class MainObj:
     def get_phase_command(self, plan, phase):
         """Build one augmentation command by joining explicit option pieces.
 
-        Supply anatomy and mask as both inputs and outputs.  Quote paths
-        inline, convert numeric parameters to strings, and keep each flag
-        beside its value.  Return the completed command string.
+        Supply anatomy and mask as both inputs and outputs.  Convert
+        numeric parameters to strings, and keep each flag beside its
+        value.  Return the completed command string.
         """
 
-        augmentation_type = self.get_aug_key(phase)
-        augmentation_script_name = DEF.DICT_aug_script[augmentation_type]
-        augmentation_script_path = os.path.join(
-            self.odir_scripts, augmentation_script_name
+        aug_type = self.get_aug_key(phase)
+        aug_script_name = DEF.DICT_aug_script[aug_type]
+        aug_script_full = os.path.join(
+            self.odir_scripts, aug_script_name
         )
 
-        # Quote paths inline, including tcsh's history character.
-        quoted_script_path = shlex.quote(augmentation_script_path)
-        quoted_script_path = quoted_script_path.replace('!', r'\!')
-        quoted_orig_path   = shlex.quote(plan['orig']).replace('!', r'\!')
-        quoted_mask_path   = shlex.quote(plan['mask']).replace('!', r'\!')
-
         # Each script receives the same four dataset options.
-        phase_command_parts = ['tcsh', '-f', quoted_script_path]
-        phase_command_parts += ['-inset_orig', quoted_orig_path]
-        phase_command_parts += ['-inset_mask', quoted_mask_path]
-        phase_command_parts += ['-prefix_orig', quoted_orig_path]
-        phase_command_parts += ['-prefix_mask', quoted_mask_path]
+        phase_cmd_opts = ['tcsh', '-f',   aug_script_full]
+        phase_cmd_opts+= ['-inset_orig',  plan['orig']]
+        phase_cmd_opts+= ['-inset_mask',  plan['mask']]
+        phase_cmd_opts+= ['-prefix_orig', plan['orig']]
+        phase_cmd_opts+= ['-prefix_mask', plan['mask']]
 
         # Add only the parameters accepted by the selected script.
-        if augmentation_type == 'reface':
-            phase_command_parts += ['-param_mode', phase['mode']]
+        if aug_type == 'reface':
+            phase_cmd_opts+= ['-param_mode', phase['mode']]
 
-        elif augmentation_type == 'gibbs':
-            phase_command_parts += ['-param_range', str(phase['radius'])]
+        elif aug_type == 'gibbs':
+            phase_cmd_opts+= ['-param_range', str(phase['radius'])]
 
-        elif augmentation_type == 'affine':
-            phase_command_parts += ['-param_affine']
+        elif aug_type == 'affine':
+            phase_cmd_opts+= ['-param_affine']
 
             for value in phase['param1D']:
-                phase_command_parts.append(str(value))
+                phase_cmd_opts.append(str(value))
 
-        elif augmentation_type == 'gain_inhom':
-            phase_command_parts += ['-param_axis', phase['axis']]
-            phase_command_parts += ['-param_window', str(phase['window'])]
+        elif aug_type == 'gain_inhom':
+            phase_cmd_opts+= ['-param_axis', phase['axis']]
+            phase_cmd_opts+= ['-param_window', str(phase['window'])]
 
-        elif augmentation_type == 'zipper':
-            phase_command_parts += ['-param_axis', phase['axis']]
+        elif aug_type == 'zipper':
+            phase_cmd_opts+= ['-param_axis', phase['axis']]
 
-        elif augmentation_type == 'add_noise':
-            phase_command_parts += [
+        elif aug_type == 'add_noise':
+            phase_cmd_opts+= [
                 '-param_noise_level', str(phase['noise_lvl'])
             ]
 
-        elif augmentation_type == 'contrast_core':
-            phase_command_parts += ['-param_dim_fac', str(phase['dim_fac'])]
+        elif aug_type == 'contrast_core':
+            phase_cmd_opts+= ['-param_dim_fac', str(phase['dim_fac'])]
 
-        elif augmentation_type == 'contrast_shading':
-            phase_command_parts += ['-param_dim_fac', str(phase['dim_fac'])]
-            phase_command_parts += ['-param_axis', phase['axis']]
-            phase_command_parts += ['-param_window', str(phase['window'])]
+        elif aug_type == 'contrast_shading':
+            phase_cmd_opts+= ['-param_dim_fac', str(phase['dim_fac'])]
+            phase_cmd_opts+= ['-param_axis', phase['axis']]
+            phase_cmd_opts+= ['-param_window', str(phase['window'])]
 
-        phase_command = ' '.join(phase_command_parts)
+        phase_command = ' '.join(phase_cmd_opts)
 
         return phase_command
 
 
-    def write_tcsh(self, script_path, command_strings):
+    def write_tcsh(self, script_full, cmd_strings):
         """Write tcsh command strings with a status check after each one.
 
         Exit with the first failed command's status.  When every command
         succeeds, exit with status 0.
         """
 
-        with open(script_path, 'w') as out:
-            out.write('#!/bin/tcsh -f\n')
+        with open(script_full, 'w') as out:
+            out.write('#!/bin/tcsh -f\n\n')
             out.write('# Generated by arch_augment.py\n\n')
 
-            for command_string in command_strings:
-                out.write(command_string + '\n')
-                out.write('set step_status = $status\n')
-                out.write('if ( $step_status != 0 ) exit $step_status\n\n')
+            for cmd_string in cmd_strings:
+                out.write(cmd_string + '\n')
+                out.write('if ( $status ) exit $status\n\n')
 
             out.write('exit 0\n')
 
-        os.chmod(script_path, 0o755)
+        os.chmod(script_full, 0o755)
 
 
     def write_scripts(self):
@@ -643,16 +635,10 @@ class MainObj:
                 'log'    : dataset_log_path,
             })
 
-            # Redirect each job directly to its log, retaining exit status.
-            quoted_script_path = shlex.quote(dataset_script_path)
-            quoted_script_path = quoted_script_path.replace('!', r'\!')
-            quoted_log_path = shlex.quote(dataset_log_path)
-            quoted_log_path = quoted_log_path.replace('!', r'\!')
+            job_cmd_parts = ['tcsh', '-f', dataset_script_path]
+            job_cmd_parts+= ['|&', 'tee',  dataset_log_path]
 
-            job_command_parts = ['tcsh', '-f', quoted_script_path]
-            job_command_parts += ['>&', quoted_log_path]
-
-            job_command = ' '.join(job_command_parts)
+            job_command = ' '.join(job_cmd_parts)
             master_commands.append(job_command)
 
         # Write one independent job per line for swarm.
@@ -667,18 +653,15 @@ class MainObj:
         self.write_tcsh(serial_path, master_commands)
 
         # Build the swarm submission command with the shared resource options.
-        log_path = os.path.join(self.outdir, 'logs')
+        log_path   = os.path.join(self.outdir, 'logs')
         swarm_path = os.path.join(self.odir_scripts, DEF.FNAME_swarm)
 
-        quoted_master_path = shlex.quote(master_path).replace('!', r'\!')
-        quoted_log_path    = shlex.quote(log_path).replace('!', r'\!')
+        swarm_cmd_parts = ['swarm']
+        swarm_cmd_parts+= ['-f', master_path]
+        swarm_cmd_parts+= DEF.LIST_swarm_opts
+        swarm_cmd_parts+= ['--logdir=' + log_path]
 
-        swarm_command_parts = ['swarm']
-        swarm_command_parts += ['-f', quoted_master_path]
-        swarm_command_parts += DEF.LIST_swarm_opts
-        swarm_command_parts += ['--logdir=' + quoted_log_path]
-
-        swarm_command = ' '.join(swarm_command_parts)
+        swarm_command = ' '.join(swarm_cmd_parts)
         self.write_tcsh(swarm_path, [swarm_command])
 
         return 0
@@ -698,12 +681,12 @@ class MainObj:
             json.dump(self.plans, out, indent=4)
             out.write('\n')
 
-        original_command_parts = []
+        original_cmd_parts = []
 
         for original_argument in self.args_orig:
-            original_command_parts.append(shlex.quote(original_argument))
+            original_cmd_parts.append(original_argument)
 
-        original_command = ' '.join(original_command_parts)
+        original_command = ' '.join(original_cmd_parts)
 
         with open(log_path, 'w') as out:
             out.write(DEF.g_version + '\n')
@@ -744,12 +727,10 @@ class MainObj:
         )
 
         # Change directory in the child shell, leaving Python's cwd alone.
-        runner_command_parts = ['cd', shlex.quote(self.odir_scripts)]
-        runner_command_parts += [
-            '&&', 'tcsh', '-f', shlex.quote(runner_script_path)
-        ]
+        runner_cmd_parts = ['cd', self.odir_scripts]
+        runner_cmd_parts+= ['&&', 'tcsh', '-f', runner_script_path]
 
-        runner_command = ' '.join(runner_command_parts)
+        runner_command = ' '.join(runner_cmd_parts)
 
         com  = ab.shell_com(runner_command, capture=1)
         stat = com.run()
