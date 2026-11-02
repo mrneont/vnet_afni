@@ -25,8 +25,6 @@ DIR_scripts = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIST_exec_mode = ['None', 'swarm', 'shell']
 STR_exec_mode = ', '.join(LIST_exec_mode)
 
-DICT_yes_no = {'yes': True, 'y': True, 'no': False, 'n': False}
-
 
 DOPTS = {
     'indir'       : None,
@@ -35,7 +33,6 @@ DOPTS = {
     'seed_num'    : None,
     'exec_mode'   : LIST_exec_mode[0],
     'script_dir'  : DIR_scripts,
-    'do_wtds'     : 'Yes',
     'verb'        : 1,
 }
 
@@ -49,12 +46,8 @@ LIST_opts = [
     ('-exec_mode', 'exec_mode', str, 'execution mode: ' + STR_exec_mode),
     ('-script_dir', 'script_dir', str,
      'directory containing the do_*.tcsh scripts'),
-    ('-do_wtds', 'do_wtds', str,
-     'Yes/No: generate weights after augmentation'),
     ('-verb', 'verb', int, 'verbosity level'),
 ]
-
-DICT_opt_alias = {'-input_dir': '-indir', '-output_dir': '-outdir'}
 
 LIST_terminal_opts = [
     ('-help', 'display help'),
@@ -75,8 +68,6 @@ FNAME_swarm       = 'run_swarm.tcsh'
 FNAME_serial      = 'run_shell.tcsh'
 FNAME_plan        = 'daug.json'
 FNAME_cmd         = 'log_arch_augment.txt'
-DIR_wtds          = 'wtds'
-PROG_mask_to_wtds = 'adjunct_mask_to_wtds.tcsh'
 
 LIST_common_flags = [
     '-inset_orig',
@@ -182,6 +173,8 @@ Copy 000 is unaugmented. Each later copy has three randomly selected phases:
   1: Gibbs (15%), affine (45%), or no operation (40%).
   2: gain inhomogeneity (30%), zipper (10%), noise (30%), contrast (30%).
 
+# --------------------------------------------------------------------------
+
 Options ~1~
 
 -indir DIR       : (req) input split directory.
@@ -201,15 +194,9 @@ Options ~1~
                    swarm submits the generated master file via run_swarm.tcsh.
 
 -script_dir DIR  : location of the updated do_*.tcsh scripts.
+                   All supported augmentation scripts must be present,
+                   even if a run does not select every augmentation type.
                    (def: directory containing arch_augment.py)
-
--do_wtds Yes/No  : append mask-to-weight commands.
-                   Uses adjunct_mask_to_wtds.tcsh MASK OUTPUT,
-                   producing wtds/.
-                   Use No to generate weights separately, for example with
-                   arch_vnet_make_wtds.py on the completed
-                   training/validation tree.
-                   (def: {do_wtds})
 
 -verb N          : verbosity, a nonnegative integer
                    (def: {verb})
@@ -222,12 +209,11 @@ Options ~1~
 
 -show_valid_opts : display all valid options.
 
-The older -input_dir and -output_dir spellings remain accepted aliases.
-AFNI option_list also provides its standard help-search/view options.
+# --------------------------------------------------------------------------
 
 Outputs ~1~
 
-orig/, mask/, scripts/, logs/, and (when requested) wtds/.
+orig/, mask/, scripts/, and logs/.
 scripts/ contains per-dataset scripts, master_script.tcsh, run_shell.tcsh,
 run_swarm.tcsh,
 daug.json (all copies, phase choices, parameters, and source/output paths),
@@ -243,16 +229,19 @@ AFNI programs. Plans are reproducible but differ from the legacy random
 stream. Swarm resource options retain the legacy defaults; edit
 run_swarm.tcsh as needed.
 
+# --------------------------------------------------------------------------
+
 Examples ~1~
 
   arch_augment.py -indir DATA/training -outdir AUG/training -num_cp 3
 
   arch_augment.py -indir DATA/training -outdir AUG/training \\
-      -exec_mode shell -do_wtds No
+      -exec_mode shell
 
 To run prepared jobs later, use tcsh scripts/run_shell.tcsh for serial
 execution, or tcsh scripts/run_swarm.tcsh for swarm. master_script.tcsh is
 the swarm command list; run_shell.tcsh also stops after a failed dataset.
 For a fresh augmentation, choose a new output directory; rerunning prepared
 scripts applies augmentation again to the existing copies.
+
 '''.format(**DOPTS)

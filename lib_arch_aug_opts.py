@@ -37,11 +37,11 @@ class InOpts:
         self.seed_num   = None
         self.exec_mode  = None
         self.script_dir = None
-        self.do_wtds    = None
         self.verb       = DEF.DOPTS['verb']
 
-        self.init_options()
+        # -----
 
+        self.init_options()
 
     def init_options(self):
         """Register option names, argument counts and short help strings.
@@ -58,10 +58,6 @@ class InOpts:
 
         for name, attr, otype, helpstr in DEF.LIST_opts:
             self.valid_opts.add_opt(name, 1, [], helpstr=helpstr)
-
-        for alias, name in DEF.DICT_opt_alias.items():
-            helpstr = 'alias for ' + name
-            self.valid_opts.add_opt(alias, 1, [], helpstr=helpstr)
 
         return 0
 
@@ -108,58 +104,50 @@ class InOpts:
         err_base = 'Problem interpreting use of opt: '
 
         for opt in uopts.olist:
-            name = DEF.DICT_opt_alias.get(opt.name, opt.name)
 
-            if name == '-indir':
+            if opt.name == '-indir':
                 val, err = uopts.get_string_opt('', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.indir = val
 
-            elif name == '-outdir':
+            elif opt.name == '-outdir':
                 val, err = uopts.get_string_opt('', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.outdir = val
 
-            elif name == '-num_cp':
+            elif opt.name == '-num_cp':
                 val, err = uopts.get_type_opt(int, '', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.num_cp = val
 
-            elif name == '-seed_num':
+            elif opt.name == '-seed_num':
                 val, err = uopts.get_type_opt(int, '', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.seed_num = val
 
-            elif name == '-exec_mode':
+            elif opt.name == '-exec_mode':
                 val, err = uopts.get_string_opt('', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.exec_mode = val
 
-            elif name == '-script_dir':
+            elif opt.name == '-script_dir':
                 val, err = uopts.get_string_opt('', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.script_dir = val
 
-            elif name == '-do_wtds':
-                val, err = uopts.get_string_opt('', opt=opt)
-                if val is None or err:
-                    ab.EP1(err_base + opt.name)
-                    return -1
-                self.do_wtds = val
-
-            elif name == '-verb':
+            elif opt.name == '-verb':
                 val, err = uopts.get_type_opt(int, '', opt=opt)
                 if val is None or err:
                     ab.EP1(err_base + opt.name)
@@ -176,34 +164,31 @@ class InOpts:
         Return 0 on success or -1 when an input is invalid.
         """
 
+        BAD_RETURN = -1
+
         if not self.indir:
             ab.EP1('missing -indir option')
-            return -1
+            return BAD_RETURN
 
         if not self.outdir:
             ab.EP1('missing -outdir option')
-            return -1
+            return BAD_RETURN
 
         if self.num_cp is not None and self.num_cp < 1:
             msg = '-num_cp must be at least 1 '
             msg+= '(including the original copy)'
             ab.EP1(msg)
-            return -1
+            return BAD_RETURN
 
         if self.verb < 0:
             ab.EP1('-verb must be nonnegative')
-            return -1
+            return BAD_RETURN
 
         if self.exec_mode is not None:
             if self.exec_mode not in DEF.LIST_exec_mode:
                 msg = '-exec_mode must be one of: '
                 msg+= DEF.STR_exec_mode
                 ab.EP1(msg)
-                return -1
-
-        if self.do_wtds is not None:
-            if self.do_wtds.lower() not in DEF.DICT_yes_no:
-                ab.EP1('-do_wtds must be Yes or No')
-                return -1
+                return BAD_RETURN
 
         return 0

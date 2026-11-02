@@ -27,11 +27,12 @@ def main(argv=None):
         ab.EP1('failed to process options')
         return 1, None
 
-    if inobj.check_options():
-        ab.EP1('failed whilst checking options')
+    co = inobj.check_options()
+    if co :
+        ab.EP1('option processing failed during check')
         return 1, None
 
-    # Load the processing library after handling help and input checks.
+    # Load the processing library after help and option parsing.
     from vnet_afni import lib_arch_aug_base as LAB
 
     mainobj = LAB.MainObj(user_inobj=inobj, args_orig=inobj.args_orig)

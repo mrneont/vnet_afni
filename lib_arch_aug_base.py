@@ -15,48 +15,6 @@ from vnet_afni import lib_arch_vnet_base as LAVB
 
 # ============================================================================
 
-def quote_tcsh(value):
-    """Quote one literal command argument for tcsh.
-
-    Escape quote and history characters.  Reject line breaks and NULs,
-    which cannot be placed safely in the generated command lines.
-    """
-
-    text = str(value)
-
-    for char in ['\n', '\r', '\x00']:
-        if char in text:
-            msg = 'Newlines and NUL chars are not supported '
-            msg+= 'in script arguments'
-            raise ValueError(msg)
-
-    text = text.replace('!', r'\!')
-    text = text.replace("'", "'\\''")
-    text = "'" + text + "'"
-
-    return text
-
-
-def command_tcsh(argv):
-    """Build one tcsh command from a list of literal arguments.
-
-    Quote each argument separately so paths and parameters retain their
-    boundaries when the generated script is executed.
-    """
-
-    cmd = ''
-
-    for arg in argv:
-        if cmd:
-            cmd += ' '
-
-        cmd += quote_tcsh(arg)
-
-    return cmd
-
-
-# ============================================================================
-
 class MainObj:
     """Store augmentation settings and run the preparation stages in order."""
 
@@ -81,7 +39,7 @@ class MainObj:
         self.script_sources = {}
         self.jobs           = []
         self.odir_scripts   = None
-        self.weight_command = None
+        self.phase_sampling = {}
 
         # Run each stage only after the preceding stage succeeds.
         if user_inobj is not None:
@@ -98,7 +56,7 @@ class MainObj:
                 if self.status:
                     return
 
-                self.status = self.make_plans()
+                self.status = self.setup_phase_sampling()
                 if self.status:
                     return
 
@@ -106,11 +64,15 @@ class MainObj:
                 if self.status:
                     return
 
+                self.status = self.make_plans()
+                if self.status:
+                    return
+
                 self.status = self.make_outdir()
                 if self.status:
                     return
 
-                self.status = self.copy_dsets()
+                self.status = self.write_plan_and_log()
                 if self.status:
                     return
 
@@ -122,7 +84,7 @@ class MainObj:
                 if self.status:
                     return
 
-                self.status = self.write_plan_and_log()
+                self.status = self.copy_dsets()
                 if self.status:
                     return
 
@@ -154,8 +116,8 @@ class MainObj:
     def basic_setup(self):
         """Check control values, output location and execution tools.
 
-        Convert directory names to absolute paths and the weight option to
-        a boolean.  Return -1 on failure before creating output files.
+        Convert directory names to absolute paths.  Return -1 on failure
+        before creating output files.
         """
 
         if not self.indir or not self.outdir:
@@ -172,14 +134,16 @@ class MainObj:
             ab.EP1(msg)
             return -1
 
-        if str(self.do_wtds).lower() not in DEF.DICT_yes_no:
-            ab.EP1('-do_wtds must be Yes or No')
-            return -1
-
-        self.do_wtds    = DEF.DICT_yes_no[str(self.do_wtds).lower()]
         self.indir      = os.path.abspath(self.indir)
         self.outdir     = os.path.abspath(self.outdir)
         self.script_dir = os.path.abspath(self.script_dir)
+
+        # Keep each path within a single generated command line.
+        for path in [self.indir, self.outdir, self.script_dir]:
+            for char in ['\n', '\r', '\x00']:
+                if char in path:
+                    ab.EP1('Newlines and NUL chars are not allowed in paths')
+                    return -1
 
         if os.path.lexists(self.outdir):
             msg = 'Output path exists already; choose a new -outdir: '
@@ -238,6 +202,14 @@ class MainObj:
         for index in range(num_pairs):
             fname_orig = self.split_tree.all_dset['orig'][index]
             fname_mask = self.split_tree.all_dset['mask'][index]
+
+            for fname in [fname_orig, fname_mask]:
+                for char in ['\n', '\r', '\x00']:
+                    if char in fname:
+                        msg = 'Newlines and NUL chars are not allowed '
+                        msg+= 'in dataset filenames'
+                        ab.EP1(msg)
+                        return BAD_RETURN
 
             path_orig = os.path.join(dir_orig, fname_orig)
             path_mask = os.path.join(dir_mask, fname_mask)
@@ -299,9 +271,11 @@ class MainObj:
             if kind == 'rotation':
                 axis  = rng.choice(DEF.LIST_axis_xyz)
                 value = 0
+                rbot  = DEF.RANGE_rotation[0]
+                rtop  = DEF.RANGE_rotation[1]
 
                 while value == 0:
-                    value = rng.randint(*DEF.RANGE_rotation)
+                    value = rng.randint(rbot, rtop)
 
                 index = DEF.DICT_rotation_index[axis]
                 params[index] = value
@@ -314,7 +288,9 @@ class MainObj:
                 params[index] = value
 
             elif kind == 'scale':
-                value = rng.uniform(*DEF.RANGE_scale)
+                rbot  = DEF.RANGE_scale[0]
+                rtop  = DEF.RANGE_scale[1]
+                value = rng.uniform(rbot, rtop)
                 value = round(value, 1)
 
                 params[6:9] = [value, value, value]
@@ -322,15 +298,35 @@ class MainObj:
             elif kind == 'shear':
                 axis  = rng.choice(DEF.LIST_axis_xyz)
                 value = 0
+                rbot  = DEF.RANGE_shear[0]
+                rtop  = DEF.RANGE_shear[1]
 
                 while value == 0:
-                    value = rng.uniform(*DEF.RANGE_shear)
+                    value = rng.uniform(rbot, rtop)
                     value = round(value, 2)
 
                 index = DEF.DICT_shear_index[axis]
                 params[index] = value
 
         return params
+
+
+    def setup_phase_sampling(self):
+        """Prepare each phase's choices and relative weights once per run.
+
+        Keep the definition order so seeded sampling follows the existing
+        random draw sequence.  Later copies reuse these prepared lists.
+        """
+
+        for phase_name in DEF.LIST_phases:
+            phase_types = DEF.DICT_phase_types[phase_name]
+
+            self.phase_sampling[phase_name] = {
+                'types'   : list(phase_types.keys()),
+                'weights' : list(phase_types.values()),
+            }
+
+        return 0
 
 
     def make_phase_plan(self, rng):
@@ -345,10 +341,10 @@ class MainObj:
 
         # Choose all three phase types before drawing their parameters.
         for phase_name in DEF.LIST_phases:
-            phase_types = DEF.DICT_phase_types[phase_name]
-            types       = list(phase_types.keys())
-            weights     = list(phase_types.values())
-            choice      = rng.choices(types, weights)
+            phase_sampling = self.phase_sampling[phase_name]
+            types          = phase_sampling['types']
+            weights        = phase_sampling['weights']
+            choice         = rng.choices(types, weights)
 
             phases[phase_name] = {'type': choice[0]}
 
@@ -362,7 +358,9 @@ class MainObj:
 
         # Set parameters for the geometric phase.
         if ph1['type'] == 'gibbs':
-            ph1['radius'] = rng.randint(*DEF.RANGE_gibbs)
+            rbot = DEF.RANGE_gibbs[0]
+            rtop = DEF.RANGE_gibbs[1]
+            ph1['radius'] = rng.randint(rbot, rtop)
 
         elif ph1['type'] == 'affine':
             ph1['param1D'] = self.make_affine_params(rng)
@@ -371,7 +369,9 @@ class MainObj:
         if ph2['type'] == 'gain_inhom':
             choice = rng.choices(DEF.LIST_axis_ijk,
                                  DEF.LIST_gain_axis_weights)
-            window = rng.uniform(*DEF.RANGE_gain_window)
+            rbot   = DEF.RANGE_gain_window[0]
+            rtop   = DEF.RANGE_gain_window[1]
+            window = rng.uniform(rbot, rtop)
 
             ph2['axis'] = choice[0]
             ph2['window'] = round(window, 1)
@@ -416,7 +416,6 @@ class MainObj:
 
                 orig_name = label + '_orig' + pair['ext_orig']
                 mask_name = label + '_mask' + pair['ext_mask']
-                wtds_name = label + '_wtds.nii.gz'
 
                 plan = dict(pair)
                 plan['copy_index'] = index
@@ -424,12 +423,6 @@ class MainObj:
                 plan['fl_basename'] = orig_name
                 plan['orig'] = os.path.join(self.outdir, 'orig', orig_name)
                 plan['mask'] = os.path.join(self.outdir, 'mask', mask_name)
-                plan['wtds'] = None
-
-                if self.do_wtds:
-                    plan['wtds'] = os.path.join(self.outdir, DEF.DIR_wtds,
-                                                wtds_name)
-
                 if index:
                     phases = self.make_phase_plan(rng)
                     plan.update(phases)
@@ -462,61 +455,22 @@ class MainObj:
 
 
     def find_aug_scripts(self):
-        """Find script sources and check that every selected script exists.
+        """Check the complete augmentation script set before making plans.
 
-        Prepare the weight command from a local helper when available, or
-        use its executable name on PATH.  Check PATH immediately for serial
-        execution; preparation and swarm jobs resolve it when they run.
+        Record each source path once for the later copying stage.  Require
+        all supported scripts, regardless of this run's random selections.
         """
 
-        required = set()
+        for script_name in DEF.DICT_aug_script.values():
+            script_path = os.path.join(self.script_dir, script_name)
 
-        # Collect the scripts used by the planned augmentation phases.
-        for plan in self.plans:
-            for phase_name in DEF.LIST_phases:
-                phase = plan[phase_name]
-
-                if phase['type'] == 'empty':
-                    continue
-
-                key = self.get_aug_key(phase)
-                required.add(key)
-
-        for key, fname in DEF.DICT_aug_script.items():
-            path = os.path.join(self.script_dir, fname)
-
-            if os.path.isfile(path):
-                self.script_sources[fname] = path
-
-            elif key in required:
+            if not os.path.isfile(script_path):
                 msg = 'Cannot find augmentation script: '
-                msg+= '{} (see -script_dir)'.format(path)
+                msg+= '{} (see -script_dir)'.format(script_path)
                 ab.EP1(msg)
                 return -1
 
-        # Use the same weight-helper interface as lib_arch_vnet_wtds.
-        if self.do_wtds:
-            path = os.path.join(self.script_dir, DEF.PROG_mask_to_wtds)
-
-            if os.path.isfile(path):
-                self.script_sources[DEF.PROG_mask_to_wtds] = path
-
-                helper = os.path.join(self.odir_scripts,
-                                      DEF.PROG_mask_to_wtds)
-                self.weight_command = ['tcsh', '-f', helper]
-
-            else:
-                self.weight_command = [DEF.PROG_mask_to_wtds]
-
-                if self.exec_mode == 'shell':
-                    helper = shutil.which(DEF.PROG_mask_to_wtds)
-
-                    if helper is None:
-                        msg = 'Cannot find {} on PATH; '
-                        msg = msg.format(DEF.PROG_mask_to_wtds)
-                        msg+= 'use -do_wtds No to defer weights'
-                        ab.EP1(msg)
-                        return -1
+            self.script_sources[script_name] = script_path
 
         return 0
 
@@ -524,18 +478,13 @@ class MainObj:
     def make_outdir(self):
         """Create a new output root and its dataset, script and log folders.
 
-        Create wtds/ only when weight generation is requested.  Let an
-        existing output root raise an error, including a creation race.
+        Let an existing output root raise an error, including a creation
+        race after the earlier output-path check.
         """
 
         os.makedirs(self.outdir)
 
-        subdirs = DEF.LIST_subdirs[:]
-
-        if self.do_wtds:
-            subdirs.append(DEF.DIR_wtds)
-
-        for subdir in subdirs:
+        for subdir in DEF.LIST_subdirs:
             path = os.path.join(self.outdir, subdir)
             os.mkdir(path)
 
@@ -571,89 +520,102 @@ class MainObj:
 
 
     def get_phase_command(self, plan, phase):
-        """Build the argument list for one augmentation script call.
+        """Build one augmentation command by joining explicit option pieces.
 
-        Supply the anatomy and mask explicitly as both inputs and outputs.
-        The scripts copy inputs into isolated workdirs before writing the
-        augmented results.  Keep each parameter flag beside its value.
+        Supply anatomy and mask as both inputs and outputs.  Quote paths
+        inline, convert numeric parameters to strings, and keep each flag
+        beside its value.  Return the completed command string.
         """
 
-        key = self.get_aug_key(phase)
-        script_name = DEF.DICT_aug_script[key]
-        script_path = os.path.join(self.odir_scripts, script_name)
+        augmentation_type = self.get_aug_key(phase)
+        augmentation_script_name = DEF.DICT_aug_script[augmentation_type]
+        augmentation_script_path = os.path.join(
+            self.odir_scripts, augmentation_script_name
+        )
+
+        # Quote paths inline, including tcsh's history character.
+        quoted_script_path = shlex.quote(augmentation_script_path)
+        quoted_script_path = quoted_script_path.replace('!', r'\!')
+        quoted_orig_path   = shlex.quote(plan['orig']).replace('!', r'\!')
+        quoted_mask_path   = shlex.quote(plan['mask']).replace('!', r'\!')
 
         # Each script receives the same four dataset options.
-        cmd = ['tcsh', '-f', script_path]
-        cmd += ['-inset_orig', plan['orig']]
-        cmd += ['-inset_mask', plan['mask']]
-        cmd += ['-prefix_orig', plan['orig']]
-        cmd += ['-prefix_mask', plan['mask']]
+        phase_command_parts = ['tcsh', '-f', quoted_script_path]
+        phase_command_parts += ['-inset_orig', quoted_orig_path]
+        phase_command_parts += ['-inset_mask', quoted_mask_path]
+        phase_command_parts += ['-prefix_orig', quoted_orig_path]
+        phase_command_parts += ['-prefix_mask', quoted_mask_path]
 
         # Add only the parameters accepted by the selected script.
-        if key == 'reface':
-            cmd += ['-param_mode', phase['mode']]
+        if augmentation_type == 'reface':
+            phase_command_parts += ['-param_mode', phase['mode']]
 
-        elif key == 'gibbs':
-            cmd += ['-param_range', phase['radius']]
+        elif augmentation_type == 'gibbs':
+            phase_command_parts += ['-param_range', str(phase['radius'])]
 
-        elif key == 'affine':
-            cmd += ['-param_affine']
-            cmd += phase['param1D']
+        elif augmentation_type == 'affine':
+            phase_command_parts += ['-param_affine']
 
-        elif key == 'gain_inhom':
-            cmd += ['-param_axis', phase['axis']]
-            cmd += ['-param_window', phase['window']]
+            for value in phase['param1D']:
+                phase_command_parts.append(str(value))
 
-        elif key == 'zipper':
-            cmd += ['-param_axis', phase['axis']]
+        elif augmentation_type == 'gain_inhom':
+            phase_command_parts += ['-param_axis', phase['axis']]
+            phase_command_parts += ['-param_window', str(phase['window'])]
 
-        elif key == 'add_noise':
-            cmd += ['-param_noise_level', phase['noise_lvl']]
+        elif augmentation_type == 'zipper':
+            phase_command_parts += ['-param_axis', phase['axis']]
 
-        elif key == 'contrast_core':
-            cmd += ['-param_dim_fac', phase['dim_fac']]
+        elif augmentation_type == 'add_noise':
+            phase_command_parts += [
+                '-param_noise_level', str(phase['noise_lvl'])
+            ]
 
-        elif key == 'contrast_shading':
-            cmd += ['-param_dim_fac', phase['dim_fac']]
-            cmd += ['-param_axis', phase['axis']]
-            cmd += ['-param_window', phase['window']]
+        elif augmentation_type == 'contrast_core':
+            phase_command_parts += ['-param_dim_fac', str(phase['dim_fac'])]
 
-        return cmd
+        elif augmentation_type == 'contrast_shading':
+            phase_command_parts += ['-param_dim_fac', str(phase['dim_fac'])]
+            phase_command_parts += ['-param_axis', phase['axis']]
+            phase_command_parts += ['-param_window', str(phase['window'])]
+
+        phase_command = ' '.join(phase_command_parts)
+
+        return phase_command
 
 
-    def write_tcsh(self, path, commands):
-        """Write executable tcsh commands with a status check after each one.
+    def write_tcsh(self, script_path, command_strings):
+        """Write tcsh command strings with a status check after each one.
 
         Exit with the first failed command's status.  When every command
         succeeds, exit with status 0.
         """
 
-        with open(path, 'w') as out:
+        with open(script_path, 'w') as out:
             out.write('#!/bin/tcsh -f\n')
             out.write('# Generated by arch_augment.py\n\n')
 
-            for cmd in commands:
-                out.write(cmd + '\n')
+            for command_string in command_strings:
+                out.write(command_string + '\n')
                 out.write('set step_status = $status\n')
                 out.write('if ( $step_status != 0 ) exit $step_status\n\n')
 
             out.write('exit 0\n')
 
-        os.chmod(path, 0o755)
+        os.chmod(script_path, 0o755)
 
 
     def write_scripts(self):
         """Write per-copy jobs, the swarm command list and both runners.
 
-        Put augmentation commands in phase order, followed by the optional
-        weight command.  Give each job a separate log and record its script
-        and log paths in self.jobs.
+        Put augmentation commands in phase order.  Give each job a separate
+        log and record its script and log paths in self.jobs.
         """
 
-        master_lines = []
+        master_commands = []
 
         for plan in self.plans:
-            commands = []
+            dataset_commands = []
 
             # Add each selected augmentation in phase order.
             for phase_name in DEF.LIST_phases:
@@ -662,58 +624,62 @@ class MainObj:
                 if phase['type'] == 'empty':
                     continue
 
-                argv = self.get_phase_command(plan, phase)
-                cmd = command_tcsh(argv)
-                commands.append(cmd)
+                phase_command = self.get_phase_command(plan, phase)
+                dataset_commands.append(phase_command)
 
-            # Make weights from the final mask after all augmentation steps.
-            if self.do_wtds:
-                argv = self.weight_command[:]
-                argv+= [plan['mask']]
-                argv+= [plan['wtds']]
+            dataset_script_name = plan['label'] + '_orig.tcsh'
+            dataset_script_path = os.path.join(
+                self.odir_scripts, dataset_script_name
+            )
 
-                cmd = command_tcsh(argv)
-                commands.append(cmd)
+            dataset_log_name = 'log_' + plan['label'] + '_orig.txt'
+            dataset_log_path = os.path.join(
+                self.outdir, 'logs', dataset_log_name
+            )
 
-            script_name = plan['label'] + '_orig.tcsh'
-            script = os.path.join(self.odir_scripts, script_name)
-
-            log_name = 'log_' + plan['label'] + '_orig.txt'
-            logfile = os.path.join(self.outdir, 'logs', log_name)
-
-            self.write_tcsh(script, commands)
-            self.jobs.append({'script': script, 'log': logfile})
+            self.write_tcsh(dataset_script_path, dataset_commands)
+            self.jobs.append({
+                'script' : dataset_script_path,
+                'log'    : dataset_log_path,
+            })
 
             # Redirect each job directly to its log, retaining exit status.
-            argv = ['tcsh', '-f', script]
-            cmd = command_tcsh(argv)
-            cmd += ' >& '
-            cmd += quote_tcsh(logfile)
+            quoted_script_path = shlex.quote(dataset_script_path)
+            quoted_script_path = quoted_script_path.replace('!', r'\!')
+            quoted_log_path = shlex.quote(dataset_log_path)
+            quoted_log_path = quoted_log_path.replace('!', r'\!')
 
-            master_lines.append(cmd)
+            job_command_parts = ['tcsh', '-f', quoted_script_path]
+            job_command_parts += ['>&', quoted_log_path]
+
+            job_command = ' '.join(job_command_parts)
+            master_commands.append(job_command)
 
         # Write one independent job per line for swarm.
         master_path = os.path.join(self.odir_scripts, DEF.FNAME_master)
 
         with open(master_path, 'w') as out:
-            for cmd in master_lines:
-                out.write(cmd + '\n')
+            for job_command in master_commands:
+                out.write(job_command + '\n')
 
         # Write the serial runner with a status check after each job.
         serial_path = os.path.join(self.odir_scripts, DEF.FNAME_serial)
-        self.write_tcsh(serial_path, master_lines)
+        self.write_tcsh(serial_path, master_commands)
 
         # Build the swarm submission command with the shared resource options.
         log_path = os.path.join(self.outdir, 'logs')
         swarm_path = os.path.join(self.odir_scripts, DEF.FNAME_swarm)
 
-        argv = ['swarm']
-        argv += ['-f', master_path]
-        argv += DEF.LIST_swarm_opts
-        argv += ['--logdir=' + log_path]
+        quoted_master_path = shlex.quote(master_path).replace('!', r'\!')
+        quoted_log_path    = shlex.quote(log_path).replace('!', r'\!')
 
-        cmd = command_tcsh(argv)
-        self.write_tcsh(swarm_path, [cmd])
+        swarm_command_parts = ['swarm']
+        swarm_command_parts += ['-f', quoted_master_path]
+        swarm_command_parts += DEF.LIST_swarm_opts
+        swarm_command_parts += ['--logdir=' + quoted_log_path]
+
+        swarm_command = ' '.join(swarm_command_parts)
+        self.write_tcsh(swarm_path, [swarm_command])
 
         return 0
 
@@ -732,16 +698,16 @@ class MainObj:
             json.dump(self.plans, out, indent=4)
             out.write('\n')
 
-        cmd_parts = []
+        original_command_parts = []
 
-        for arg in self.args_orig:
-            cmd_parts.append(shlex.quote(arg))
+        for original_argument in self.args_orig:
+            original_command_parts.append(shlex.quote(original_argument))
 
-        cmd = ' '.join(cmd_parts)
+        original_command = ' '.join(original_command_parts)
 
         with open(log_path, 'w') as out:
             out.write(DEF.g_version + '\n')
-            out.write(cmd + '\n')
+            out.write(original_command + '\n')
             out.write('seed_num = {}\n'.format(self.seed_num))
 
         return 0
@@ -765,21 +731,27 @@ class MainObj:
             return 0
 
         if self.exec_mode == 'shell':
-            fname = DEF.FNAME_serial
+            runner_script_name = DEF.FNAME_serial
         else:
-            fname = DEF.FNAME_swarm
+            runner_script_name = DEF.FNAME_swarm
 
         if self.verb:
             msg = 'Run augmentation in {} mode'.format(self.exec_mode)
             ab.IP(msg)
 
-        path = os.path.join(self.odir_scripts, fname)
+        runner_script_path = os.path.join(
+            self.odir_scripts, runner_script_name
+        )
 
         # Change directory in the child shell, leaving Python's cwd alone.
-        cmd = 'cd {} && '.format(shlex.quote(self.odir_scripts))
-        cmd+= 'tcsh -f {}'.format(shlex.quote(path))
+        runner_command_parts = ['cd', shlex.quote(self.odir_scripts)]
+        runner_command_parts += [
+            '&&', 'tcsh', '-f', shlex.quote(runner_script_path)
+        ]
 
-        com  = ab.shell_com(cmd, capture=1)
+        runner_command = ' '.join(runner_command_parts)
+
+        com  = ab.shell_com(runner_command, capture=1)
         stat = com.run()
 
         if self.verb or stat:
@@ -795,7 +767,7 @@ class MainObj:
             ab.EP1(msg)
 
             print('Failed command:')
-            print(cmd)
+            print(runner_command)
 
             for line in com.se:
                 print(line)
