@@ -662,7 +662,7 @@ class MainObj:
         swarm_cmd_parts+= '    --logdir={} \\\n'.format(log_path)
         swarm_cmd_parts+= '    -f {} \\\n'.format(master_path)
 
-        self.write_tcsh(swarm_path, [swarm_command])
+        self.write_tcsh(swarm_path, [swarm_cmd_parts])
 
         return 0
 
