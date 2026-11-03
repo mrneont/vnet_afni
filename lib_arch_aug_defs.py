@@ -33,7 +33,7 @@ DOPTS = {
     'seed_num'    : None,
     'exec_mode'   : LIST_exec_mode[0],
     'script_dir'  : DIR_scripts,
-    'do_qc_imgs'  : 'No',
+    'do_qc_imgs'  : 'Yes',
     'verb'        : 1,
 }
 
