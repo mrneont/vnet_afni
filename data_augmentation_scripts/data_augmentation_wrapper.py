@@ -509,7 +509,7 @@ def write_script(da_dict,fl_name, daug):
 
         # phase-0  
         if (da_dict['daug_ph0']['type'] == 'reface'):
-            f.write("tcsh do_reface.tcsh {}""".format(fl_name))
+            f.write("""tcsh do_reface.tcsh {}""".format(fl_name))
             f.write('\n')
 
         print('\n')
@@ -518,13 +518,13 @@ def write_script(da_dict,fl_name, daug):
         if (da_dict['daug_ph1']['type'] == 'gibbs'):#(weightage =15%)
             gibbs_radius = da_dict['daug_ph1']['radius']
             print('gibbs_radius =',gibbs_radius)
-            f.write("tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
+            f.write("""tcsh do_gibbs.tcsh {} {}""".format(fl_name,\
                                                         gibbs_radius))
             f.write('\n')
 
         if (da_dict['daug_ph1']['type'] == 'affine'): # affine_transform(weightage =45%)
             param1D = da_dict['daug_ph1']['param1D']
-            f.write("tcsh do_affine.tcsh {} {}""".format(fl_name,\
+            f.write("""tcsh do_affine.tcsh {} {}""".format(fl_name,\
                                                         param1D))
             f.write('\n')
         # phase-2  data augmentation shell script
@@ -536,34 +536,34 @@ def write_script(da_dict,fl_name, daug):
             case 'gain_inhom':
                 axis   = da_dict['daug_ph2']['axis']
                 window = da_dict['daug_ph2']['window']
-                f.write("tcsh do_gain_inhomogenity.tcsh {} {} {}""".format(fl_name,\
+                f.write("""tcsh do_gain_inhomogenity.tcsh {} {} {}""".format(fl_name,\
                                                         axis, window))
 
             case 'zipper':
                 axis  = da_dict['daug_ph2']['axis']
                 width = da_dict['daug_ph2']['zip_width']
-                f.write("tcsh do_zipper_noise.tcsh {} {} {}""".format(fl_name,\
+                f.write("""tcsh do_zipper_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, width))
 
             case 'add_noise':
                 axis         = da_dict['daug_ph2']['axis']
                 noise_level  = da_dict['daug_ph2']['noise_lvl']
-                f.write("tcsh do_add_noise.tcsh {} {} {}""".format(fl_name,\
+                f.write("""tcsh do_add_noise.tcsh {} {} {}""".format(fl_name,\
                                                         axis, noise_level))
 
             case 'contrast_var':
                 shading         = da_dict['daug_ph2']['shading']
                 if shading ==1:
-                    f.write("tcsh do_contrast_variation_shading.tcsh {} """.format(fl_name))
+                    f.write("""tcsh do_contrast_variation_shading.tcsh {} """.format(fl_name))
                 else:
-                    f.write("tcsh do_contrast_variation_core.tcsh {} """.format(fl_name))
+                    f.write("""tcsh do_contrast_variation_core.tcsh {} """.format(fl_name))
         f.write('\n')
 
     
     # create the edt data for all the masks 
 
     
-    f.write("tcsh do_daug_weight.tcsh {}""".format(fl_name))
+    f.write("""tcsh do_daug_weight.tcsh {}""".format(fl_name))
 
     f.write('\n')
     f.close()
@@ -676,7 +676,7 @@ def main():
             print("daug_dict = ",daug_dict)
             list_daug.append(daug_dict)
             #|& tee logs/log_sub-001001_orig.txt
-        fl.write("tcsh -x {}.tcsh |& tee ../logs/{}""".format(fl_basename.split('.')[0],log_fl))
+        fl.write("""tcsh -x {}.tcsh |& tee ../logs/{}""".format(fl_basename.split('.')[0],log_fl))
         fl.write('\n')
             # list of dict
     fl.close()

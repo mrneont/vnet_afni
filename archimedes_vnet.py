@@ -1,0 +1,817 @@
+#!/usr/bin/env python
+
+# python3 status: compatible
+
+# system libraries
+import sys, os
+
+# AFNI libraries
+from    afnipy import option_list   as OL
+from    afnipy import afni_util     as UTIL
+from    afnipy import afni_base     as BASE
+
+from vnet_afni import lib_arch_vnet_defs as DEF
+
+# ----------------------------------------------------------------------
+# globals
+
+# combine all entries for help here
+g_help_dict   = {
+    **DEF.DOPTS, 
+    'STR_architecture' : DEF.STR_architecture,
+    'STR_optimizer'    : DEF.STR_optimizer,
+    'STR_scale_mode'   : DEF.STR_scale_mode,
+    'STR_precision'    : DEF.STR_precision,
+    'STR_loss_func'    : DEF.STR_loss_func,
+    'STR_loss_func_has_wtds' : DEF.STR_loss_func_has_wtds,
+    'STR_device'       : DEF.STR_device,
+}
+
+g_help_string = """Overview ~1~
+
+This program is for applying machine learning training+validation to
+generate a VNET checkpoint to be used within 3dBrainTeaser (which does
+skullstripping of a T1w anatomical dataset).
+
+auth = Y Narayana Swamy (SSCC, NIMH, NIH, USA)
+       RC Reynolds (SSCC, NIMH, NIH, USA)
+       PA Taylor (SSCC, NIMH, NIH, USA)
+
+------------------------------------------------------------------------
+
+Usage ~1~
+
+-indir INDIR   :(req) name of the input directory of training data
+
+-outdir OUTDIR :(req) name of the output directory of training data
+
+-max_epoch NE  :maximum epoch value to use for training; epoch counting 
+                is zero-based, so run from 0 through max_epoch, inclusive
+                (def: {max_epoch})
+
+-learn_rate LR :learning rate during training, which is the step size while
+                optimizing; smaller values can improve stability, but 
+                also take more time/computational resources                
+                (def: {learn_rate})
+
+-batch_size BS :number of dsets to batch together during training; increasing
+                this should boost robustness, but uses/requires more memory
+                (def: {batch_size})
+
+-do_shuffle DS :if using a batch_size >1, can choose to shuffle during which
+                dsets are batched together, which is probably a good idea
+                (def: {do_shuffle})
+
+-do_weight_norm DWN 
+               :use weight normalization during training?
+                (def: {do_weight_norm})
+
+-do_strict_load DSL
+               :load model with strict parameter matching during training?
+                NB: this is a developer setting that should probably remain
+                Yes or 1.
+                (def: {do_strict_load})
+
+-loss_func LF  :choose a particular loss function for training, from among
+                this list:
+                    {STR_loss_func}
+                NB: some loss_func types require a weight dataset for each
+                mask; those are:
+                    {STR_loss_func_has_wtds}
+                (def: {loss_func})
+
+-device D      :choose a particular device to run the training on, from among
+                this list:
+                  {STR_device}
+                (def: {device})
+
+-architecture AR :choose a particular architecture for training, from among
+                this list:
+                    {STR_architecture}
+                (def: {architecture})
+
+-optimizer OP  :choose a particular optimizer for training, from among
+                this list:
+                    {STR_optimizer}
+                (def: {optimizer})
+
+-precision PR  :choose a particular precision for training, from among
+                this list:
+                    {STR_precision}
+                (def: {precision})
+
+-seed S        :set a particular seed for any randomization steps
+                (def: {seed})
+
+-num_cpu NCPU  :number of CPU threads to use during training; 
+                a negative value means that the system decides.
+                NB: to know how many CPUs are available, you can run:
+                    afni_system_check.py -disp_num_cpu
+                (def: {num_cpu})
+
+-restart_checkpoint RC 
+               :to start training from an already-created checkpoint,
+                provide its name here
+                (def: {restart_checkpoint})
+
+-save_checkpoint_rate SCR :write out a checkpoint at a regular interval;
+                if using this option, a checkpoint will be written for the
+                [0]th epoch and then every SCR-th one up to max_epoch. For
+                example, if max_epoch is 20 and SCR is 5, then checkpoints
+                will be written out at these epochs: 0, 5, 10, 15, 20.
+                (def: only save the final checkpoint)
+
+-save_checkpoint_list SCL 
+               :write out a checkpoint at specified epochs; users
+                can provide a list of one or more integers in the range:
+                [0, max_epoch].
+                (def: only save the final checkpoint)
+
+       NB: the above -save_checkpoint_* options can both be used; the result
+           is to create a list of their union and max_epoch (without repeats).
+
+-save_pmask_rate SPR
+               :write out estimated masks at a regular interval;
+                if using this option, pmasks will be written for the
+                [0]th epoch and then every SPR-th one up to
+                max_epoch. For example, if max_epoch is 20 and SPR
+                is 5, then pmasks will be written out at these epochs:
+                0, 5, 10, 15, 20.  
+                (def: no pmasks written out)
+
+-save_pmask_list SPL
+               :write out estimated masks at specified epochs; users
+                can provide a list of one or more integers in the range:
+                [0, max_epoch].
+                (def: no pmasks written out)
+
+       NB: the above -save_pmask_* options can both be used; the result
+           is to create a list of their union (without repeats).
+
+-save_pmask_qc_frac F
+               :make QC images for a fraction F of the training and validation
+                pmasks from the highest-numbered saved-pmask epoch. F must be
+                in the range [0.0, 1.0].  The pmask lists are sorted, and QC
+                images are made for the first fraction F of each list; F=1.0
+                means all pmasks. Each prediction is binarized at 0.5 and
+                shown over its corresponding orig dataset, along with the
+                corresponding input mask using compare_mask_overlap.tcsh, with
+                the corresponding orig dataset as underlay. The QC images are
+                written into:
+                    OUTDIR/pmask_qc_train/
+                    OUTDIR/pmask_qc_valid/
+                and the tcsh scripts used to make them are:
+                    OUTDIR/run_pmask_qc_train.tcsh
+                    OUTDIR/run_pmask_qc_valid.tcsh
+                (def: {save_pmask_qc_frac})
+
+-do_clean DC   :state whether to clean up any intermediate files;
+                allowed values are:  Yes, 1, No, 0
+                (def: '{do_clean}')
+
+-do_log        :add this opt to turn on making a text log of all the
+                shell commands that are run when this program is
+                executed.  Mainly for debugging purposes.
+
+-do_log_loss DLL
+               :write per-epoch loss statistics to these files:
+                OUTDIR/log_loss_training.dat and
+                OUTDIR/log_loss_validation.dat?
+                allowed values are:  Yes, 1, No, 0
+                (def: '{do_log_loss}')
+
+-do_plot_loss DPL
+               :make a plot of the training and validation loss logs?
+                This writes and executes a tcsh script in OUTDIR, creating:
+                    OUTDIR/log_loss_plot.png
+                NB: this requires -do_log_loss Yes.
+                Allowed values are:  Yes, 1, No, 0
+                (def: '{do_plot_loss}')
+
+-help, -h      :display program help file
+
+-hist          :display program history
+
+-ver           :display program version number
+
+-verb  VVV     :control verbosity (def: {verb})
+
+-show_valid_opts :show valid options for this program
+
+------------------------------------------------------------------------
+
+Notes ~1~
+
+Outputs ~2~
+
+A default run of archimedes_vnet.py creates and OUTDIR directory and
+populates it with several useful outputs from training and validation,
+including one or more checkpoints, various logs, and a loss function plot.
+The output directory contains:
+
+  OUTDIR/
+  + checkpoint_train_XXXX.pt : primary output, the VNet itself that can
+                               be provided as an input for 3dBrainTeaser;
+                               XXXX is the zero-padded epoch number
+
+  + log_cmd_run.txt          : a copy of the executed archimedes_vnet.py
+                               command, with start/finish/duration times
+
+  + log_loss_training.dat    : per-epoch loss function values from the
+                               training data (min, max, mean, stdev) 
+
+  + log_loss_validation.dat  : per-epoch loss function values from the
+                               validation data (min, max, mean, stdev) 
+
+  + log_loss_plot.png        : a plot of the log_loss*.dat files, showing
+                               the mean and stdev across epochs
+
+  + run_plot_loss.tcsh       : the script used to create log_loss_plot.png,
+                               via 1dplot.py; could be adjusted and re-run
+                               if different image styles are desired.
+
+  + pmask_train/             : dir of output training prediction masks 
+                              (if using: '-save_pmask_* ..')
+
+  + pmask_valid/             : dir of output validation prediction masks
+                               (if using: '-save_pmask_* ..')
+
+  + pmask_train_qc/          : dir of QC images for saved training pmasks
+                               (if using: '-save_pmask_qc_frac ..')
+
+  + pmask_valid_qc/          : dir of QC images for saved validation pmasks
+                               (if using: '-save_pmask_qc_frac ..')
+
+Re. the main VNet checkpoint_train_*.pt outputs: 
+By default, the final epoch checkpoint is always written. Checkpoints
+from additional epochs can be generated when the corresponding
+-save_checkpoint_* options are used.
+
+Re. the main optional pmask_train/ and pmask_valid/ directory outputs:
+
+When using -save_pmask_* options, predicted masks are written for the
+selected epochs. (The two options can be combined, and the resulting
+save epochs are the union of the requested values.) Training and validation
+pmasks are kept separately, like:
+
+  pmask_train/
+    `-- SUBJ_pmask_train_XXXX.nii.gz
+
+  pmask_valid/
+    `-- SUBJ_pmask_valid_XXXX.nii.gz
+    ...
+
+where XXXX is the zero-padded epoch number, and SUBJ is the subject ID
+(like sub-123). The pmask_*.nii.gz datasets are floating point values
+between [0, 1], like probabilities, for the brain mask; they could be
+binarized above a threshold of 0.5 (so values above 0.5 -> 1) to
+produce the estimated brain mask. Ideally, by the final epoch, all
+pmask values should be either very close to either 0 or 1.
+
+When -save_pmask_qc_frac is used (and the provided fraction F is greater 
+than 0.0), QC images are made from the highest-numbered saved-pmask 
+epoch. The sorted training and validation pmask lists are handled 
+separately, using the first fraction F of each. Each selected prediction
+is binarized at 0.5 and compared with the corresponding input mask using
+compare_mask_overlap.tcsh, with the corresponding orig dataset as
+underlay. The resulting outputs are kept separately in pmask_train_qc/
+and pmask_valid_qc/.
+
+------------------------------------------------------------------------
+
+Examples ~1~
+
+ 1. Basic run (use default loss function and epoch count):
+
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
+        -outdir     odir_vnet
+
+ 2. Specify loss function and total number of epochs:
+
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
+        -outdir     odir_vnet                     \\
+        -loss_func  Sorensen_Dice_single_channel  \\
+        -max_epoch  120
+
+ 3. Specify different loss function, one that requires having the wtds/
+    (weight dataset) directory in the training/ and validation/ trees,
+    which would be created by running arch_make_wtds.py earlier:
+
+    archimedes_vnet.py                            \\
+        -indir      data_00_basic                 \\
+        -outdir     odir_vnet                     \\
+        -loss_func  WtSorensen_Dice               \\
+        -max_epoch  120
+
+ 4. Also specify extra/intermediate epoch output, a batch size, and 
+    output pmasks (prediction masks) of training and validation dsets
+    at the end, with QC images for 10% of the training and validation 
+    pmasks:
+
+    archimedes_vnet.py                                       \\
+        -indir                 data_00_basic                 \\
+        -outdir                odir_vnet                     \\
+        -loss_func             Sorensen_Dice_single_channel  \\
+        -max_epoch             120                           \\
+        -save_pmask_list       120                           \\
+        -save_pmask_qc_frac    0.1                           \\
+        -save_checkpoint_list  10 78 100
+           
+
+""".format(**g_help_dict)
+
+g_history = """
+  archimedes_vent.py history:
+
+  0.1   Sep 28, 2026 :: started this command line interface 
+"""
+
+g_prog    = g_history.split()[0]
+g_ver     = g_history.split("\n")[-2].split("::")[0].strip()
+g_version = g_prog + " version " + g_ver
+
+class InOpts:
+    """Object for storing any/all command line inputs, and just checking
+that any input files do, in fact, exist.  Option parsing and other
+checks happen in a subsequent object.
+
+    """
+
+    def __init__(self):
+        # main variables
+        self.status          = 0                       # exit value
+        self.valid_opts      = None
+        self.user_opts       = None
+
+        # general variables
+        self.verb            = DEF.DOPTS['verb']
+        self.do_clean        = None
+        self.overwrite       = None
+        self.do_log          = None
+        self.do_log_loss     = None
+        self.do_plot_loss    = None
+        self.save_pmask_qc_frac = None
+
+        # main data variables
+        self.indir           = None
+        self.outdir          = None
+        self.workdir         = None
+
+        # control variables
+        self.architecture    = None
+        self.scale_mode      = None
+        self.optimizer       = None
+        self.precision       = None
+        self.max_epoch       = None
+        self.learn_rate      = None
+        self.loss_func       = None
+        self.device          = None
+        self.seed            = None
+        self.num_cpu         = None
+        self.batch_size      = None
+        self.do_weight_norm  = None
+        self.do_strict_load  = None
+        self.do_shuffle      = None
+        self.restart_checkpoint   = None
+        self.save_checkpoint_rate = None
+        self.save_checkpoint_list = None
+        self.save_pmask_rate  = None
+        self.save_pmask_list  = None
+
+
+        # ----- take action(s)
+
+        # prelim stuff
+        tmp1 = self.init_options()
+
+    # ----- methods
+
+    def init_options(self):
+        """
+        Prepare the set of all options, with very short help descriptions
+        for each.
+        """
+
+        self.valid_opts = OL.OptionList('valid opts')
+
+        # short, terminal arguments
+
+        self.valid_opts.add_opt('-help', 0, [],           \
+                        helpstr='display program help')
+        self.valid_opts.add_opt('-hist', 0, [],           \
+                        helpstr='display the modification history')
+        self.valid_opts.add_opt('-show_valid_opts', 0, [],\
+                        helpstr='display all valid options')
+        self.valid_opts.add_opt('-ver', 0, [],            \
+                        helpstr='display the current version number')
+
+        # required parameters
+
+        self.valid_opts.add_opt('-indir', 1, [], 
+                        helpstr='name of input directory')
+
+        self.valid_opts.add_opt('-outdir', 1, [], 
+                        helpstr='name of output directory')
+
+        # optional parameters
+
+        self.valid_opts.add_opt('-workdir', 1, [], 
+                        helpstr='name of workdir (no path)')
+
+        self.valid_opts.add_opt('-max_epoch', 1, [], 
+                        helpstr='max epoch (iterations) for training')
+
+        self.valid_opts.add_opt('-learn_rate', 1, [], 
+                        helpstr='learning rate for training')
+
+        self.valid_opts.add_opt('-seed', 1, [], 
+                        helpstr='seed value (int) for randomization steps')
+
+        self.valid_opts.add_opt('-num_cpu', 1, [], 
+                        helpstr='specify number of CPUs to use')
+
+        self.valid_opts.add_opt('-batch_size', 1, [], 
+                        helpstr='batch size (int) for training')
+
+        self.valid_opts.add_opt('-do_weight_norm', 1, [], 
+                        helpstr='do weight normalization (or not)')
+
+        self.valid_opts.add_opt('-do_strict_load', 1, [], 
+                        helpstr='do strict parameter matching; likely leave 1')
+
+        self.valid_opts.add_opt('-do_shuffle', 1, [], 
+                        helpstr='if batch size >1, shuffle dsets in training')
+
+        self.valid_opts.add_opt('-restart_checkpoint', 1, [], 
+                        helpstr='restart training from specified checkpoint')
+
+        self.valid_opts.add_opt('-save_checkpoint_rate', 1, [], 
+                        helpstr='write a checkpoint every n-th epoch')
+
+        self.valid_opts.add_opt('-save_checkpoint_list', -1, [], 
+                        helpstr='write a checkpoint at every listed epoch')
+
+        self.valid_opts.add_opt('-save_pmask_rate', 1, [], 
+                        helpstr='write pmasks every n-th epoch')
+
+        self.valid_opts.add_opt('-save_pmask_list', -1, [], 
+                        helpstr='write pmasks at every listed epoch')
+
+        self.valid_opts.add_opt('-save_pmask_qc_frac', 1, [], 
+                        helpstr='fraction of saved pmasks for QC images')
+
+        self.valid_opts.add_opt('-architecture', 1, [], 
+                        helpstr='network architecture type for training')
+
+        self.valid_opts.add_opt('-scale_mode', 1, [], 
+                        helpstr='data normalization type for training')
+
+        self.valid_opts.add_opt('-optimizer', 1, [], 
+                        helpstr='name of optimizer to use during training')
+
+        self.valid_opts.add_opt('-precision', 1, [], 
+                        helpstr='type of dset precision to use for training')
+
+        self.valid_opts.add_opt('-loss_func', 1, [], 
+                        helpstr='type of loss function to use for training')
+
+        self.valid_opts.add_opt('-device', 1, [], 
+                        helpstr='device to use (cpu, cuda, etc.)')
+
+        # general options
+
+        self.valid_opts.add_opt('-do_clean', 1, [], 
+                        helpstr="turn on/off removal of intermediate files")
+
+        self.valid_opts.add_opt('-do_log', 0, [], 
+                        helpstr="turn on/off logging shell cmd execution")
+
+        self.valid_opts.add_opt('-do_log_loss', 1, [], 
+                        helpstr="write per-epoch loss statistics")
+
+        self.valid_opts.add_opt('-do_plot_loss', 1, [], 
+                        helpstr="plot training and validation loss")
+
+        self.valid_opts.add_opt('-overwrite', 0, [], 
+                        helpstr='overwrite preexisting outputs')
+
+        self.valid_opts.add_opt('-verb', 1, [], 
+                        helpstr='set the verbose level (default is 0)')
+
+        return 0
+
+    def process_options(self):
+        """return  1 on valid and exit        (e.g. -help)
+           return  0 on valid and continue    (e.g. do main processing)
+           return -1 on invalid               (bad things, panic, abort)
+        """
+
+        # process any optlist_ options
+        self.valid_opts.check_special_opts(sys.argv)
+
+        # process terminal options without the option_list interface
+        # (so that errors are not reported)
+        # return 1 (valid, but terminal)
+
+        # if no arguments are given, apply -help
+        if len(sys.argv) <= 1 or '-help' in sys.argv:
+           print(g_help_string)
+           return 1
+
+        if '-hist' in sys.argv:
+           print(g_history)
+           return 1
+
+        if '-show_valid_opts' in sys.argv:
+           self.valid_opts.show('', 1)
+           return 1
+
+        if '-ver' in sys.argv:
+           print(g_version)
+           return 1
+
+        # ============================================================
+        # read options specified by the user
+        self.user_opts = OL.read_options(sys.argv, self.valid_opts)
+        uopts = self.user_opts            # convenience variable
+        if not uopts: return -1           # error condition
+
+        # ------------------------------------------------------------
+        # process non-chronological options, verb comes first
+
+        val, err = uopts.get_type_opt(int, '-verb')
+        if val != None and not err: self.verb = val
+
+        # ------------------------------------------------------------
+        # process options sequentially, to make them like a script
+
+        err_base = "Problem interpreting use of opt: "
+
+        for opt in uopts.olist:
+
+            # main options
+
+            if opt.name == '-indir':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.indir = val
+
+            if opt.name == '-outdir':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.outdir = val
+
+            elif opt.name == '-workdir':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.workdir = val
+
+            # control options
+
+            elif opt.name == '-max_epoch':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.max_epoch = val
+
+            elif opt.name == '-learn_rate':
+                val, err = uopts.get_type_opt(float, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.learn_rate = val
+
+            elif opt.name == '-seed':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.seed = val
+
+            elif opt.name == '-num_cpu':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.num_cpu = val
+
+            elif opt.name == '-batch_size':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.batch_size = val
+
+            elif opt.name == '-do_weight_norm':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_weight_norm = val
+
+            elif opt.name == '-do_strict_load':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_strict_load = val
+
+            elif opt.name == '-do_shuffle':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_shuffle = val
+
+            elif opt.name == '-restart_checkpoint':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.restart_checkpoint = val
+
+            elif opt.name == '-save_checkpoint_rate':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_checkpoint_rate = val
+
+            # list (of int)
+            elif opt.name == '-save_checkpoint_list':
+                val, err = uopts.get_string_list('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_checkpoint_list = val
+
+            elif opt.name == '-save_pmask_rate':
+                val, err = uopts.get_type_opt(int, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_pmask_rate = val
+
+            # list (of int)
+            elif opt.name == '-save_pmask_list':
+                val, err = uopts.get_string_list('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_pmask_list = val
+
+            elif opt.name == '-save_pmask_qc_frac':
+                val, err = uopts.get_type_opt(float, '', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.save_pmask_qc_frac = val
+
+            elif opt.name == '-architecture':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.architecture = val
+
+            elif opt.name == '-scale_mode':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.scale_mode = val
+
+            elif opt.name == '-optimizer':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.optimizer = val
+
+            elif opt.name == '-precision':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.precision = val
+
+            elif opt.name == '-loss_func':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.loss_func = val
+
+            elif opt.name == '-device':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.device = val
+
+            # general options
+
+            elif opt.name == '-do_clean':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_clean = val
+
+            elif opt.name == '-do_log':
+                self.do_log = True
+
+            elif opt.name == '-do_log_loss':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_log_loss = val
+
+            elif opt.name == '-do_plot_loss':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    BASE.EP(err_base + opt.name)
+                self.do_plot_loss = val
+
+            elif opt.name == '-overwrite':
+                self.overwrite = '-overwrite'
+
+            # ... verb has already been checked above
+
+        return 0
+
+    def check_options(self):
+        """perform any final tests before execution; most checks are done
+        in the main object"""
+
+        if self.verb > 1:
+            BASE.IP("Begin processing options")
+
+        # required opt
+        if self.indir is None :
+            BASE.EP1("missing -indir option")
+            return -1
+
+        if self.outdir is None:
+            BASE.EP1("missing -outdir option")
+            return -1
+
+        return 0
+
+    def test(self, verb=3):
+        """one might want to be able to run internal tests,
+           alternatively, test from the shell
+        """
+        print('------------------------ initial tests -----------------------')
+        self.verb = verb
+        
+        print('------------------------ reset files -----------------------')
+
+        print('------------------------ should fail -----------------------')
+
+        print('------------------------ more tests ------------------------')
+
+        return None
+
+    # ----- decorators
+
+    #@property
+
+
+# ----------------------------------------------------------------------------
+
+def main():
+
+    # init option-reading obj
+    inobj = InOpts()
+    if not(inobj) :  
+        return 1, None
+
+    # process (= read) options
+    rv = inobj.process_options()
+    if rv > 0: 
+        # exit with success (e.g. -help)
+        return 0, None
+    if rv < 0:
+        # exit with error status
+        BASE.EP1('failed to process options')
+        return 1, None
+
+    # check the options
+    rv2 = inobj.check_options()
+    if rv2 :
+        # exit with error status
+        BASE.EP1('failed whilst checking options')
+        return rv2, None
+    
+    # this import is here, because it leads to torch being imported,
+    # and we don't want that getting in the way of help display, above
+    from vnet_afni import lib_arch_vnet_run  as LAVR
+
+    # use options to create main object
+    mainobj = LAVR.MainObj( user_inobj=inobj, args_orig=sys.argv )
+    if not(mainobj) or mainobj.status :  
+        return 1, mainobj
+
+    # write out log/history of what has been done (not done by default, to
+    # save some time, bc this takes a mini-while)
+    if inobj.do_log :
+        olog = 'log_archimedes_vnet.txt'
+        BASE.IP('creating log: {}'.format(olog))
+        UTIL.write_afni_com_log(olog)
+
+    return 0, mainobj
+
+# ============================================================================
+
+if __name__ == '__main__':
+
+    stat, mainobj = main()
+    sys.exit(stat)
+
+
