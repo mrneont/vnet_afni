@@ -33,6 +33,7 @@ DOPTS = {
     'seed_num'    : None,
     'exec_mode'   : LIST_exec_mode[0],
     'script_dir'  : DIR_scripts,
+    'do_qc_imgs'  : 'No',
     'verb'        : 1,
 }
 
@@ -46,6 +47,7 @@ LIST_opts = [
     ('-exec_mode', 'exec_mode', str, 'execution mode: ' + STR_exec_mode),
     ('-script_dir', 'script_dir', str,
      'directory containing the do_*.tcsh scripts'),
+    ('-do_qc_imgs', 'do_qc_imgs', str, 'make QC images: Yes/No/1/0'),
     ('-verb', 'verb', int, 'verbosity level'),
 ]
 
@@ -177,9 +179,9 @@ Copy 000 is unaugmented. Each later copy has three randomly selected phases:
 
 Options ~1~
 
--indir DIR       : (req) input split directory.
+-indir IDIR      : (req) input split directory.
 
--outdir DIR      : (req) output directory; must not already exist.
+-outdir ODIR     : (req) output directory; must not already exist.
 
 -num_cp N        : total copies per input, including copy 000
                    (def: {num_cp}).
@@ -197,6 +199,13 @@ Options ~1~
                    All supported augmentation scripts must be present,
                    even if a run does not select every augmentation type.
                    (def: directory containing arch_augment.py)
+
+-do_qc_imgs YN   : make mask-over-orig QC images for the augmented datasets; 
+                   allowed values are: Yes or 1, No or 0
+                   Images are written to ODIR/QC/.
+                   With -exec_mode None, QC commands are prepared for later.
+                   (def: {do_qc_imgs}).
+
 
 -verb N          : verbosity, a nonnegative integer
                    (def: {verb})
@@ -216,6 +225,8 @@ Outputs ~1~
 orig/, mask/, scripts/, and logs/.
 scripts/ contains per-dataset scripts, master_script.tcsh, run_shell.tcsh,
 run_swarm.tcsh,
+With -do_qc_imgs Yes/1, also QC/, with *_QC.jpg images corresponding to
+the *_orig.nii or *_orig.nii.gz output datasets.
 daug.json (all copies, phase choices, parameters, and source/output paths),
 and the copied augmentation scripts. log_arch_augment.txt records the command.
 

@@ -37,6 +37,7 @@ class InOpts:
         self.seed_num   = None
         self.exec_mode  = None
         self.script_dir = None
+        self.do_qc_imgs = None
         self.verb       = DEF.DOPTS['verb']
 
         # -----
@@ -146,6 +147,13 @@ class InOpts:
                     ab.EP1(err_base + opt.name)
                     return -1
                 self.script_dir = val
+
+            elif opt.name == '-do_qc_imgs':
+                val, err = uopts.get_string_opt('', opt=opt)
+                if val is None or err:
+                    ab.EP1(err_base + opt.name)
+                    return -1
+                self.do_qc_imgs = val
 
             elif opt.name == '-verb':
                 val, err = uopts.get_type_opt(int, '', opt=opt)

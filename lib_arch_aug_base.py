@@ -9,6 +9,7 @@ import random
 import shutil
 
 from afnipy    import afni_base          as ab
+from afnipy    import afni_util          as au
 from vnet_afni import lib_arch_aug_defs  as DEF
 from vnet_afni import lib_arch_vnet_base as LAVB
 
@@ -159,6 +160,9 @@ class MainObj:
             return -1
 
         self.odir_scripts = os.path.join(self.outdir, 'scripts')
+
+        # convert bool-ish opts to bools
+        self.do_qc_imgs = au.convert_to_bool_yn10(self.do_qc_imgs)
 
         if self.verb:
             ab.IP('Planning seed: {}'.format(self.seed_num))
@@ -487,6 +491,9 @@ class MainObj:
             path = os.path.join(self.outdir, subdir)
             os.mkdir(path)
 
+        if self.do_qc_imgs:
+            os.mkdir(os.path.join(self.outdir, 'QC'))
+
         return 0
 
 
@@ -538,6 +545,11 @@ class MainObj:
         phase_cmd_opts+= ['-inset_mask',  plan['mask']]
         phase_cmd_opts+= ['-prefix_orig', plan['orig']]
         phase_cmd_opts+= ['-prefix_mask', plan['mask']]
+
+        if self.do_qc_imgs:
+            qc_name = plan['label'] + '_QC.jpg'
+            qc_full = os.path.join(self.outdir, 'QC', qc_name)
+            phase_cmd_opts+= ['-prefix_qc', qc_full]
 
         # Add only the parameters accepted by the selected script.
         if aug_type == 'reface':
