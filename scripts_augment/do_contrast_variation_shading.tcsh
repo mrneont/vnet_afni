@@ -32,6 +32,7 @@ set inset_orig  = ""
 set inset_mask  = ""
 set prefix_orig = ""
 set prefix_mask = ""
+set prefix_qc   = ""
 set odir        = ""
 set opref       = ""
 set mdir        = ""
@@ -76,6 +77,11 @@ while ( $ac <= $#argv )
         if ( $ac >= $#argv ) goto FAIL_MISSING_ARG
         @ ac += 1
         set prefix_mask = "$argv[$ac]"
+
+    else if ( "$argv[$ac]" == "-prefix_qc" ) then
+        if ( $ac >= $#argv ) goto FAIL_MISSING_ARG
+        @ ac += 1
+        set prefix_qc = "$argv[$ac]"
 
     else if ( "$argv[$ac]" == "-param_dim_fac" ) then
         if ( $ac >= $#argv ) goto FAIL_MISSING_ARG
@@ -141,7 +147,8 @@ if ( "${prefix_mask}" == "" ) then
 endif
 
 foreach value ( "${inset_orig}" "${inset_mask}" "${prefix_orig}" \
-                "${prefix_mask}" "${dim_fac}" "${axis}" "${window}" )
+                "${prefix_mask}" "${prefix_qc}" "${dim_fac}" "${axis}" \
+                "${window}" )
     if ( "$value" =~ -[A-Za-z]* ) then
         echo "** ERROR: an option value appears to be another option: $value"
         goto BAD_EXIT
@@ -159,6 +166,12 @@ if ( "$inset_orig" !~ /* )  set inset_orig  = "${here}/${inset_orig}"
 if ( "$inset_mask" !~ /* )  set inset_mask  = "${here}/${inset_mask}"
 if ( "$prefix_orig" !~ /* ) set prefix_orig = "${here}/${prefix_orig}"
 if ( "$prefix_mask" !~ /* ) set prefix_mask = "${here}/${prefix_mask}"
+
+if ( "$prefix_qc" != "" && "$prefix_qc" != "0" ) then
+    if ( "$prefix_qc" !~ /* ) set prefix_qc = "${here}/${prefix_qc}"
+    set qc_prog = `which adjunct_mask_qc_image`
+    if ( $status ) goto BAD_EXIT
+endif
 
 set odir  = "`dirname "$prefix_orig"`"
 if ( $status ) goto BAD_EXIT
@@ -311,6 +324,27 @@ if ( $status ) goto BAD_EXIT
 3dcopy -overwrite "$mask_result" "$prefix_mask"
 if ( $status ) goto BAD_EXIT
 
+# Make the optional QC image from the published output datasets.
+if ( "$prefix_qc" != "" && "$prefix_qc" != "0" ) then
+    set qc_dir = "`dirname "$prefix_qc"`"
+    if ( $status ) goto BAD_EXIT
+    if ( ! -d "$qc_dir" ) then
+        \mkdir -p "$qc_dir"
+        if ( $status ) goto BAD_EXIT
+    endif
+
+    adjunct_mask_qc_image                                                    \
+        -input      "$prefix_mask"                                           \
+        -ulay       "$prefix_orig"                                           \
+        -outdir     "$work_path"                                             \
+        -prefix     qc_00_mask
+    if ( $status ) goto BAD_EXIT
+
+    # The helper appends _QC.jpg; use the exact filename requested here.
+    \mv "$work_path/qc_00_mask_QC.jpg" "$prefix_qc"
+    if ( $status ) goto BAD_EXIT
+endif
+
 # move out of wdir to the odir
 cd "$odir"
 if ( $status ) goto BAD_EXIT
@@ -358,6 +392,10 @@ Options ~1~
 -prefix_orig   PREF_O  :(req) output anatomical dataset name/prefix
 
 -prefix_mask   PREF_M  :(req) output mask dataset name/prefix
+
+-prefix_qc     JPG     :optional QC image filename, including its path.
+                        Overlay the output mask on the output orig dataset.
+                        (def: empty; 0 also disables QC)
 
 -param_dim_fac  DF     :dimming factor (power-modulation divisor).
                         (def: ${dim_fac})
